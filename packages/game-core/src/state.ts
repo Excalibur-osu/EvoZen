@@ -142,6 +142,10 @@ export function createNewGame(): GameState {
       ptrait: 'none',
       geology: {},
       market: { active: false },
+      // 铸造厂产线分配（工匠 → 合成品）
+      foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0 },
+      // 自动贸易路线
+      trade_routes: [],
     } as CityState,
 
     space: {},

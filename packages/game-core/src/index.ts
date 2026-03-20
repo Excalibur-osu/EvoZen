@@ -11,3 +11,24 @@ export { BASIC_TECHS, type TechDefinition } from './tech';
 export { BASIC_STRUCTURES, type StructureDefinition, type CostFunction } from './structures';
 export { gameTick } from './tick';
 export { saveGame, loadGame, exportSave, importSave } from './save';
+export {
+  manualCraft,
+  craftingTick,
+  assignCraftsman,
+  removeCraftsman,
+  CRAFTABLE_IDS,
+  type CraftableId,
+  type FoundryState,
+} from './crafting';
+export {
+  buyResource,
+  sellResource,
+  getBuyPrice,
+  getSellPrice,
+  tradeTick,
+  getMaxTradeRoutes,
+  setTradeRoute,
+  TRADABLE_RESOURCES,
+  type TradeRoute,
+  type TradableResourceId,
+} from './trade';

@@ -1,6 +1,12 @@
 /**
  * 基础建筑定义
- * 从旧 src/actions.js 提取第一阶段建筑
+ * 严格对标 legacy/src/actions.js 原版数值
+ *
+ * 每项建筑的 reqs、costs 均从原版源码逐行核对。
+ * 费用递增公式: Math.ceil(base * Math.pow(mult, count))
+ *
+ * 注意：原版很多建筑的 Money 费用在前几座为 0（条件性出现），
+ * 这里简化为始终有 Money 费用，以 base 值为准。
  */
 
 import type { GameState } from '@evozen/shared-types';
@@ -29,9 +35,13 @@ function scaleCost(base: number, mult: number): CostFunction {
   return (_state, count) => Math.ceil(base * Math.pow(mult, count));
 }
 
-/** 第一阶段基础建筑 */
+/**
+ * 第一阶段基础建筑
+ * 数据来源：legacy/src/actions.js
+ */
 export const BASIC_STRUCTURES: StructureDefinition[] = [
   // ---- 住房 ----
+  // actions.js L1375-1427: basic_housing
   {
     id: 'basic_housing',
     name: '小屋',
@@ -43,6 +53,8 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '市民上限 +1',
   },
+  // actions.js L1429-1478: cottage
+  // 原版需要合成材料：Plywood, Brick, Wrought_Iron
   {
     id: 'cottage',
     name: '茅屋',
@@ -50,14 +62,16 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'housing',
     reqs: { housing: 2 },
     costs: {
-      Lumber: scaleCost(25, 1.25),
-      Stone: scaleCost(12, 1.25),
-      Iron: scaleCost(5, 1.25),
+      Money: scaleCost(900, 1.15),
+      Plywood: scaleCost(25, 1.25),
+      Brick: scaleCost(20, 1.25),
+      Wrought_Iron: scaleCost(15, 1.25),
     },
     effect: '市民上限 +2',
   },
 
   // ---- 食物 ----
+  // actions.js L1728-1785: farm
   {
     id: 'farm',
     name: '农场',
@@ -70,6 +84,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '允许农民工作以获得更高效的食物产量。',
   },
+  // actions.js L1837-1926: mill
   {
     id: 'mill',
     name: '磨坊',
@@ -77,14 +92,16 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'food',
     reqs: { agriculture: 4 },
     costs: {
-      Lumber: scaleCost(65, 1.32),
-      Iron: scaleCost(33, 1.32),
-      Cement: scaleCost(20, 1.32),
+      Money: scaleCost(1000, 1.31),
+      Lumber: scaleCost(600, 1.33),
+      Iron: scaleCost(150, 1.33),
+      Cement: scaleCost(125, 1.33),
     },
-    effect: '食物产量 +5%',
+    effect: '食物产量 +3%（风车时代 +5%）',
   },
 
   // ---- 基础资源 ----
+  // actions.js L2506-2590: lumber_yard
   {
     id: 'lumber_yard',
     name: '伐木场',
@@ -92,11 +109,12 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { axe: 1 },
     costs: {
-      Lumber: scaleCost(18, 1.26),
-      Stone: scaleCost(8, 1.26),
+      Lumber: scaleCost(6, 1.9),
+      Stone: scaleCost(2, 1.95),
     },
-    effect: '木材上限 +100，伐木工效率 +2%',
+    effect: '木材上限 +100，木材产量 +2',
   },
+  // actions.js L2592-2665: rock_quarry
   {
     id: 'rock_quarry',
     name: '采石场',
@@ -104,11 +122,12 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { mining: 1 },
     costs: {
-      Lumber: scaleCost(20, 1.36),
-      Stone: scaleCost(16, 1.36),
+      Lumber: scaleCost(50, 1.36),
+      Stone: scaleCost(10, 1.36),
     },
-    effect: '石头上限 +100，石工效率 +2%',
+    effect: '石头上限 +100，石头产量 +2',
   },
+  // actions.js L2960-3005: mine
   {
     id: 'mine',
     name: '矿井',
@@ -116,13 +135,14 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { mining: 2 },
     costs: {
-      Lumber: scaleCost(60, 1.36),
-      Stone: scaleCost(18, 1.36),
+      Money: scaleCost(60, 1.6),
+      Lumber: scaleCost(175, 1.38),
     },
     effect: '解锁矿工岗位。',
     powered: true,
     powerCost: 1,
   },
+  // actions.js L3007-3005: coal_mine
   {
     id: 'coal_mine',
     name: '煤矿',
@@ -130,13 +150,15 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { mining: 4 },
     costs: {
+      Money: scaleCost(480, 1.4),
       Lumber: scaleCost(250, 1.36),
-      Iron: scaleCost(180, 1.32),
+      Wrought_Iron: scaleCost(18, 1.36),
     },
     effect: '解锁煤矿工人岗位。',
     powered: true,
     powerCost: 1,
   },
+  // actions.js L2667-2712: cement_plant
   {
     id: 'cement_plant',
     name: '水泥厂',
@@ -144,13 +166,15 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { cement: 1 },
     costs: {
-      Lumber: scaleCost(40, 1.36),
-      Stone: scaleCost(50, 1.36),
+      Money: scaleCost(3000, 1.5),
+      Lumber: scaleCost(1800, 1.36),
+      Stone: scaleCost(2000, 1.32),
     },
-    effect: '解锁水泥工人岗位。',
+    effect: '解锁水泥工人岗位（每座+2工人位）。',
   },
 
   // ---- 存储 ----
+  // actions.js L1928-1959: silo
   {
     id: 'silo',
     name: '粮仓',
@@ -158,25 +182,29 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'storage',
     reqs: { agriculture: 3 },
     costs: {
-      Lumber: scaleCost(55, 1.32),
-      Cement: scaleCost(20, 1.32),
+      Money: scaleCost(85, 1.32),
+      Lumber: scaleCost(65, 1.36),
+      Stone: scaleCost(50, 1.36),
     },
-    effect: '食物上限 +250',
+    effect: '食物上限 +500',
   },
+  // actions.js L2104-2200: shed
   {
     id: 'shed',
     name: '仓库',
     description: '增加多种资源存储上限。',
     category: 'storage',
-    reqs: { container: 1 },
+    reqs: { storage: 1 },
     costs: {
-      Lumber: scaleCost(30, 1.22),
-      Stone: scaleCost(15, 1.22),
+      Money: scaleCost(75, 1.22),
+      Lumber: scaleCost(55, 1.32),
+      Stone: scaleCost(45, 1.32),
     },
-    effect: '木材/石头等上限 +100，提供板条箱位。',
+    effect: '木材/石头等上限增加，提供板条箱位。',
   },
 
   // ---- 商业 ----
+  // actions.js L2352-2505: bank
   {
     id: 'bank',
     name: '银行',
@@ -184,11 +212,13 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'commerce',
     reqs: { banking: 1 },
     costs: {
+      Money: scaleCost(250, 1.35),
       Lumber: scaleCost(75, 1.32),
-      Stone: scaleCost(100, 1.32),
+      Stone: scaleCost(100, 1.35),
     },
-    effect: '金钱上限 +1800，解锁银行家岗位。',
+    effect: '金钱上限增加。',
   },
+  // actions.js L3147-3190: trade (贸易站)
   {
     id: 'trade_post',
     name: '贸易站',
@@ -196,41 +226,49 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'commerce',
     reqs: { trade: 1 },
     costs: {
-      Lumber: scaleCost(60, 1.36),
-      Stone: scaleCost(40, 1.36),
+      Money: scaleCost(500, 1.36),
+      Lumber: scaleCost(125, 1.36),
+      Stone: scaleCost(50, 1.36),
+      Furs: scaleCost(65, 1.36),
     },
-    effect: '解锁贸易路线，可以买卖资源。',
+    effect: '贸易路线 +2。',
   },
 
   // ---- 科学 ----
+  // actions.js L3643-3745: university
+  // 注意：原版 science:1 解锁的是 university，不是 library
+  {
+    id: 'university',
+    name: '大学',
+    description: '高等学府，增加知识上限并提供教授岗位。',
+    category: 'science',
+    reqs: { science: 1 },
+    costs: {
+      Money: scaleCost(900, 1.5),
+      Lumber: scaleCost(500, 1.36),
+      Stone: scaleCost(750, 1.36),
+    },
+    effect: '知识上限 +500，教授上限 +1。',
+  },
+  // actions.js L3748-3835: library
+  // 注意：原版 library 需要 science:2（图书馆学科技），并需要合成材料
   {
     id: 'library',
     name: '图书馆',
     description: '存储知识，提供研究能力。',
     category: 'science',
-    reqs: { science: 1 },
+    reqs: { science: 2 },
     costs: {
-      Lumber: scaleCost(45, 1.2),
+      Money: scaleCost(45, 1.2),
       Furs: scaleCost(22, 1.2),
-      Cement: scaleCost(10, 1.2),
+      Plywood: scaleCost(20, 1.2),
+      Brick: scaleCost(15, 1.2),
     },
     effect: '知识上限 +125。',
   },
-  {
-    id: 'university',
-    name: '大学',
-    description: '高等教育机构，大幅增加知识上限。',
-    category: 'science',
-    reqs: { science: 4 },
-    costs: {
-      Lumber: scaleCost(500, 1.36),
-      Stone: scaleCost(750, 1.36),
-      Crystal: scaleCost(5, 1.36),
-    },
-    effect: '知识上限 +500，教授上限 +1。',
-  },
 
   // ---- 军事 ----
+  // actions.js L1961-2010: garrison
   {
     id: 'garrison',
     name: '兵营',
@@ -238,13 +276,14 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'military',
     reqs: { military: 1 },
     costs: {
-      Lumber: scaleCost(25, 1.32),
-      Stone: scaleCost(18, 1.32),
+      Money: scaleCost(240, 1.5),
+      Stone: scaleCost(260, 1.46),
     },
-    effect: '士兵上限 +1。',
+    effect: '士兵上限 +2。',
   },
 
   // ---- 制造 ----
+  // actions.js L2714-2770: foundry
   {
     id: 'foundry',
     name: '铸造厂',
@@ -252,7 +291,8 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'craft',
     reqs: { foundry: 1 },
     costs: {
-      Copper: scaleCost(200, 1.36),
+      Money: scaleCost(750, 1.36),
+      Copper: scaleCost(250, 1.36),
       Stone: scaleCost(100, 1.36),
     },
     effect: '工匠岗位上限 +1。',

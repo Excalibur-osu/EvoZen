@@ -13,10 +13,12 @@ import ResourceDetailPanel from './components/ResourceDetailPanel.vue'
 import BuildPanel from './components/BuildPanel.vue'
 import TechPanel from './components/TechPanel.vue'
 import JobPanel from './components/JobPanel.vue'
+import CraftPanel from './components/CraftPanel.vue'
+import TradePanel from './components/TradePanel.vue'
 import MessageLog from './components/MessageLog.vue'
 
 const game = useGameStore()
-const activeTab = ref<'city' | 'civic' | 'research' | 'resources'>('city')
+const activeTab = ref<'city' | 'civic' | 'research' | 'resources' | 'industry' | 'market'>('city')
 
 onMounted(() => {
   game.init()
@@ -29,6 +31,8 @@ const tabs = computed(() => {
     { id: 'civic', label: '市政', visible: game.state.settings.showCivic },
     { id: 'research', label: '研究', visible: true },
     { id: 'resources', label: '资源', visible: game.state.settings.showResources },
+    { id: 'industry', label: '工坊', visible: (game.state.tech['foundry'] ?? 0) >= 1 },
+    { id: 'market', label: '贸易', visible: game.state.settings.showMarket },
   ]
   return list.filter(t => t.visible)
 })
@@ -88,6 +92,8 @@ const cityTabLabel = computed(() => {
             <JobPanel v-if="activeTab === 'civic'" />
             <TechPanel v-if="activeTab === 'research'" />
             <ResourceDetailPanel v-if="activeTab === 'resources'" />
+            <CraftPanel v-if="activeTab === 'industry'" />
+            <TradePanel v-if="activeTab === 'market'" />
           </div>
         </main>
       </template>

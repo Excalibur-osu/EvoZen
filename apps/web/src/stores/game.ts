@@ -4,7 +4,31 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { GameState, GameMessage } from '@evozen/shared-types'
-import { createNewGame, gameTick, saveGame, loadGame, exportSave, importSave, BASIC_STRUCTURES, BASIC_TECHS, BASE_JOBS } from '@evozen/game-core'
+import {
+  createNewGame,
+  gameTick,
+  saveGame,
+  loadGame,
+  exportSave,
+  importSave,
+  BASIC_STRUCTURES,
+  BASIC_TECHS,
+  BASE_JOBS,
+  manualCraft,
+  assignCraftsman as coreAssignCraftsman,
+  removeCraftsman as coreRemoveCraftsman,
+  CRAFTABLE_IDS,
+  type CraftableId,
+  type FoundryState,
+  buyResource as coreBuyResource,
+  sellResource as coreSellResource,
+  getBuyPrice,
+  getSellPrice,
+  getMaxTradeRoutes,
+  setTradeRoute as coreSetTradeRoute,
+  TRADABLE_RESOURCES,
+  type TradeRoute,
+} from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
   // ---- 核心状态 ----
@@ -190,6 +214,41 @@ export const useGameStore = defineStore('game', () => {
     }
     if ((s.tech['mining'] ?? 0) >= 1) {
       s.resource['Copper'].display = true
+    }
+
+    // --- 工匠上限由铸造厂决定 ---
+    const foundries = getStructCount('foundry')
+    setJobMax('craftsman', foundries)
+
+    // --- 铸造科技解锁合成资源显示 ---
+    if ((s.tech['foundry'] ?? 0) >= 1) {
+      s.resource['Plywood'].display = true
+      s.resource['Brick'].display = true
+      s.resource['Wrought_Iron'].display = true
+      // 确保铸造厂 foundry 状态存在
+      if (!s.city['foundry']) {
+        (s.city as Record<string, unknown>)['foundry'] = {
+          count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0
+        }
+      }
+    }
+
+    // --- 贸易路线自动调整 ---
+    if ((s.tech['trade'] ?? 0) >= 1) {
+      s.settings.showMarket = true
+      const maxRoutes = getMaxTradeRoutes(s)
+      if (!(s.city as any).trade_routes) {
+        (s.city as any).trade_routes = []
+      }
+      const routes = (s.city as any).trade_routes as TradeRoute[]
+      // 扩充路线槽位
+      while (routes.length < maxRoutes) {
+        routes.push({ resource: 'Food', action: 'none', qty: 1 })
+      }
+      // 缩减路线槽位（如果贸易站被拆除）
+      if (routes.length > maxRoutes) {
+        routes.length = maxRoutes
+      }
     }
 
     // --- 科技解锁岗位显示 ---
@@ -398,6 +457,28 @@ export const useGameStore = defineStore('game', () => {
     if (!job || !unemployed || job.workers <= 0) return
     job.workers--
     unemployed.workers++
+
+    // 如果移除的是工匠，同步清理分配
+    if (jobId === 'craftsman') {
+      const foundry = state.value.city['foundry'] as FoundryState | undefined
+      if (foundry) {
+        let totalAssigned = 0
+        for (const id of CRAFTABLE_IDS) {
+          totalAssigned += foundry[id] ?? 0
+        }
+        // 如果总分配超过工匠数，从后往前减
+        while (totalAssigned > job.workers) {
+          for (let i = CRAFTABLE_IDS.length - 1; i >= 0; i--) {
+            const cid = CRAFTABLE_IDS[i]
+            if ((foundry[cid] ?? 0) > 0) {
+              foundry[cid] = (foundry[cid] ?? 0) - 1
+              totalAssigned--
+              break
+            }
+          }
+        }
+      }
+    }
   }
 
   // ---- 进化阶段操作 ----
@@ -482,6 +563,63 @@ export const useGameStore = defineStore('game', () => {
     res.amount = Math.min(res.amount + amount, res.max > 0 ? res.max : Infinity)
   }
 
+  // ---- 合成操作 ----
+
+  /** 手动合成一次（一键制作） */
+  function doCraft(craftId: CraftableId, qty: number = 1) {
+    const result = manualCraft(state.value, craftId, qty)
+    if (result) {
+      state.value = result
+      const names: Record<string, string> = { Plywood: '胶合板', Brick: '砖块', Wrought_Iron: '锻铁' }
+      addMessage(`⚒ 手动合成了 ${qty} 份${names[craftId] ?? craftId}。`, 'success', 'progress')
+    } else {
+      addMessage('材料不足，无法合成。', 'warning', 'progress')
+    }
+  }
+
+  /** 给指定合成产线增加一个工匠 */
+  function assignCraftLine(craftId: CraftableId) {
+    const result = coreAssignCraftsman(state.value, craftId)
+    if (result) {
+      state.value = result
+    }
+  }
+
+  /** 从指定合成产线移除一个工匠 */
+  function removeCraftLine(craftId: CraftableId) {
+    const result = coreRemoveCraftsman(state.value, craftId)
+    if (result) {
+      state.value = result
+    }
+  }
+
+  // ---- 贸易操作 ----
+
+  /** 手动买入资源 */
+  function tradeBuy(resourceId: string, qty: number = 1) {
+    const result = coreBuyResource(state.value, resourceId, qty)
+    if (result) {
+      state.value = result
+    } else {
+      addMessage('金币不足或仓库已满。', 'warning', 'progress')
+    }
+  }
+
+  /** 手动卖出资源 */
+  function tradeSell(resourceId: string, qty: number = 1) {
+    const result = coreSellResource(state.value, resourceId, qty)
+    if (result) {
+      state.value = result
+    } else {
+      addMessage('资源不足，无法出售。', 'warning', 'progress')
+    }
+  }
+
+  /** 设置贸易路线 */
+  function updateTradeRoute(index: number, route: TradeRoute) {
+    state.value = coreSetTradeRoute(state.value, index, route)
+  }
+
   return {
     state,
     messages,
@@ -509,5 +647,15 @@ export const useGameStore = defineStore('game', () => {
     formDNA,
     startCivilization,
     gather,
+    // 合成系统
+    doCraft,
+    assignCraftLine,
+    removeCraftLine,
+    // 贸易系统
+    tradeBuy,
+    tradeSell,
+    updateTradeRoute,
+    getBuyPrice,
+    getSellPrice,
   }
 })

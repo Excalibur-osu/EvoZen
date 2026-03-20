@@ -1,9 +1,22 @@
 /**
  * 游戏主循环 / Tick 逻辑
  * 完整资源产出、消耗、建筑加成
+ *
+ * 严格对标 legacy/src/main.js 原版公式。
+ * 所有产出/消耗值在最终应用前统一乘以 time_multiplier = 0.25
+ * （原版 main.js L1213）。
  */
 
 import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
+import { craftingTick } from './crafting';
+import { tradeTick } from './trade';
+
+/**
+ * 原版全局时间缩放因子
+ * legacy/src/main.js L1213: var time_multiplier = 0.25;
+ * 所有 modRes() 调用都乘以此值。
+ */
+const TIME_MULTIPLIER = 0.25;
 
 /**
  * 执行单个游戏 tick
@@ -42,21 +55,27 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 猎人副产品：毛皮
   const hunterFurs = hunters * 0.15;
 
-  // 农民产出 — 基础 0.82, 灌溉(agriculture>=2) +40%, 磨坊加成
+  // 农民产出 — 对标 legacy/src/jobs.js L797-822 farmerValue()
+  // farmerValue(farm=true) = impact + (agriculture >= 2 ? 1.15 : 0.65)
+  // impact = 0.82
   const farmers = workers('farmer');
-  let farmerBase = 0.82;
-  if (techLevel('agriculture') >= 2) farmerBase += 0.36;  // 灌溉 +40%
-  if (techLevel('agriculture') >= 4) farmerBase += 0.12;  // 磨坊科技
-  // 磨坊建筑 +5%/座
+  let farmerBase = 0.82;  // impact
+  // 有农场时的额外加成（原版 jobs.js L799-800）
+  if (farmers > 0 && structCount('farm') > 0) {
+    farmerBase += techLevel('agriculture') >= 2 ? 1.15 : 0.65;
+  }
+  // 磨坊建筑加成（原版 main.js L3587-3591）
+  // agriculture >= 5 → 5%/座, 否则 3%/座（非电力化磨坊）
   const mills = structCount('mill');
-  let foodMult = 1 + mills * 0.05;
+  const millBonus = techLevel('agriculture') >= 5 ? 0.05 : 0.03;
+  let foodMult = 1 + mills * millBonus;
   const farmerFood = farmers * farmerBase * foodMult;
 
-  // 食物消耗 — 每市民 0.25/tick, 失业人口消耗减半, 猎人在野外生存也减半
+  // 食物消耗 — 原版 main.js L3711:
+  // consume = (pop + soldiers - (unemployed + hunters) * 0.5)
+  // 简化版（暂无士兵系统），food_consume_mod = 1（标准人类）
   const unemployed = workers('unemployed');
-  const employed = pop - unemployed;
-  const standardEaters = employed - hunters;
-  const foodConsumption = standardEaters * 0.25 + (unemployed + hunters) * 0.125;
+  const foodConsumption = pop - (unemployed + hunters) * 0.5;
 
   deltas['Food'] = hunterFood + farmerFood - foodConsumption;
 
@@ -68,11 +87,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 3. 木材 — 伐木工
   // ============================================================
+  // 原版 main.js L5540-5559:
+  // lumber_base = workers * impact(1.0)
+  // axe bonus: (axe > 1 ? (axe-1) * 0.35 : 0) + 1  ← 只有 axe level 2+ 才有
+  // lumber_yard: +2%/座
   const lumberjacks = workers('lumberjack');
-  let lumberBase = 1;
-  // 石斧科技加成
-  if (techLevel('axe') >= 1) lumberBase += 0.35;
-  // 伐木场加成 +2%/座
+  let lumberBase = 1;  // impact = 1.0
+  // 石斧科技加成 — 原版 main.js L5559: axe > 1 才有加成
+  const axeLevel = techLevel('axe');
+  if (axeLevel > 1) {
+    lumberBase *= 1 + (axeLevel - 1) * 0.35;
+  }
+  // 伐木场加成 +2%/座（原版 main.js L5575-5576）
   const lumberYards = structCount('lumber_yard');
   let lumberMult = 1 + lumberYards * 0.02;
   deltas['Lumber'] = lumberjacks * lumberBase * lumberMult;
@@ -80,9 +106,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 4. 石头 — 石工
   // ============================================================
+  // 原版 main.js L5663-5677: impact = 1.0（不是 0.8）
   const quarryWorkers = workers('quarry_worker');
-  let stoneBase = 0.8;
-  // 采石场加成 +2%/座
+  let stoneBase = 1.0;  // quarry_worker.impact = 1.0
+  // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   let stoneMult = 1 + quarries * 0.02;
   deltas['Stone'] = quarryWorkers * stoneBase * stoneMult;
@@ -90,11 +117,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 5. 铜 / 铁 — 矿工
   // ============================================================
+  // 原版 main.js L6117-6119: miner_base = workers * impact(1.0)
+  // 铜系数 main.js L6158: copper_mult = 1/7
+  // 铁系数 main.js L6225: iron_mult  = 1/4
   const miners = workers('miner');
-  deltas['Copper'] = miners * 0.3;
+  deltas['Copper'] = miners * (1 / 7);  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = miners * 0.15;
+    deltas['Iron'] = miners * 0.25;  // 1/4
   }
 
   // ============================================================
@@ -139,9 +169,31 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   deltas['Money'] = taxIncome * bankBonus;
 
   // ============================================================
-  // 10. 应用变化
+  // 10a. 工匠合成产线（自动消耗原料、产出合成品）
   // ============================================================
-  const newState = structuredClone(state);
+  const craftDeltas = craftingTick(state);
+  for (const [resId, delta] of Object.entries(craftDeltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+  }
+
+  // ============================================================
+  // 10b. 贸易路线自动执行
+  // ============================================================
+  const tradeDeltas = tradeTick(state);
+  for (const [resId, delta] of Object.entries(tradeDeltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+  }
+
+  // ============================================================
+  // 10. 应用 time_multiplier 并写入状态
+  // ============================================================
+  // 原版 main.js L1213: var time_multiplier = 0.25;
+  // 所有 modRes() 调用均乘以此值。
+  for (const resId of Object.keys(deltas)) {
+    deltas[resId] *= TIME_MULTIPLIER;
+  }
+
+  const newState: GameState = JSON.parse(JSON.stringify(state));
 
   for (const [resId, delta] of Object.entries(deltas)) {
     const res = newState.resource[resId];
@@ -197,27 +249,43 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 12. 日历推进
   // ============================================================
+  // 原版 Evolve：fast loop = 250ms, long loop = 250 × 20 = 5000ms
+  // 日历推进在 long loop 中执行，即每 20 个 fast tick 推进 1 天
+  // 这里用 dayTick 计数器模拟 long loop 比例
   if (newState.city.calendar) {
-    newState.city.calendar.day++;
-    if (newState.city.calendar.day >= newState.city.calendar.orbit) {
-      newState.city.calendar.day = 0;
-      newState.city.calendar.year++;
-      // 季节随年变
-      newState.city.calendar.season = newState.city.calendar.year % 4;
+    newState.city.calendar.dayTick = (newState.city.calendar.dayTick ?? 0) + 1;
+    if (newState.city.calendar.dayTick >= 20) {
+      newState.city.calendar.dayTick = 0;
+      newState.city.calendar.day++;
+      newState.stats.days = (newState.stats.days ?? 0) + 1;
 
-      // 新年消息
-      if (newState.city.calendar.year % 10 === 0) {
-        messages.push({
-          text: `🎆 进入第 ${newState.city.calendar.year} 年！`,
-          type: 'info',
-          category: 'calendar',
-        });
+      if (newState.city.calendar.day > newState.city.calendar.orbit) {
+        newState.city.calendar.day = 1;
+        newState.city.calendar.year++;
+
+        // 新年消息
+        if (newState.city.calendar.year % 10 === 0) {
+          messages.push({
+            text: `🎆 进入第 ${newState.city.calendar.year} 年！`,
+            type: 'info',
+            category: 'calendar',
+          });
+        }
       }
+
+      // 季节计算（与原版一致：一年分 4 段，按天数判断所处季节）
+      const seasonLength = Math.round(newState.city.calendar.orbit / 4);
+      let daysLeft = newState.city.calendar.day;
+      let season = 0;
+      while (daysLeft > seasonLength) {
+        daysLeft -= seasonLength;
+        season++;
+      }
+      newState.city.calendar.season = Math.min(season, 3);
     }
   }
 
-  // 统计
-  newState.stats.days = (newState.stats.days ?? 0) + 1;
+  // 统计（days 已在日历推进内更新）
 
   return {
     state: newState,

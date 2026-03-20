@@ -64,7 +64,7 @@ function fillColor(res: { amount: number; max: number }): string {
         </div>
         <div class="res-bottom">
           <span class="res-rate font-mono" :class="rateClass(res.diff)" v-if="res.diff !== 0">
-            {{ formatRate(res.diff) }}/s
+            {{ formatRate(res.diff * 4) }}/s
           </span>
           <span class="res-max font-mono" v-if="res.max > 0">/ {{ formatNum(res.max) }}</span>
         </div>

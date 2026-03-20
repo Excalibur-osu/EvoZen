@@ -278,6 +278,8 @@ export interface CalendarState {
   moon: number;
   wind: number;
   orbit: number;
+  /** 内部计数器：fast tick → day 推进（每 20 tick = 1 天） */
+  dayTick?: number;
 }
 
 export interface CityState {
