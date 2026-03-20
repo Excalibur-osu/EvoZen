@@ -1,0 +1,19 @@
+{
+  "name": "evozen",
+  "version": "0.1.0",
+  "description": "EvoZen — 进化之禅",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@evozen/web",
+    "build": "npm run build --workspace=@evozen/web",
+    "legacy:serve": "cd legacy && npx servehere -c"
+  },
+  "keywords": [
+    "EvoZen"
+  ],
+  "license": "MPL-2.0"
+}

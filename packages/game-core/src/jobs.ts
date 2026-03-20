@@ -1,0 +1,121 @@
+/**
+ * 岗位定义
+ * 从旧 src/jobs.js 提取第一阶段基础岗位
+ */
+
+export interface JobDefinition {
+  id: string;
+  name: string;
+  impact: number;
+  stress: number;
+  /** 是否需要特定科技解锁 */
+  requiredTech?: Record<string, number>;
+  /** 描述文字 */
+  description: string;
+}
+
+/** 基础岗位定义表 */
+export const BASE_JOBS: JobDefinition[] = [
+  {
+    id: 'unemployed',
+    name: '失业人口',
+    impact: 0,
+    stress: 0,
+    description: '失业的市民士气低落，消耗一半口粮。',
+  },
+  {
+    id: 'hunter',
+    name: '猎人',
+    impact: 0,
+    stress: 0,
+    description: '猎人自行寻找食物，效率受军事研究加成。',
+  },
+  {
+    id: 'farmer',
+    name: '农民',
+    impact: 0.82,
+    stress: 5,
+    requiredTech: { agriculture: 1 },
+    description: '农民生产食物来养活国家。',
+  },
+  {
+    id: 'lumberjack',
+    name: '伐木工人',
+    impact: 1,
+    stress: 5,
+    requiredTech: { axe: 1 },
+    description: '伐木工人从森林里砍伐木材。',
+  },
+  {
+    id: 'quarry_worker',
+    name: '石工',
+    impact: 1,
+    stress: 5,
+    requiredTech: { mining: 1 },
+    description: '石工从采石场采集石头。',
+  },
+  {
+    id: 'miner',
+    name: '矿工',
+    impact: 1,
+    stress: 4,
+    requiredTech: { mining: 2 },
+    description: '矿工从矿井中开采铜和铁。',
+  },
+  {
+    id: 'coal_miner',
+    name: '煤矿工人',
+    impact: 0.2,
+    stress: 4,
+    requiredTech: { mining: 4 },
+    description: '煤矿工人在地下深处开采煤炭。',
+  },
+  {
+    id: 'craftsman',
+    name: '工匠',
+    impact: 1,
+    stress: 5,
+    requiredTech: { foundry: 1 },
+    description: '工匠将原材料制作成建筑材料。',
+  },
+  {
+    id: 'cement_worker',
+    name: '水泥工人',
+    impact: 0.4,
+    stress: 5,
+    requiredTech: { cement: 1 },
+    description: '水泥工人使用石头加工水泥。',
+  },
+  {
+    id: 'banker',
+    name: '银行家',
+    impact: 0.1,
+    stress: 6,
+    requiredTech: { banking: 1 },
+    description: '银行家管理银行与税收。',
+  },
+  {
+    id: 'entertainer',
+    name: '艺人',
+    impact: 1,
+    stress: 10,
+    requiredTech: { theatre: 1 },
+    description: '艺人能缓解日常生活的沉闷，提升士气。',
+  },
+  {
+    id: 'professor',
+    name: '教授',
+    impact: 0.5,
+    stress: 6,
+    requiredTech: { science: 1 },
+    description: '教授帮助教化市民，产生知识。',
+  },
+  {
+    id: 'scientist',
+    name: '科学家',
+    impact: 1,
+    stress: 5,
+    requiredTech: { science: 5 },
+    description: '科学家研究宇宙并揭露秘密，产生知识。',
+  },
+];
