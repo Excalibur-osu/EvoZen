@@ -52,10 +52,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   let foodMult = 1 + mills * 0.05;
   const farmerFood = farmers * farmerBase * foodMult;
 
-  // 食物消耗 — 每市民 0.25/tick, 失业人口消耗减半
+  // 食物消耗 — 每市民 0.25/tick, 失业人口消耗减半, 猎人在野外生存也减半
   const unemployed = workers('unemployed');
   const employed = pop - unemployed;
-  const foodConsumption = employed * 0.25 + unemployed * 0.125;
+  const standardEaters = employed - hunters;
+  const foodConsumption = standardEaters * 0.25 + (unemployed + hunters) * 0.125;
 
   deltas['Food'] = hunterFood + farmerFood - foodConsumption;
 

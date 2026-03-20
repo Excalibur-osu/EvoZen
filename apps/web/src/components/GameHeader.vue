@@ -1,3 +1,7 @@
+<!-- 
+  游戏顶部导航/状态栏组件 (GameHeader.vue)
+  负责展示当前种族物种、游戏内年月日历流转状态，以及暂停/存档等全局功能入口
+-->
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 

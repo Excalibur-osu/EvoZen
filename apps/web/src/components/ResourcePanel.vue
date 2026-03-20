@@ -1,3 +1,7 @@
+<!--
+  左侧边栏资源概览面板 (ResourcePanel.vue)
+  精简版展示当前解锁的所有资源，只提供 [当前数目 / 填充比率条 / 每秒浮动速率] 等核心信息。
+-->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'

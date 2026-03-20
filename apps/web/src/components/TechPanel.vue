@@ -1,3 +1,8 @@
+<!--
+  科技研究面板 (TechPanel.vue)
+  读取所有的基础科技项并检查前置依赖。
+  玩家点击时消耗资源进行科技解锁。解锁后可能会连带解锁新资源、新建筑与新岗位。
+-->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'

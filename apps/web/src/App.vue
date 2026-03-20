@@ -1,3 +1,8 @@
+<!--
+  前端应用主入口容器 (App.vue)
+  负责初始化调度 Pinia 状态、组织左右两侧的响应式布局分栏，并展示顶部导航栏。
+  涵盖了由未开化(protoplasm)到开启文明全选项卡的流转控制。
+-->
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useGameStore } from './stores/game'

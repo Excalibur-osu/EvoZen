@@ -1,3 +1,8 @@
+<!--
+  市政岗位分配面板 (JobPanel.vue)
+  读取解锁的各种社会工作岗位（农民、伐木工等），展现加成和分配上限。
+  包含了自动扣除“失业人口”补充至有生产力岗位的核心 UI 交互。
+-->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'

@@ -1,3 +1,8 @@
+<!--
+  资源详情面板组件 (ResourceDetailPanel.vue)
+  在游戏主界面的独立面板，使用表格详尽展示每种已解锁资源的总额、最大上限、每秒获取/消耗速率。
+  通过填充条动态可视化当前的满仓程度。
+-->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'

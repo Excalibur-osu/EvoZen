@@ -1,3 +1,8 @@
+<!--
+  底部系统消息日志台 (MessageLog.vue)
+  负责展示系统事件信息（比如进化提示、科技解锁、市民饥饿/死亡等重要进展）
+  当存在新消息时自动将内部滚动条滚到最底部。
+-->
 <script setup lang="ts">
 import { computed, ref, nextTick, watch } from 'vue'
 import { useGameStore } from '../stores/game'

@@ -1,3 +1,7 @@
+/**
+ * Vue 应用程序入口
+ * 负责实例化 Vue App、挂载 Pinia 状态树并连接 DOM
+ */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'

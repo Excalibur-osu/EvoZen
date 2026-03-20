@@ -1,3 +1,8 @@
+<!--
+  城市建设面板 (BuildPanel.vue)
+  分为“手动采集(Gather)”与“建设建筑”两部分。
+  读取基础建筑数据，计算价格与显示建造成本，处理能否建造的判定逻辑和建筑点击事件。
+-->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'

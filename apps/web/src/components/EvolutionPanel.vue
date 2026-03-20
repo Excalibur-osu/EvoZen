@@ -1,3 +1,8 @@
+<!--
+  进化初始面板 (EvolutionPanel.vue)
+  呈现开局第一阶段玩法，让玩家通过点击或挂机获取 RNA/DNA。
+  当 RNA 和 DNA 储能填满时，可开启物种进化树与文明时代。
+-->
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { ref } from 'vue'

@@ -91,3 +91,5 @@ EvoZen/
 ## 许可证
 
 [MPL-2.0](LICENSE)（沿用原版 Evolve 许可证）
+
+Copyright (c) 2024-2026 Excalibur-osu 及 EvoZen 贡献者。
