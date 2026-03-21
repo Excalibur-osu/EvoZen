@@ -52,8 +52,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   let hunterRate = 0.5;
   if (techLevel('military') >= 1) hunterRate += 0.1;
   const hunterFood = hunters * hunterRate;
-  // 猎人副产品：毛皮
-  const hunterFurs = hunters * 0.15;
+  // 猎人副产品：毛皮 — 原版 main.js L4036-4058
+  // furs = hunters * weaponTechModifer() / 20
+  // weaponTechModifer() = military tech level，初始=1
+  const militaryTech = techLevel('military') >= 1 ? techLevel('military') : 1;
+  const hunterFurs = hunters * militaryTech / 20;
 
   // 农民产出 — 对标 legacy/src/jobs.js L797-822 farmerValue()
   // farmerValue(farm=true) = impact + (agriculture >= 2 ? 1.15 : 0.65)
@@ -148,25 +151,51 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
 
   // ============================================================
-  // 8. 知识 — 教授 + 科学家
+  // 8. 知识 — 日晷基础 + 教授 + 科学家
   // ============================================================
+  // 日晷基础产出 — 原版 main.js L4157:
+  // let sundial_base = global.tech['primitive'] && global.tech['primitive'] >= 3 ? 1 : 0;
+  // delta += sundial_base * global_multiplier;
+  // 日晷产出独立于饥饿因子，研究日晷后即自动提供知识
+  const sundialBase = techLevel('primitive') >= 3 ? 1 : 0;
+
   const professors = workers('professor');
   const scientists = workers('scientist');
-  // 教授 0.5/人, 图书馆加成 +5%/座
   const libraries = structCount('library');
-  const universities = structCount('university');
-  let knowledgeMult = 1 + libraries * 0.05 + universities * 0.08;
-  deltas['Knowledge'] = (professors * 0.5 + scientists * 1.0) * knowledgeMult;
+  // 教授基础产出 — 原版 main.js L9313:
+  // professor.impact = 0.5 + (library_count * 0.01)
+  const profImpact = 0.5 + libraries * 0.01;
+  const professorsBase = professors * profImpact;
+  // 科学家产出 — impact = 1.0
+  const scientistBase = scientists * 1.0;
+  // 教授+科学家受饥饿影响，日晷不受（原版 L4228-4229）
+  let knowledgeDelta = (professorsBase + scientistBase) + sundialBase;
+  // 图书馆全局加成 — 原版 main.js L4259:
+  // library_mult = 1 + (library_count * 0.05)
+  // 注意：原版 L4261 是 delta *= library_mult，即日晷也受此加成
+  const libraryMult = 1 + libraries * 0.05;
+  knowledgeDelta *= libraryMult;
+  deltas['Knowledge'] = knowledgeDelta;
 
   // ============================================================
   // 9. 金币 — 税收 + 银行家
   // ============================================================
+  // 原版 main.js L7586-7626:
+  // citizens = pop + soldiers - unemployed（简化：无士兵）
+  // income_base = citizens * 0.4（非 truepath）
+  // banking >= 2 时: income_base *= 1 + (bankers * impact)
+  // income_base *= tax_rate / 20
   const taxRate = state.civic.taxes?.tax_rate ?? 20;
   const bankers = workers('banker');
-  const taxIncome = pop * (taxRate / 100) * 0.5;
-  // 银行家增加金币产量 10%/人
-  const bankBonus = 1 + bankers * 0.1;
-  deltas['Money'] = taxIncome * bankBonus;
+  const citizens = pop - unemployed;  // 原版 L7587
+  let incomeBase = citizens * 0.4;  // 原版 L7592, non-truepath
+  // 银行家加成（需要 banking:2）— 原版 L7601-7615
+  if (techLevel('banking') >= 2 && bankers > 0) {
+    const bankerImpact = 0.1;  // 基础 impact
+    incomeBase *= 1 + bankers * bankerImpact;
+  }
+  incomeBase *= taxRate / 20;  // 原版 L7626
+  deltas['Money'] = incomeBase;
 
   // ============================================================
   // 10a. 工匠合成产线（自动消耗原料、产出合成品）

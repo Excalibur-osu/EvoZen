@@ -238,6 +238,32 @@ export const BASIC_TECHS: TechDefinition[] = [
     effect: '解锁图书馆建筑，大幅增加知识上限。',
   },
 
+  // legacy tech.js L4105-4122: thesis → science:3
+  {
+    id: 'thesis',
+    name: '学位论文',
+    description: '系统化的研究方法论。',
+    category: 'science',
+    era: '文明',
+    reqs: { science: 2 },
+    grant: ['science', 3],
+    costs: { Knowledge: 1125 },
+    effect: '提高研究效率，解锁更多高级科技。',
+  },
+
+  // legacy tech.js L4124-4141: research_grant → science:4
+  {
+    id: 'research_grant',
+    name: '研究资助',
+    description: '政府资助科学研究。',
+    category: 'science',
+    era: '文明',
+    reqs: { science: 3 },
+    grant: ['science', 4],
+    costs: { Knowledge: 3240 },
+    effect: '大幅推进科研体系，解锁更高级的科技路线。',
+  },
+
   // legacy tech.js L1205-1223: silo → agriculture:3
   {
     id: 'silo_tech',

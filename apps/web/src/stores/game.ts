@@ -26,7 +26,6 @@ import {
   getSellPrice,
   getMaxTradeRoutes,
   setTradeRoute as coreSetTradeRoute,
-  TRADABLE_RESOURCES,
   type TradeRoute,
 } from '@evozen/game-core'
 
@@ -290,7 +289,18 @@ export const useGameStore = defineStore('game', () => {
     if (job) job.max = max
   }
 
-  /** 人口增长：有食物且有空房间时缓慢增长 */
+  /**
+   * 人口增长：基于概率的增长系统
+   * 对标原版 legacy/src/main.js L3906-3973
+   *
+   * 原版逻辑：
+   * - 在 long loop（每 20 个 fast tick = 5秒）中执行一次
+   * - Math.rand(0, upperBound) <= lowerBound 时新增 1 人
+   * - lowerBound = reproduction 科技等级（无科技时为 0）
+   * - upperBound = 当前人口 × (3 - 2^time_multiplier)
+   *
+   * 简化实现：仍使用 tick 计数器模拟 long loop 频率
+   */
   function handlePopGrowth() {
     if (isEvolving.value) return
     const s = state.value
@@ -301,17 +311,34 @@ export const useGameStore = defineStore('game', () => {
     const food = s.resource['Food']
     if (!food || food.amount <= 0) return
 
-    // 有食物且人口未达上限时，缓慢增长
-    if (pop.amount < pop.max && food.amount > food.max * 0.1) {
-      pop.amount += 0.005 // 每 tick 增长 0.005 人
-      if (Math.floor(pop.amount) > Math.floor(pop.amount - 0.005)) {
-        // 新增了一个完整市民
-        const newPop = Math.floor(pop.amount)
-        addMessage(`一位新市民加入了你的部落！人口: ${newPop}`, 'success', 'progress')
-        // 新市民默认为失业
-        const unemployed = s.civic['unemployed'] as { workers: number }
-        if (unemployed) unemployed.workers++
-      }
+    // 跟踪 long loop 计数器（每20个tick执行一次增长检查）
+    if (!(s as any)._popGrowthTick) (s as any)._popGrowthTick = 0
+    ;(s as any)._popGrowthTick++
+    if ((s as any)._popGrowthTick < 20) return
+    ;(s as any)._popGrowthTick = 0
+
+    // 有食物且人口未达上限时，才尝试增长
+    if (pop.amount >= pop.max) return
+    if (food.amount <= 0) return
+
+    // reproduction 科技提高增长概率（原版 main.js L3917）
+    const lowerBound = s.tech['reproduction'] ?? 0
+
+    // 原版 upperBound = currentPop * (3 - 2^0.25) ≈ currentPop * 1.811
+    let upperBound = Math.floor(pop.amount * (3 - Math.pow(2, 0.25)))
+    if (upperBound < 2) upperBound = 2  // 防止初始人口太少时永远无法增长
+
+    // 原版使用整数随机：Math.rand(0, upperBound) <= lowerBound
+    // Math.rand(0, N) = Math.floor(Math.random() * N)，返回 0..N-1，共 N 个值
+    // P(rand <= K) = (K+1) / N
+    // 因此 lowerBound=0 时概率 = 1/upperBound
+    if (Math.random() < (lowerBound + 1) / upperBound) {
+      pop.amount = Math.floor(pop.amount) + 1
+      const newPop = Math.floor(pop.amount)
+      addMessage(`一位新市民加入了你的部落！人口: ${newPop}`, 'success', 'progress')
+      // 新市民默认为失业
+      const unemployed = s.civic['unemployed'] as { workers: number }
+      if (unemployed) unemployed.workers++
     }
   }
 

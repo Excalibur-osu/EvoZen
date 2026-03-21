@@ -60,7 +60,7 @@ function fillPercent(res: { amount: number; max: number }): number {
           <td class="col-name">{{ res.name || getResourceName(res.id) }}</td>
           <td class="col-num font-mono">{{ formatNum(res.amount) }}</td>
           <td class="col-num font-mono" style="color: var(--text-muted)">{{ res.max > 0 ? formatNum(res.max) : '∞' }}</td>
-          <td class="col-num font-mono" :class="rateClass(res.diff)">{{ formatRate(res.diff) }}/s</td>
+          <td class="col-num font-mono" :class="rateClass(res.diff)">{{ formatRate(res.diff * 4) }}/s</td>
           <td class="col-bar">
             <div class="mini-bar" v-if="res.max > 0">
               <div
