@@ -38,6 +38,8 @@ export {
   getTaxMultiplier,
   getProductionMultiplier,
   getMaxTaxRate,
+  getTempleMultiplier,
+  getKnowledgeMultiplier,
   type GovernmentType,
   type GovernmentDef,
 } from './government';
@@ -47,3 +49,20 @@ export {
   isQueueUnlocked,
   toggleQueueMode
 } from './queue';
+export {
+  buildCrate,
+  buildContainer,
+  assignCrate,
+  unassignCrate,
+  assignContainer,
+  unassignContainer,
+  getTotalAssignedCrates,
+  getTotalAssignedContainers,
+  getStorageBonus,
+  CRATE_VALUE,
+  CONTAINER_VALUE,
+  CRATE_COST_PLYWOOD,
+  CONTAINER_COST_STEEL,
+  STORABLE_RESOURCES,
+  type StorableResourceId,
+} from './storage';

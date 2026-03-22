@@ -75,7 +75,10 @@ export type BasicStructureId =
   | 'university'
   | 'wardenclyffe'
   | 'smelter'
-  | 'metal_refinery';
+  | 'metal_refinery'
+  | 'storage_yard'
+  | 'warehouse'
+  | 'amphitheatre';
 
 /** 单个建筑的状态 */
 export interface StructureState {

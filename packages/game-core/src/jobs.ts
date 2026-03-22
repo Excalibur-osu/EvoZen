@@ -118,4 +118,12 @@ export const BASE_JOBS: JobDefinition[] = [
     requiredTech: { science: 5 },
     description: '科学家研究宇宙并揭露秘密，产生知识。',
   },
+  {
+    id: 'priest',
+    name: '牧师',
+    impact: 1,
+    stress: 3,
+    requiredTech: { theology: 2 },
+    description: '牧师在神庙中主持祭祀，增加信仰加成。',
+  },
 ];

@@ -35,6 +35,21 @@ import {
   isQueueUnlocked as coreIsQueueUnlocked,
   toggleQueueMode as coreToggleQueueMode,
   getQueueMax,
+  // 仓储系统
+  buildCrate as coreBuildCrate,
+  buildContainer as coreBuildContainer,
+  assignCrate as coreAssignCrate,
+  unassignCrate as coreUnassignCrate,
+  assignContainer as coreAssignContainer,
+  unassignContainer as coreUnassignContainer,
+  getTotalAssignedCrates,
+  getTotalAssignedContainers,
+  getStorageBonus,
+  STORABLE_RESOURCES,
+  CRATE_VALUE,
+  CONTAINER_VALUE,
+  CRATE_COST_PLYWOOD,
+  CONTAINER_COST_STEEL,
 } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
@@ -131,6 +146,7 @@ export const useGameStore = defineStore('game', () => {
     const sheds = getStructCount('shed')
     lumberMax += lumberYards * 100
     lumberMax += sheds * 75
+    lumberMax += getStorageBonus(s, 'Lumber')
     s.resource['Lumber'].max = lumberMax
 
     // --- 石头上限 ---
@@ -138,40 +154,48 @@ export const useGameStore = defineStore('game', () => {
     const quarries = getStructCount('rock_quarry')
     stoneMax += quarries * 100
     stoneMax += sheds * 75
+    stoneMax += getStorageBonus(s, 'Stone')
     s.resource['Stone'].max = stoneMax
 
     // --- 铜上限 ---
     let copperMax = 100
     copperMax += sheds * 50
+    copperMax += getStorageBonus(s, 'Copper')
     s.resource['Copper'].max = copperMax
 
     // --- 铁上限 ---
     let ironMax = 100
     ironMax += sheds * 50
+    ironMax += getStorageBonus(s, 'Iron')
     s.resource['Iron'].max = ironMax
 
     // --- 水泥上限 ---
     let cementMax = 100
     cementMax += sheds * 40
+    cementMax += getStorageBonus(s, 'Cement')
     s.resource['Cement'].max = cementMax
 
     // --- 煤上限 ---
     let coalMax = 50
     coalMax += sheds * 30
+    coalMax += getStorageBonus(s, 'Coal')
     s.resource['Coal'].max = coalMax
 
     // --- 毛皮上限 ---
     let fursMax = 100
     fursMax += sheds * 40
+    fursMax += getStorageBonus(s, 'Furs')
     s.resource['Furs'].max = fursMax
 
     // --- 钢和铝上限 ---
     let steelMax = 50
     steelMax += sheds * 20
+    steelMax += getStorageBonus(s, 'Steel')
     s.resource['Steel'].max = steelMax
 
     let aluminiumMax = 50
     aluminiumMax += sheds * 20
+    aluminiumMax += getStorageBonus(s, 'Aluminium')
     s.resource['Aluminium'].max = aluminiumMax
 
     // --- 毛皮显示（有猎人工作时自动显示）---
@@ -245,6 +269,33 @@ export const useGameStore = defineStore('game', () => {
     // --- 工匠上限由铸造厂决定 ---
     const foundries = getStructCount('foundry')
     setJobMax('craftsman', foundries)
+
+    // --- 娱乐者上限由圆形剧场决定 ---
+    const amphitheatres = getStructCount('amphitheatre')
+    setJobMax('entertainer', amphitheatres)
+
+    // --- 牧师上限由神庙决定 ---
+    const temples = getStructCount('temple')
+    setJobMax('priest', temples)
+
+    // --- 板条箱/集装箱上限由装运站/集装箱港口决定 ---
+    const storageYards = getStructCount('storage_yard')
+    const warehouses = getStructCount('warehouse')
+    if (s.resource['Crates']) {
+      s.resource['Crates'].max = storageYards * 10
+    }
+    if (s.resource['Containers']) {
+      s.resource['Containers'].max = warehouses * 10
+    }
+
+    // --- 板条箱/集装箱显示 ---
+    if ((s.tech['container'] ?? 0) >= 1) {
+      s.resource['Crates'].display = true
+      s.settings.showStorage = true
+    }
+    if ((s.tech['steel_container'] ?? 0) >= 1) {
+      s.resource['Containers'].display = true
+    }
 
     // --- 铸造科技解锁合成资源显示 ---
     if ((s.tech['foundry'] ?? 0) >= 1) {
@@ -764,6 +815,54 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  // ---- 仓储操作 ----
+
+  /** 建造板条箱 */
+  function doBuildCrate(qty: number = 1) {
+    const result = coreBuildCrate(state.value, qty)
+    if (result) {
+      state.value = result
+      addMessage(`📦 建造了 ${qty} 个板条箱。`, 'success', 'progress')
+    } else {
+      addMessage('胶合板不足或板条箱已达上限。', 'warning', 'progress')
+    }
+  }
+
+  /** 建造集装箱 */
+  function doBuildContainer(qty: number = 1) {
+    const result = coreBuildContainer(state.value, qty)
+    if (result) {
+      state.value = result
+      addMessage(`📦 建造了 ${qty} 个集装箱。`, 'success', 'progress')
+    } else {
+      addMessage('钢材不足或集装箱已达上限。', 'warning', 'progress')
+    }
+  }
+
+  /** 给资源分配板条箱 */
+  function doAssignCrate(resourceId: string, qty: number = 1) {
+    const result = coreAssignCrate(state.value, resourceId, qty)
+    if (result) { state.value = result }
+  }
+
+  /** 从资源取消分配板条箱 */
+  function doUnassignCrate(resourceId: string, qty: number = 1) {
+    const result = coreUnassignCrate(state.value, resourceId, qty)
+    if (result) { state.value = result }
+  }
+
+  /** 给资源分配集装箱 */
+  function doAssignContainer(resourceId: string, qty: number = 1) {
+    const result = coreAssignContainer(state.value, resourceId, qty)
+    if (result) { state.value = result }
+  }
+
+  /** 从资源取消分配集装箱 */
+  function doUnassignContainer(resourceId: string, qty: number = 1) {
+    const result = coreUnassignContainer(state.value, resourceId, qty)
+    if (result) { state.value = result }
+  }
+
   return {
     state,
     messages,
@@ -813,5 +912,17 @@ export const useGameStore = defineStore('game', () => {
     enqueueBuilding,
     dequeueBuilding,
     toggleQueue,
+    // 仓储系统
+    doBuildCrate,
+    doBuildContainer,
+    doAssignCrate,
+    doUnassignCrate,
+    doAssignContainer,
+    doUnassignContainer,
+    STORABLE_RESOURCES,
+    CRATE_VALUE,
+    CONTAINER_VALUE,
+    CRATE_COST_PLYWOOD,
+    CONTAINER_COST_STEEL,
   }
 })

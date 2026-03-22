@@ -486,4 +486,134 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 95000 },
     effect: '建造队列容量 +1。',
   },
+
+  // ===== 仓储系统 (Storage) =====
+
+  // 对标原版 actions.js storage_yard reqs: { container: 1 }
+  // 简化：将原版多个科技合并为一个 containerization 入口
+  {
+    id: 'containerization',
+    name: '集装箱化',
+    description: '标准化的货物装载系统。',
+    category: 'storage',
+    era: '文明',
+    reqs: { cement: 1, mining: 1, storage: 1 },
+    grant: ['container', 1],
+    costs: { Knowledge: 2700 },
+    effect: '解锁装运站建筑，可使用板条箱扩展资源上限。',
+  },
+
+  // 对标原版 actions.js warehouse reqs: { steel_container: 1 }
+  {
+    id: 'steel_containers',
+    name: '钢制集装箱',
+    description: '用钢制造更坚固的集装箱。',
+    category: 'storage',
+    era: '文明',
+    reqs: { container: 1, smelting: 2 },
+    grant: ['steel_container', 1],
+    costs: { Knowledge: 3600 },
+    effect: '解锁集装箱港口建筑，可使用集装箱进一步扩展资源上限。',
+  },
+
+  // ===== 娱乐系统 (Entertainment) =====
+
+  // legacy tech.js L1670-1689: theatre → theatre:1
+  {
+    id: 'theatre',
+    name: '剧场',
+    description: '市民们可以在此观看演出，提振他们的精神。',
+    category: 'entertainment',
+    era: '文明',
+    reqs: { housing: 1, currency: 1, cement: 1 },
+    grant: ['theatre', 1],
+    costs: { Knowledge: 750 },
+    effect: '解锁圆形剧场建筑和娱乐者岗位。',
+  },
+
+  // legacy tech.js L1691-1708: playwright → theatre:2
+  {
+    id: 'playwright',
+    name: '剧作家',
+    description: '创作感人至深的戏剧作品。',
+    category: 'entertainment',
+    era: '文明',
+    reqs: { theatre: 1, science: 2 },
+    grant: ['theatre', 2],
+    costs: { Knowledge: 1080 },
+    effect: '每座圆形剧场的效果提升。',
+  },
+
+  // ===== 宗教系统 (Religion) =====
+
+  // 原版 theology:1 由重置系统给予，EvoZen 简化为可研究科技
+  {
+    id: 'faith',
+    name: '信仰',
+    description: '部落开始对宇宙产生敬畏。',
+    category: 'religion',
+    era: '文明',
+    reqs: { science: 1, housing: 1 },
+    grant: ['theology', 1],
+    costs: { Knowledge: 300 },
+    effect: '开启宗教科技线，解锁进一步的神学研究。',
+  },
+
+  // legacy tech.js L8345-8369: theology → theology:2
+  {
+    id: 'theology_tech',
+    name: '神学',
+    description: '系统化研究宗教信仰与超自然力量。',
+    category: 'religion',
+    era: '文明',
+    reqs: { theology: 1, housing: 1, cement: 1 },
+    grant: ['theology', 2],
+    costs: { Knowledge: 900 },
+    effect: '解锁神庙建筑和牧师岗位。',
+  },
+
+  // ===== 工具科技 (Hammer) =====
+
+  // 铜锤 → hammer:1（铜器冶金时代）
+  // 对标 legacy jobs.js L119: hammer 科技每级 +40% 石工效率
+  {
+    id: 'copper_hammer',
+    name: '铜锤',
+    description: '用铜制造出更坚硬的锤子。',
+    category: 'mining',
+    era: '文明',
+    reqs: { mining: 2 },
+    grant: ['hammer', 1],
+    costs: { Knowledge: 500, Copper: 20 },
+    effect: '石工效率 +40%。',
+  },
+
+  // 铁锤 → hammer:2
+  {
+    id: 'iron_hammer',
+    name: '铁锤',
+    description: '坚固的铁锤大幅提升采石效率。',
+    category: 'mining',
+    era: '文明',
+    reqs: { hammer: 1, mining: 3 },
+    grant: ['hammer', 2],
+    costs: { Knowledge: 2800, Iron: 40 },
+    effect: '石工效率再 +40%。',
+  },
+
+  // ===== 神权政体科技 (Theocracy) =====
+
+  // 对标 legacy/src/tech.js L3055-3072
+  // reqs: { govern: 1, theology: 2 }, grant: ['gov_theo', 1], cost: 1200 Knowledge
+  {
+    id: 'theocracy',
+    name: '神权政体',
+    description: '以宗教信仰为基础建立政权。',
+    category: 'government',
+    era: '文明',
+    reqs: { govern: 1, theology: 2 },
+    grant: ['gov_theo', 1],
+    costs: { Knowledge: 1200 },
+    effect: '解锁神权政体。神庙加成 +12%，但教授效率 -25%，科学家效率 -50%。',
+  },
 ];

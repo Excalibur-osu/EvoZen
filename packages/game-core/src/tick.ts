@@ -10,7 +10,7 @@
 import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
 import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
-import { getTaxMultiplier, getProductionMultiplier, tickGovernmentCooldown } from './government';
+import { getTaxMultiplier, getProductionMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from './government';
 import { BASIC_STRUCTURES } from './structures';
 
 /**
@@ -178,9 +178,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 教授基础产出 — 原版 main.js L9313:
   // professor.impact = 0.5 + (library_count * 0.01)
   const profImpact = 0.5 + libraries * 0.01;
-  const professorsBase = professors * profImpact;
+  // 神权政体惩罚——原版 main.js L4183-4184:
+  // if (govern.type === 'theocracy') professors_base *= 1 - (govEffect.theocracy()[1] / 100)
+  const profGovMult = getKnowledgeMultiplier(state, 'professor');
+  const professorsBase = professors * profImpact * profGovMult;
   // 科学家产出 — impact = 1.0
-  const scientistBase = scientists * 1.0;
+  // 神权政体惩罚——原版 main.js L4200-4201:
+  // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
+  const sciGovMult = getKnowledgeMultiplier(state, 'scientist');
+  const scientistBase = scientists * 1.0 * sciGovMult;
   // 教授+科学家受饥饿影响，日晷不受（原版 L4228-4229）
   let knowledgeDelta = (professorsBase + scientistBase) + sundialBase;
   // 图书馆全局加成 — 原版 main.js L4259:

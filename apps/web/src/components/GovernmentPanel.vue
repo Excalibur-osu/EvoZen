@@ -60,6 +60,15 @@ function onTaxInput(e: Event) {
 function adjustTax(delta: number) {
   game.setTaxRate(taxRate.value + delta)
 }
+
+/** 检查某政体是否可用（科技前置是否满足） */
+function isGovAvailable(def: { id: string; reqGovern: number }): boolean {
+  // 基本前置：govern 科技等级
+  if ((game.state.tech['govern'] ?? 0) < def.reqGovern) return false
+  // 神权政体额外需要 gov_theo:1（对标 legacy/src/civics.js L397）
+  if (def.id === 'theocracy' && (game.state.tech['gov_theo'] ?? 0) < 1) return false
+  return true
+}
 </script>
 
 <template>
@@ -101,9 +110,9 @@ function adjustTax(delta: number) {
             class="gov-btn"
             :class="{
               active: currentGovType === def.id,
-              locked: (game.state.tech['govern'] ?? 0) < def.reqGovern,
+              locked: !isGovAvailable(def),
             }"
-            :disabled="isInCooldown || currentGovType === def.id || (game.state.tech['govern'] ?? 0) < def.reqGovern"
+            :disabled="isInCooldown || currentGovType === def.id || !isGovAvailable(def)"
             @click="switchGov(def.id)"
           >
             <div class="gov-btn-name">{{ def.name }}</div>

@@ -327,4 +327,54 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '工匠岗位上限 +1。',
   },
+
+  // ---- 仓储 ----
+  // actions.js L2239-2297: storage_yard (装运站/货运码头)
+  // 对标原版：reqs { container: 1 }，每座 +10 板条箱上限
+  {
+    id: 'storage_yard',
+    name: '装运站',
+    description: '标准化的货物装卸站，扩展板条箱容量。',
+    category: 'storage',
+    reqs: { container: 1 },
+    costs: {
+      Money: scaleCost(10, 1.36),
+      Brick: scaleCost(3, 1.35),
+      Wrought_Iron: scaleCost(5, 1.35),
+    },
+    effect: '板条箱上限 +10。',
+  },
+
+  // actions.js L2299-2351: warehouse (集装箱港口)
+  // 对标原版：reqs { steel_container: 1 }，每座 +10 集装箱上限
+  {
+    id: 'warehouse',
+    name: '集装箱港口',
+    description: '用钢制集装箱存储大量货物。',
+    category: 'storage',
+    reqs: { steel_container: 1 },
+    costs: {
+      Money: scaleCost(400, 1.26),
+      Cement: scaleCost(75, 1.26),
+      Sheet_Metal: scaleCost(25, 1.25),
+    },
+    effect: '集装箱上限 +10。',
+  },
+
+  // ---- 娱乐 ----
+  // actions.js L3285-3337: amphitheatre (圆形剧场)
+  // 对标原版：reqs { theatre: 1 }，每座 +1 娱乐者上限，+1 士气上限
+  {
+    id: 'amphitheatre',
+    name: '圆形剧场',
+    description: '举办演出和表演，提升市民士气。',
+    category: 'commerce',
+    reqs: { theatre: 1 },
+    costs: {
+      Money: scaleCost(500, 1.55),
+      Lumber: scaleCost(50, 1.75),
+      Stone: scaleCost(200, 1.75),
+    },
+    effect: '娱乐者上限 +1，士气上限 +1。',
+  },
 ];

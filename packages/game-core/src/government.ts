@@ -6,9 +6,10 @@
  *
  * 政体解锁：
  *   - govern:1 (government 科技)    → 无政府/独裁/民主/寡头 可选
+ *   - gov_theo:1 (theocracy 科技)   → 神权政体 可选（需 govern:1 + theology:2）
  *   - govern:2 (republic 科技)      → 共和国 可选（后期，暂不实装）
  *
- * 第一阶段只实装前 4 种政体 + 「变更政体」的冷却计数器。
+ * 第一阶段实装 5 种政体 + 「变更政体」的冷却计数器。
  */
 
 import type { GameState } from '@evozen/shared-types';
@@ -18,7 +19,7 @@ import type { GameState } from '@evozen/shared-types';
 // ============================================================
 
 /** 目前可选的政体（第一阶段） */
-export type GovernmentType = 'anarchy' | 'autocracy' | 'democracy' | 'oligarchy';
+export type GovernmentType = 'anarchy' | 'autocracy' | 'democracy' | 'oligarchy' | 'theocracy';
 
 // ============================================================
 // 政体定义（名称 + 描述 + 效果摘要）
@@ -71,6 +72,17 @@ export const GOVERNMENT_DEFS: GovernmentDef[] = [
     reqGovern: 1,
     // legacy civics.js L200: tax penalty 5%, tax cap 20%
     effects: ['税率上限 +20%（最高可调至40%）', '基础税收效率 -5%'],
+  },
+  {
+    id: 'theocracy',
+    name: '神权',
+    description: '以宗教信仰指导国家治理。',
+    reqGovern: 1,
+    // legacy civics.js L205-210: govEffect.theocracy()
+    // [0] temple bonus = 12%
+    // [1] prof_malus = 25% (教授效率降低)
+    // [2] sci_malus = 50% (科学家效率降低)
+    effects: ['神庙效果 +12%', '教授效率 -25%', '科学家效率 -50%'],
   },
 ];
 
@@ -167,6 +179,10 @@ export function changeGovernment(state: GameState, newType: GovernmentType): Gam
   if (!def) return null;
   if ((state.tech['govern'] ?? 0) < def.reqGovern) return null;
 
+  // 神权政体额外需要 gov_theo:1 科技
+  // 对标 legacy/src/civics.js L397: if (global.tech['gov_theo'])
+  if (newType === 'theocracy' && (state.tech['gov_theo'] ?? 0) < 1) return null;
+
   const newState: GameState = JSON.parse(JSON.stringify(state));
   const newGovern = newState.civic.govern;
   newGovern.type = newType;
@@ -189,4 +205,41 @@ export function tickGovernmentCooldown(state: GameState): void {
   if (govern && (govern.rev ?? 0) > 0) {
     govern.rev = Math.max(0, (govern.rev ?? 0) - 1);
   }
+}
+
+/**
+ * 获取当前政体对神庙效果的乘数
+ * 神权政体下神庙效果 +12%
+ * 对标 legacy/src/resources.js L3143-3144:
+ * temple_bonus *= 1 + (govEffect.theocracy()[0] / 100)  → theocracy()[0] = 12
+ *
+ * @param state - 当前游戏状态
+ * @returns 神庙效果乘数
+ */
+export function getTempleMultiplier(state: GameState): number {
+  const govType = state.civic.govern?.type ?? 'anarchy';
+  if (govType === 'theocracy') {
+    return 1.12; // 1 + 12/100
+  }
+  return 1.0;
+}
+
+/**
+ * 获取当前政体对知识产出岗位的效率乘数
+ * 神权政体下教授 -25%，科学家 -50%
+ * 对标 legacy/src/main.js L4183-4184 (professor):
+ *   professors_base *= 1 - (govEffect.theocracy()[1] / 100)  → [1]=25 → ×0.75
+ * 对标 legacy/src/main.js L4200-4201 (scientist):
+ *   scientist_base *= 1 - (govEffect.theocracy()[2] / 100)   → [2]=50 → ×0.50
+ *
+ * @param state - 当前游戏状态
+ * @param role - 'professor' 或 'scientist'
+ * @returns 效率乘数
+ */
+export function getKnowledgeMultiplier(state: GameState, role: 'professor' | 'scientist'): number {
+  const govType = state.civic.govern?.type ?? 'anarchy';
+  if (govType === 'theocracy') {
+    return role === 'professor' ? 0.75 : 0.50;
+  }
+  return 1.0;
 }
