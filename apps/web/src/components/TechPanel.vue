@@ -24,8 +24,8 @@ const completedTechs = computed(() => {
   })
 })
 
-function formatCost(costs: Record<string, number>): Array<{ resId: string; amount: number; affordable: boolean }> {
-  return Object.entries(costs).map(([resId, amount]) => ({
+function formatCost(techId: string): Array<{ resId: string; amount: number; affordable: boolean }> {
+  return Object.entries(game.getTechCost(techId)).map(([resId, amount]) => ({
     resId,
     amount: Math.ceil(amount),
     affordable: (game.state.resource[resId]?.amount ?? 0) >= amount,
@@ -55,7 +55,7 @@ function formatCost(costs: Record<string, number>): Array<{ resId: string; amoun
       <p class="tech-effect">{{ tech.effect }}</p>
       <div class="tech-costs">
         <span
-          v-for="cost in formatCost(tech.costs)"
+          v-for="cost in formatCost(tech.id)"
           :key="cost.resId"
           class="cost-tag"
           :class="{ unaffordable: !cost.affordable }"

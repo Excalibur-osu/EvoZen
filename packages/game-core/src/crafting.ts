@@ -10,7 +10,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
-import { CRAFT_COSTS, type CraftRecipe } from './resources';
+import { CRAFT_COSTS } from './resources';
 
 // ============================================================
 // 合成产线 ID
@@ -36,6 +36,44 @@ export interface FoundryState {
   on: number;
   /** 各产线分配的工匠数 */
   [craftId: string]: number;
+}
+
+/**
+ * 计算自动锻造的产出倍率
+ *
+ * 对标 legacy/src/resources.js craftingRatio():
+ * - foundry:2 之后，每座铸造厂提供 +3% 自动锻造加成
+ * - foundry:3 之后，同一产线每个额外工匠再 +3%
+ * - foundry:4 之后，每座锯木厂为胶合板额外 +2%
+ * - 矮人 artisan 特质使自动锻造总产量额外 ×1.5
+ */
+function getAutoCraftRatio(
+  state: GameState,
+  craftId: CraftableId,
+  assignedWorkers: number
+): number {
+  let ratio = 1;
+  const foundryLevel = state.tech['foundry'] ?? 0;
+  const foundryCount = (state.city['foundry'] as FoundryState | undefined)?.count ?? 0;
+
+  if (foundryLevel >= 2) {
+    ratio += foundryCount * 0.03;
+  }
+
+  if (foundryLevel >= 3 && assignedWorkers > 1) {
+    ratio += (assignedWorkers - 1) * 0.03;
+  }
+
+  if (foundryLevel >= 4 && craftId === 'Plywood') {
+    const sawmills = (state.city['sawmill'] as { count?: number } | undefined)?.count ?? 0;
+    ratio += sawmills * 0.02;
+  }
+
+  if (state.race['artisan']) {
+    ratio *= 1.5;
+  }
+
+  return ratio;
 }
 
 // ============================================================
@@ -103,7 +141,7 @@ export function craftingTick(state: GameState): Record<string, number> {
   const foundry = state.city['foundry'] as FoundryState | undefined;
   if (!foundry) return deltas;
 
-  const speed = 1; // 基础速度倍率（原版有科技加成，后续可扩展）
+  const speed = 1;
   const baseTickRate = speed / 140; // 每个工匠每 tick 的基础产出
 
   for (const craftId of CRAFTABLE_IDS) {
@@ -134,7 +172,7 @@ export function craftingTick(state: GameState): Record<string, number> {
     }
 
     // 产出合成品
-    const output = effectiveWorkers * baseTickRate;
+    const output = effectiveWorkers * baseTickRate * getAutoCraftRatio(state, craftId, assignedWorkers);
     deltas[craftId] = (deltas[craftId] ?? 0) + output;
   }
 

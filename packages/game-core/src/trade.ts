@@ -4,13 +4,14 @@
  * 本模块实现原版 Evolve 的贸易站买卖机制：
  * - 买入：花费金币购入资源，价格 = 资源基础价值 × 贸易比率
  * - 卖出：出售资源获得金币，卖价 = 买价 / 4（与原版一致）
- * - 贸易路线：每座贸易站提供一条自动贸易路线（买/卖/关闭），每 tick 自动执行
+ * - 贸易路线：每座贸易站提供多条自动贸易路线（买/卖/关闭），每 tick 自动执行
  *
  * 纯函数模块，零 UI 依赖。
  */
 
 import type { GameState } from '@evozen/shared-types';
 import { RESOURCE_VALUES, TRADE_RATIOS } from './resources';
+import { getTradeBuyPriceMultiplier, getTradeSellPriceMultiplier } from './traits';
 
 // ============================================================
 // 贸易路线数据结构
@@ -46,10 +47,11 @@ export type TradableResourceId = (typeof TRADABLE_RESOURCES)[number];
  *
  * 原版公式简化：buyPrice = value × tradeRatio
  */
-export function getBuyPrice(resourceId: string): number {
+export function getBuyPrice(resourceId: string, state?: GameState): number {
   const value = RESOURCE_VALUES[resourceId] ?? 0;
   const ratio = TRADE_RATIOS[resourceId] ?? 1;
-  return +(value * ratio).toFixed(1);
+  const traitMult = state ? getTradeBuyPriceMultiplier(state) : 1;
+  return +(value * ratio * traitMult).toFixed(1);
 }
 
 /**
@@ -57,10 +59,11 @@ export function getBuyPrice(resourceId: string): number {
  *
  * 原版公式简化：sellPrice = value × tradeRatio / 4
  */
-export function getSellPrice(resourceId: string): number {
+export function getSellPrice(resourceId: string, state?: GameState): number {
   const value = RESOURCE_VALUES[resourceId] ?? 0;
   const ratio = TRADE_RATIOS[resourceId] ?? 1;
-  return +((value * ratio) / 4).toFixed(1);
+  const traitMult = state ? getTradeSellPriceMultiplier(state) : 1;
+  return +(((value * ratio) / 4) * traitMult).toFixed(1);
 }
 
 // ============================================================
@@ -79,7 +82,7 @@ export function buyResource(
   resourceId: string,
   qty: number = 1
 ): GameState | null {
-  const price = getBuyPrice(resourceId) * qty;
+  const price = getBuyPrice(resourceId, state) * qty;
   const money = state.resource['Money'];
   if (!money || money.amount < price) return null;
 
@@ -115,7 +118,7 @@ export function sellResource(
   const res = state.resource[resourceId];
   if (!res || res.amount < qty) return null;
 
-  const income = getSellPrice(resourceId) * qty;
+  const income = getSellPrice(resourceId, state) * qty;
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
   newState.resource[resourceId].amount -= qty;
@@ -154,7 +157,7 @@ export function tradeTick(state: GameState): Record<string, number> {
     const { resource, action, qty } = route;
 
     if (action === 'buy') {
-      const price = getBuyPrice(resource) * qty;
+      const price = getBuyPrice(resource, state) * qty;
       const money = state.resource['Money']?.amount ?? 0;
       const totalMoneyDelta = deltas['Money'] ?? 0;
       // 检查金币是否足够（考虑之前路线的消耗）
@@ -168,7 +171,7 @@ export function tradeTick(state: GameState): Record<string, number> {
       deltas['Money'] = (deltas['Money'] ?? 0) - price;
       deltas[resource] = (deltas[resource] ?? 0) + qty;
     } else if (action === 'sell') {
-      const income = getSellPrice(resource) * qty;
+      const income = getSellPrice(resource, state) * qty;
       const resAmount = state.resource[resource]?.amount ?? 0;
       const totalResDelta = deltas[resource] ?? 0;
       // 检查资源是否充足
@@ -187,11 +190,19 @@ export function tradeTick(state: GameState): Record<string, number> {
 // ============================================================
 
 /**
- * 获取当前可用的贸易路线数量上限（= 贸易站数量）
+ * 获取当前可用的贸易路线数量上限
+ *
+ * 对标原版 `actions.city.trade.routes()`：
+ * - `trade:1` 时每座贸易站提供 2 条路线
+ * - `trade:2+` 时每座贸易站提供 3 条路线
  */
 export function getMaxTradeRoutes(state: GameState): number {
   const tradePost = state.city['trade_post'] as { count: number } | undefined;
-  return tradePost?.count ?? 0;
+  const count = tradePost?.count ?? 0;
+  if (count <= 0) return 0;
+
+  const routesPerPost = (state.tech['trade'] ?? 0) >= 2 ? 3 : 2;
+  return count * routesPerPost;
 }
 
 /**

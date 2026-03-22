@@ -119,7 +119,7 @@ export function getTaxMultiplier(state: GameState): number {
  * @param state - 当前游戏状态
  * @returns 生产力乘数（1.0 = 无加成）
  */
-export function getProductionMultiplier(state: GameState): number {
+export function getProductionMultiplier(_state: GameState): number {
   // 原版 govEffect.democracy()[1] = work_malus = 5（%）
   // 该值在原版 main.js 中属于 morale/stress 系统（全局士气影响生产力），
   // 并非直接乘资源产出。EvoZen 目前尚未实装士气系统，

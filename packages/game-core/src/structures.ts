@@ -188,6 +188,20 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '食物上限 +500',
   },
+  // actions.js L1587-1615: smokehouse
+  {
+    id: 'smokehouse',
+    name: '烟房',
+    description: '用于熏制与保存食物，延长肉类储存时间。',
+    category: 'storage',
+    reqs: { hunting: 1 },
+    costs: {
+      Money: scaleCost(85, 1.32),
+      Lumber: scaleCost(65, 1.36),
+      Stone: scaleCost(50, 1.36),
+    },
+    effect: '食物上限 +100，降低腐坏（待接入）。',
+  },
   // actions.js L2104-2200: shed
   {
     id: 'shed',
@@ -280,6 +294,20 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Stone: scaleCost(260, 1.46),
     },
     effect: '士兵上限 +2。',
+  },
+  // actions.js L2021-2055: hospital
+  {
+    id: 'hospital',
+    name: '医院',
+    description: '提供基础医疗设施，改善伤病恢复能力。',
+    category: 'military',
+    reqs: { medic: 1 },
+    costs: {
+      Money: scaleCost(22000, 1.32),
+      Furs: scaleCost(4000, 1.32),
+      Aluminium: scaleCost(10000, 1.32),
+    },
+    effect: '伤兵治愈与人口增长加成待接入。',
   },
 
   // ---- 制造与精炼设施 ----
@@ -376,5 +404,36 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Stone: scaleCost(200, 1.75),
     },
     effect: '娱乐者上限 +1，士气上限 +1。',
+  },
+
+  // ---- 宗教 ----
+  // actions.js L3379-3423: temple
+  {
+    id: 'temple',
+    name: '寺庙',
+    description: '市民们在此祈祷、祭祀，并传播共同的信仰。',
+    category: 'commerce',
+    reqs: { theology: 2 },
+    costs: {
+      Money: scaleCost(50, 1.36),
+      Lumber: scaleCost(25, 1.36),
+      Furs: scaleCost(15, 1.36),
+      Cement: scaleCost(10, 1.36),
+    },
+    effect: '牧师上限 +1（后续接入士气/信仰加成）。',
+  },
+  // actions.js L2546-2578: sawmill
+  {
+    id: 'sawmill',
+    name: '锯木厂',
+    description: '以更高效的切割与加工流程提升木材产量和储备能力。',
+    category: 'resource',
+    reqs: { saw: 1 },
+    costs: {
+      Money: scaleCost(3000, 1.26),
+      Iron: scaleCost(400, 1.26),
+      Cement: scaleCost(420, 1.26),
+    },
+    effect: '木材上限 +200，伐木工木材产量 +5%。',
   },
 ];

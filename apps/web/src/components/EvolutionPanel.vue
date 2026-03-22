@@ -6,15 +6,41 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { ref } from 'vue'
+import { getSpeciesTraitDescriptors } from '@evozen/game-core'
 
 const game = useGameStore()
 
 const speciesOptions = [
-  { id: 'human', label: '人类', emoji: '🧑' },
-  { id: 'elven', label: '精灵', emoji: '🧝' },
-  { id: 'orc', label: '兽人', emoji: '👹' },
-  { id: 'dwarf', label: '矮人', emoji: '⛏️' },
-  { id: 'goblin', label: '地精', emoji: '👺' },
+  {
+    id: 'human',
+    label: '人类',
+    emoji: '🧑',
+    traits: getSpeciesTraitDescriptors('human'),
+  },
+  {
+    id: 'elven',
+    label: '精灵',
+    emoji: '🧝',
+    traits: getSpeciesTraitDescriptors('elven'),
+  },
+  {
+    id: 'orc',
+    label: '兽人',
+    emoji: '👹',
+    traits: getSpeciesTraitDescriptors('orc'),
+  },
+  {
+    id: 'dwarf',
+    label: '矮人',
+    emoji: '⛏️',
+    traits: getSpeciesTraitDescriptors('dwarf'),
+  },
+  {
+    id: 'goblin',
+    label: '地精',
+    emoji: '👺',
+    traits: getSpeciesTraitDescriptors('goblin'),
+  },
 ]
 
 const selectedSpecies = ref('human')
@@ -111,6 +137,12 @@ function startEvolution() {
         >
           <span class="species-emoji">{{ sp.emoji }}</span>
           <span class="species-name">{{ sp.label }}</span>
+          <span class="species-traits">
+            {{ sp.traits.map(t => t.label).join(' / ') }}
+          </span>
+          <span class="species-effect">
+            {{ sp.traits.map(t => t.summary).join(' ') }}
+          </span>
         </button>
       </div>
       <button
@@ -194,15 +226,15 @@ function startEvolution() {
 
 .species-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
 }
 .species-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
-  padding: 14px 8px;
+  padding: 14px 12px;
   background: var(--bg-input);
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -224,8 +256,28 @@ function startEvolution() {
   font-size: 28px;
 }
 .species-name {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+}
+.species-traits {
+  font-size: 11px;
+  color: var(--text-accent);
+}
+.species-effect {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .species-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .species-effect {
+    display: none;
+  }
 }
 
 /* 快速开始 */

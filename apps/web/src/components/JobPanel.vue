@@ -40,6 +40,7 @@ const JOB_OUTPUT: Record<string, string> = {
   professor: '📚 知识',
   scientist: '🔬 知识',
   entertainer: '🎭 士气',
+  priest: '⛪ 信仰/士气',
   craftsman: '🔨 制造',
 }
 

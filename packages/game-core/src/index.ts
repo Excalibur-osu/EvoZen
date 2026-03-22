@@ -9,6 +9,23 @@ export { RESOURCE_VALUES, TRADE_RATIOS, CRAFT_COSTS, type CraftRecipe } from './
 export { BASE_JOBS, type JobDefinition } from './jobs';
 export { BASIC_TECHS, type TechDefinition } from './tech';
 export { BASIC_STRUCTURES, type StructureDefinition, type CostFunction } from './structures';
+export {
+  SPECIES_TRAITS,
+  SPECIES_TRAIT_DESCRIPTORS,
+  assignSpeciesTraits,
+  getSpeciesTraitDescriptors,
+  getProfessorTraitBonus,
+  getLibraryKnowledgeCapMultiplier,
+  getTradeBuyPriceMultiplier,
+  getTradeSellPriceMultiplier,
+  getTaxIncomeTraitMultiplier,
+  getCraftingSpeedMultiplier,
+  getScienceKnowledgeCostMultiplier,
+  getModifiedTechCosts,
+  type SupportedSpeciesId,
+  type SpeciesTraitId,
+  type SpeciesTraitDescriptor,
+} from './traits';
 export { gameTick } from './tick';
 export { saveGame, loadGame, exportSave, importSave } from './save';
 export {

@@ -22,8 +22,8 @@ import {
   type FoundryState,
   buyResource as coreBuyResource,
   sellResource as coreSellResource,
-  getBuyPrice,
-  getSellPrice,
+  getBuyPrice as coreGetBuyPrice,
+  getSellPrice as coreGetSellPrice,
   getMaxTradeRoutes,
   setTradeRoute as coreSetTradeRoute,
   type TradeRoute,
@@ -42,14 +42,16 @@ import {
   unassignCrate as coreUnassignCrate,
   assignContainer as coreAssignContainer,
   unassignContainer as coreUnassignContainer,
-  getTotalAssignedCrates,
-  getTotalAssignedContainers,
   getStorageBonus,
   STORABLE_RESOURCES,
   CRATE_VALUE,
   CONTAINER_VALUE,
   CRATE_COST_PLYWOOD,
   CONTAINER_COST_STEEL,
+  assignSpeciesTraits,
+  getLibraryKnowledgeCapMultiplier,
+  getModifiedTechCosts,
+  getSpeciesTraitDescriptors,
 } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
@@ -80,6 +82,7 @@ export const useGameStore = defineStore('game', () => {
     const saved = loadGame()
     if (saved) {
       state.value = saved
+      syncRaceTraits()
       addMessage('读取存档成功。', 'success', 'progress')
     } else {
       state.value = createNewGame()
@@ -136,15 +139,19 @@ export const useGameStore = defineStore('game', () => {
     let foodMax = 250
     const farms = getStructCount('farm')
     const silos = getStructCount('silo')
+    const smokehouses = getStructCount('smokehouse')
     foodMax += farms * 50
-    foodMax += silos * 250
+    foodMax += silos * 500
+    foodMax += smokehouses * 100
     s.resource['Food'].max = foodMax
 
     // --- 木材上限 ---
     let lumberMax = 200
     const lumberYards = getStructCount('lumber_yard')
+    const sawmills = getStructCount('sawmill')
     const sheds = getStructCount('shed')
     lumberMax += lumberYards * 100
+    lumberMax += sawmills * 200
     lumberMax += sheds * 75
     lumberMax += getStorageBonus(s, 'Lumber')
     s.resource['Lumber'].max = lumberMax
@@ -208,7 +215,7 @@ export const useGameStore = defineStore('game', () => {
     let knowledgeMax = 100
     const libraries = getStructCount('library')
     const universities = getStructCount('university')
-    knowledgeMax += libraries * 125
+    knowledgeMax += libraries * 125 * getLibraryKnowledgeCapMultiplier(s)
     knowledgeMax += universities * 500
     s.resource['Knowledge'].max = knowledgeMax
 
@@ -233,12 +240,12 @@ export const useGameStore = defineStore('game', () => {
     setJobMax('miner', getStructCount('mine'))
     // 煤矿工人由煤矿决定
     setJobMax('coal_miner', getStructCount('coal_mine'))
-    // 水泥工人由水泥厂决定
-    setJobMax('cement_worker', getStructCount('cement_plant'))
+    // 水泥工人由水泥厂决定（原版每座 +2）
+    setJobMax('cement_worker', getStructCount('cement_plant') * 2)
     // 银行家由银行数量决定
     setJobMax('banker', banks)
-    // 教授由图书馆决定
-    setJobMax('professor', libraries + universities)
+    // 教授由大学决定；图书馆只影响知识产出
+    setJobMax('professor', universities)
 
     // --- 科技解锁资源显示 ---
     if ((s.tech['mining'] ?? 0) >= 3) {
@@ -368,6 +375,16 @@ export const useGameStore = defineStore('game', () => {
 
   function getStructCount(id: string): number {
     return (state.value.city[id] as { count: number } | undefined)?.count ?? 0
+  }
+
+  function syncRaceTraits() {
+    assignSpeciesTraits(state.value.race, state.value.race.species)
+  }
+
+  function getTechCost(techId: string): Record<string, number> {
+    const def = BASIC_TECHS.find(t => t.id === techId)
+    if (!def) return {}
+    return getModifiedTechCosts(state.value, def.costs, def.category)
   }
 
   function setJobMax(jobId: string, max: number) {
@@ -589,7 +606,8 @@ export const useGameStore = defineStore('game', () => {
   function canAffordTech(techId: string): boolean {
     const def = BASIC_TECHS.find(t => t.id === techId)
     if (!def) return false
-    for (const [resId, cost] of Object.entries(def.costs)) {
+    const costs = getTechCost(techId)
+    for (const [resId, cost] of Object.entries(costs)) {
       if ((state.value.resource[resId]?.amount ?? 0) < cost) return false
     }
     return true
@@ -598,7 +616,8 @@ export const useGameStore = defineStore('game', () => {
   function research(techId: string) {
     const def = BASIC_TECHS.find(t => t.id === techId)
     if (!def || !canAffordTech(techId)) return
-    for (const [resId, cost] of Object.entries(def.costs)) {
+    const costs = getTechCost(techId)
+    for (const [resId, cost] of Object.entries(costs)) {
       state.value.resource[resId].amount -= cost
     }
     const [grantKey, grantLvl] = def.grant
@@ -672,6 +691,7 @@ export const useGameStore = defineStore('game', () => {
     }
 
     state.value.race.species = speciesId
+    syncRaceTraits()
 
     // 初始化种族人口资源（1个初始人口，上限1）
     state.value.resource[speciesId] = {
@@ -712,7 +732,13 @@ export const useGameStore = defineStore('game', () => {
     state.value.settings.showCity = true
 
     const label = speciesLabels[speciesId] ?? speciesId
+    const traitSummary = getSpeciesTraitDescriptors(speciesId)
+      .map(trait => `${trait.label}${trait.activeNow ? '' : '（后续生效）'}`)
+      .join(' / ')
     addMessage(`🎉 进化完成！你的 ${label} 部落踏上了文明之路。`, 'special', 'progress')
+    if (traitSummary) {
+      addMessage(`🧬 当前种族特质：${traitSummary}`, 'info', 'progress')
+    }
     addMessage(`💡 提示：先研究"棍棒"来解锁更多科技。点击"研究"标签页查看。`, 'info', 'progress')
     addMessage(`💡 提示：在"洞穴"标签页可以手动搜集食物和木材。`, 'info', 'progress')
   }
@@ -784,6 +810,14 @@ export const useGameStore = defineStore('game', () => {
   /** 设置贸易路线 */
   function updateTradeRoute(index: number, route: TradeRoute) {
     state.value = coreSetTradeRoute(state.value, index, route)
+  }
+
+  function getBuyPrice(resourceId: string): number {
+    return coreGetBuyPrice(resourceId, state.value)
+  }
+
+  function getSellPrice(resourceId: string): number {
+    return coreGetSellPrice(resourceId, state.value)
   }
 
   // ---- 政府操作 ----
@@ -883,6 +917,7 @@ export const useGameStore = defineStore('game', () => {
     build,
     isTechAvailable,
     canAffordTech,
+    getTechCost,
     research,
     assignWorker,
     removeWorker,

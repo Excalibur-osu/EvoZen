@@ -56,29 +56,29 @@ EvoZen/
 |------|------|------|
 | 进化阶段 | ✅ 完成 | RNA/DNA 收集、物种选择、快速开始 |
 | 资源系统 | ✅ 完成 | 18 种资源、产出/消耗引擎、建筑加成 |
-| 科技树 | ✅ 完成 | 45 个科技（进化链 + 科学链 + 仓储/娱乐/宗教/工具/政府线） |
+| 科技树 | 🟡 部分完成 | 56 个科技；主体可玩，但 `science:5`、贸易升级链和部分文明时代收尾科技仍缺 |
 | 建造队列 | ✅ 完成 | 城市规划科技解锁建造队列 UI，逐 Tick 扣资源排队建造 |
-| 建筑系统 | ✅ 完成 | 22 个建筑、费用递增、效果联动 |
-| 岗位系统 | ✅ 完成 | 14 个岗位（含娱乐者、牧师）、工人分配、产量计算 |
+| 建筑系统 | ✅ 完成 | 26 个建筑、费用递增、效果联动 |
+| 岗位系统 | 🟡 部分完成 | 14 个岗位已接入；entertainer/priest 效果未挂载，`scientist` 当前仍不可达 |
 | 本地存档 | ✅ 完成 | localStorage + base64 导入导出 |
-| 贸易系统 | ✅ 完成 | 贸易站 + 资源买卖 + 自动贸易路线 |
+| 贸易系统 | 🟡 部分完成 | 贸易站 + 资源买卖 + 自动贸易路线；基础路线数已对齐，升级科技链仍待补齐 |
 | 工匠/铸造 | ✅ 完成 | 合成材料（胶合板/砖/锻铁/合金板）+ 工匠产线分配 |
 | 冶金系统 | ✅ 完成 | 熔炉 + 钢铁生产 + 金属精炼厂 + 铝矿开采 |
 | 政府系统 | ✅ 完成 | 5 种政体（无政府/独裁/民主/寡头/神权）+ 税率调节 + 250 tick 切换冷却 |
 | 银行/金融 | ✅ 完成 | 银行建筑 + 银行家岗位 + Vault 科技扩展金钱上限 |
 | 仓储系统 | ✅ 完成 | 板条箱/集装箱 + 装运站/集装箱港口 + 集装箱化/钢制集装箱科技 |
 | 娱乐系统 | ✅ 完成 | 剧场/剧作家科技 + 圆形剧场建筑 + 娱乐者岗位 |
-| 宗教系统 | ✅ 完成 | 信仰/神学科技 + 神庙建筑 + 牧师岗位 + 神权政体 |
+| 宗教系统 | 🟡 部分完成 | faith/theology/theocracy + `temple` 建筑已接入；priest 产出与 morale 挂载仍待补齐 |
 
 #### 待完成系统
 
 | 系统 | 状态 | 说明 |
 |------|------|------|
-| 日历/季节 | 🔲 待做 | 春夏秋冬循环 + 天气（晴/雨/雪/风）对农业和士气的影响 |
+| 日历/季节 | 🟡 部分完成 | 已有 day/year/season 推进；仍缺天气（晴/雨/雪/风）和对农业/士气的影响 |
 | 士气系统 | 🔲 待做 | morale/stress → 全局产出乘数 + 季节/天气/税率/政体联动 + entertainer/priest 产出挂载 |
-| 补全建筑 | 🔲 待做 | hospital(+1人口) + sawmill(木材+5%/座) + smokehouse(食物上限+500) + oil_well + oil_depot + wardenclyffe(高级实验室) + biolab + casino + wharf(港口) + tourist_center + shrine |
-| 补全资源 | 🔲 待做 | Oil(石油) + Titanium(钛) — 工业化和后续建筑的基础材料 |
-| 补全科技 | 🔲 待做 | hospital/farm_house/carpentry/iron_saw/shovel/iron_shovel/dynamite/rebar/apprentices/artisans/aphrodisiac/large_trades/dowsing_rod/metal_detector 等 ~15 个文明时代科技 |
+| 补全建筑 | 🔲 待做 | oil_well + oil_depot + wardenclyffe(高级实验室) + biolab + casino + wharf(港口) + tourist_center + shrine |
+| 补全资源 | 🔲 待做 | Oil(石油) + Titanium(钛) — 工业化和后续建筑的基础材料（当前仅底层数值预埋） |
+| 补全科技 | 🔲 待做 | farm_house/shovel/iron_shovel/dynamite/rebar/aphrodisiac/large_trades/dowsing_rod/metal_detector + `science:5` 等文明时代科技收尾 |
 | 军事系统 | 🔲 待做 | garrison 兵营 + 士兵招募/战术/受伤 + boot_camp 训练营 + 武器护甲科技线(spear→armor) + mercs 雇佣兵 + spy 间谍 + 外交（3 个外国政府：占领/吞并/购买）|
 | 事件系统 | 🔲 待做 | 随机事件：丰收/旱灾/瘟疫/贸易商队/灵感(知识×2)/火灾/外敌袭击/罢工 等 |
 

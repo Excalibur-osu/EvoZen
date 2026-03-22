@@ -12,6 +12,7 @@ import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
 import { getTaxMultiplier, getProductionMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from './government';
 import { BASIC_STRUCTURES } from './structures';
+import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier } from './traits';
 
 /**
  * 原版全局时间缩放因子
@@ -111,7 +112,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
   // 伐木场加成 +2%/座（原版 main.js L5575-5576）
   const lumberYards = structCount('lumber_yard');
-  let lumberMult = 1 + lumberYards * 0.02;
+  const sawmills = structCount('sawmill');
+  const sawmillBonus = techLevel('saw') >= 2 ? 0.08 : 0.05;
+  let lumberMult = 1 + lumberYards * 0.02 + sawmills * sawmillBonus;
   deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * prodMult;
 
   // ============================================================
@@ -177,7 +180,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const libraries = structCount('library');
   // 教授基础产出 — 原版 main.js L9313:
   // professor.impact = 0.5 + (library_count * 0.01)
-  const profImpact = 0.5 + libraries * 0.01;
+  const profImpact = 0.5 + getProfessorTraitBonus(state) + libraries * 0.01;
   // 神权政体惩罚——原版 main.js L4183-4184:
   // if (govern.type === 'theocracy') professors_base *= 1 - (govEffect.theocracy()[1] / 100)
   const profGovMult = getKnowledgeMultiplier(state, 'professor');
@@ -214,6 +217,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const bankerImpact = 0.1;  // 基础 impact
     incomeBase *= 1 + bankers * bankerImpact;
   }
+  incomeBase *= getTaxIncomeTraitMultiplier(state);
   incomeBase *= taxRate / 20;  // 原版 L7626
   // 政体税收加成（civics.js govEffect.autocracy/oligarchy）
   incomeBase *= getTaxMultiplier(state);

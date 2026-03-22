@@ -302,6 +302,67 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 3240 },
     effect: '大幅推进科研体系，解锁更高级的科技路线。',
   },
+  // legacy tech.js L6715-6734: copper_axes → axe:2
+  {
+    id: 'copper_axes',
+    name: '青铜斧',
+    description: '使用青铜制造青铜斧。',
+    category: 'lumber_gathering',
+    era: '文明',
+    reqs: { axe: 1, mining: 2 },
+    grant: ['axe', 2],
+    costs: { Knowledge: 540, Copper: 25 },
+    effect: '将原始斧头升级为青铜斧，伐木场木材产量 +35%。',
+  },
+  // legacy tech.js L6736-6756: iron_saw → saw:1
+  {
+    id: 'iron_saw',
+    name: '锯木厂',
+    description: '将金属锯片引入伐木业，显著提高木材加工效率。',
+    category: 'lumber_gathering',
+    era: '文明',
+    reqs: { axe: 1, mining: 3 },
+    grant: ['saw', 1],
+    costs: { Knowledge: 3375, Iron: 400 },
+    effect: '解锁锯木厂建筑；每座锯木厂使伐木工木材产量 +5%。',
+  },
+  // legacy tech.js L6758-6776: steel_saw → saw:2
+  {
+    id: 'steel_saw',
+    name: '钢锯',
+    description: '发明更坚固耐用的钢锯。',
+    category: 'lumber_gathering',
+    era: '发现',
+    reqs: { smelting: 2, saw: 1 },
+    grant: ['saw', 2],
+    costs: { Knowledge: 10800, Steel: 400 },
+    effect: '锯木厂对伐木工的产量加成由 +5% 提升到 +8%。',
+  },
+
+  // legacy tech.js L6778-6797: iron_axes → axe:3
+  {
+    id: 'iron_axes',
+    name: '铁斧',
+    description: '使用铁制造坚固的铁斧。',
+    category: 'lumber_gathering',
+    era: '文明',
+    reqs: { axe: 2, mining: 3 },
+    grant: ['axe', 3],
+    costs: { Knowledge: 2700, Iron: 250 },
+    effect: '将青铜斧升级为铁斧，伐木场木材产量加成由 +35% 提升到 +70%。',
+  },
+  // legacy tech.js L6799-6818: steel_axes → axe:4
+  {
+    id: 'steel_axes',
+    name: '钢斧',
+    description: '使用钢制造更好的钢斧。',
+    category: 'lumber_gathering',
+    era: '发现',
+    reqs: { axe: 3, smelting: 2 },
+    grant: ['axe', 4],
+    costs: { Knowledge: 9000, Steel: 250 },
+    effect: '将铁斧升级为钢斧，伐木场木材产量加成由 +70% 提升到 +105%。',
+  },
 
   // legacy tech.js L1205-1223: silo → agriculture:3
   {
@@ -314,6 +375,18 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['agriculture', 3],
     costs: { Knowledge: 80 },
     effect: '解锁粮仓建筑。',
+  },
+  // legacy tech.js L964-983: smokehouse → hunting:1
+  {
+    id: 'smokehouse',
+    name: '烟熏屋',
+    description: '发明保存肉类的方法。',
+    category: 'storage',
+    era: '文明',
+    reqs: { primitive: 3, storage: 1 },
+    grant: ['hunting', 1],
+    costs: { Knowledge: 80 },
+    effect: '解锁烟房，可用于长期储存肉类。',
   },
 
   // legacy tech.js L1225-1243: mill → agriculture:4
@@ -354,6 +427,18 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 70 },
     effect: '解锁兵营和士兵。',
   },
+  // legacy tech.js L7397-7416: hospital → medic:1
+  {
+    id: 'hospital',
+    name: '医院',
+    description: '建立基础医疗体系，为更复杂的社会结构提供保障。',
+    category: 'military',
+    era: '文明',
+    reqs: { military: 1, alumina: 1 },
+    grant: ['medic', 1],
+    costs: { Knowledge: 5000 },
+    effect: '解锁医院建筑；伤兵治愈与人口增长联动待补齐。',
+  },
 
   // legacy tech.js L325-340: cottage → housing:2
   {
@@ -369,15 +454,13 @@ export const BASIC_TECHS: TechDefinition[] = [
   },
 
   // legacy tech.js L3469-3492: trade
-  // 注意：原版需要 currency:2，但我们目前没有 currency:2 的科技
-  // 简化为 currency:1 + military:1，费用保持原版
   {
     id: 'trade',
     name: '贸易',
     description: '建立贸易路线。',
     category: 'market',
     era: '文明',
-    reqs: { currency: 1, military: 1 },
+    reqs: { currency: 2, military: 1 },
     grant: ['trade', 1],
     costs: { Knowledge: 4500 },
     effect: '解锁贸易站。',
@@ -394,6 +477,42 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['foundry', 1],
     costs: { Knowledge: 650 },
     effect: '解锁铸造厂建筑和工匠岗位，允许合成胶合板、砖块和锻铁。',
+  },
+  // legacy tech.js L1346-1363: artisans → foundry:2
+  {
+    id: 'artisans',
+    name: '工匠',
+    description: '总结工匠们的经验，提高自动锻造效率。',
+    category: 'crafting',
+    era: '文明',
+    reqs: { foundry: 1 },
+    grant: ['foundry', 2],
+    costs: { Knowledge: 1500 },
+    effect: '每座铸造厂使自动锻造产量 +3%。',
+  },
+  // legacy tech.js L1365-1382: apprentices → foundry:3
+  {
+    id: 'apprentices',
+    name: '学徒',
+    description: '让资深工匠带领学徒协作，提高同产线协同效率。',
+    category: 'crafting',
+    era: '文明',
+    reqs: { foundry: 2 },
+    grant: ['foundry', 3],
+    costs: { Knowledge: 3200 },
+    effect: '同一种锻造物在指派超过一位工匠时，每位额外工匠使该产线产量 +3%。',
+  },
+  // legacy tech.js L1384-1402: carpentry → foundry:4
+  {
+    id: 'carpentry',
+    name: '木工',
+    description: '优化木材切割与拼接工艺，提升胶合板制作效率。',
+    category: 'crafting',
+    era: '文明',
+    reqs: { foundry: 3, saw: 1 },
+    grant: ['foundry', 4],
+    costs: { Knowledge: 5200 },
+    effect: '每座锯木厂使胶合板自动锻造产量额外 +2%。',
   },
 
   // legacy tech.js L3028-3054: government → govern:1
@@ -574,31 +693,43 @@ export const BASIC_TECHS: TechDefinition[] = [
 
   // ===== 工具科技 (Hammer) =====
 
-  // 铜锤 → hammer:1（铜器冶金时代）
-  // 对标 legacy jobs.js L119: hammer 科技每级 +40% 石工效率
+  // legacy tech.js L6866-6884: copper_sledgehammer → hammer:1
   {
     id: 'copper_hammer',
-    name: '铜锤',
-    description: '用铜制造出更坚硬的锤子。',
+    name: '青铜大锤',
+    description: '使用青铜制造锤头。',
     category: 'mining',
     era: '文明',
     reqs: { mining: 2 },
     grant: ['hammer', 1],
-    costs: { Knowledge: 500, Copper: 20 },
+    costs: { Knowledge: 540, Copper: 25 },
     effect: '石工效率 +40%。',
   },
 
-  // 铁锤 → hammer:2
+  // legacy tech.js L6887-6905: iron_sledgehammer → hammer:2
   {
     id: 'iron_hammer',
-    name: '铁锤',
-    description: '坚固的铁锤大幅提升采石效率。',
+    name: '铁制大锤',
+    description: '使用铁制造锤头。',
     category: 'mining',
     era: '文明',
     reqs: { hammer: 1, mining: 3 },
     grant: ['hammer', 2],
-    costs: { Knowledge: 2800, Iron: 40 },
-    effect: '石工效率再 +40%。',
+    costs: { Knowledge: 2700, Iron: 250 },
+    effect: '将青铜锤升级为更耐用的铁锤，采石场产量加成由 +40% 提升到 +80%。',
+  },
+
+  // legacy tech.js L6908-6926: steel_sledgehammer → hammer:3
+  {
+    id: 'steel_hammer',
+    name: '钢制大锤',
+    description: '使用钢制造锤头。',
+    category: 'mining',
+    era: '发现',
+    reqs: { hammer: 2, smelting: 2 },
+    grant: ['hammer', 3],
+    costs: { Knowledge: 7200, Steel: 250 },
+    effect: '将铁锤升级为更坚固的钢锤，采石场产量加成由 +80% 提升到 +120%。',
   },
 
   // ===== 神权政体科技 (Theocracy) =====
