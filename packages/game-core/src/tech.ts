@@ -120,6 +120,18 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 10 },
     effect: '解锁农场建筑和农民岗位。',
   },
+  // legacy tech.js L1166-1184: farm_house → farm:1
+  {
+    id: 'farm_house',
+    name: '农舍',
+    description: '使农场可供一位市民居住。',
+    category: 'housing',
+    era: '文明',
+    reqs: { agriculture: 1, housing: 1, currency: 1 },
+    grant: ['farm', 1],
+    costs: { Money: 50, Knowledge: 180 },
+    effect: '每个农场使市民上限 +1。',
+  },
 
   // legacy tech.js L1186-1203: irrigation
   {
@@ -172,6 +184,18 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 350 },
     effect: '解锁矿井建筑和矿工岗位。',
   },
+  // legacy tech.js L6948-6967: copper_pickaxe → pickaxe:1
+  {
+    id: 'copper_pickaxe',
+    name: '青铜镐',
+    description: '使用青铜制造青铜镐。',
+    category: 'mining',
+    era: '文明',
+    reqs: { mining: 2 },
+    grant: ['pickaxe', 1],
+    costs: { Knowledge: 675, Copper: 25 },
+    effect: '矿工产量 +15%，煤矿工人产量 +12%。',
+  },
 
   // legacy tech.js L2291-2316: iron_mining → mining:3
   {
@@ -185,6 +209,42 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 2500 },
     effect: '矿工可以挖铁矿。铁矿显示。',
   },
+  // legacy tech.js L6969-6988: iron_pickaxe → pickaxe:2
+  {
+    id: 'iron_pickaxe',
+    name: '铁镐',
+    description: '使用铁制造铁镐。',
+    category: 'mining',
+    era: '文明',
+    reqs: { pickaxe: 1, mining: 3 },
+    grant: ['pickaxe', 2],
+    costs: { Knowledge: 3200, Iron: 250 },
+    effect: '矿工产量加成由 +15% 提升到 +30%，煤矿工人产量加成由 +12% 提升到 +24%。',
+  },
+  // legacy tech.js L6990-7009: steel_pickaxe → pickaxe:3
+  {
+    id: 'steel_pickaxe',
+    name: '钢镐',
+    description: '使用钢制造钢镐。',
+    category: 'mining',
+    era: '发现',
+    reqs: { pickaxe: 2, smelting: 2 },
+    grant: ['pickaxe', 3],
+    costs: { Knowledge: 9000, Steel: 250 },
+    effect: '矿工产量加成由 +30% 提升到 +45%，煤矿工人产量加成由 +24% 提升到 +36%。',
+  },
+  // legacy tech.js L7011-7030: jackhammer → pickaxe:4
+  {
+    id: 'jackhammer',
+    name: '手提钻',
+    description: '发明手提钻。',
+    category: 'mining',
+    era: '发现',
+    reqs: { pickaxe: 3, high_tech: 2 },
+    grant: ['pickaxe', 4],
+    costs: { Knowledge: 22500, Copper: 5000 },
+    effect: '用手提钻取代老式的镐子，矿工产量加成由 +45% 提升到 +60%，煤矿工人产量加成由 +36% 提升到 +48%。',
+  },
 
   // legacy tech.js L2318-2340: coal_mining → mining:4
   {
@@ -197,6 +257,42 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['mining', 4],
     costs: { Knowledge: 4320 },
     effect: '解锁煤矿和煤矿工人。煤炭显示。',
+  },
+  // legacy tech.js L7097-7116: copper_hoe → hoe:1
+  {
+    id: 'copper_hoe',
+    name: '青铜锄',
+    description: '使用青铜制造青铜锄。',
+    category: 'agriculture',
+    era: '文明',
+    reqs: { mining: 2, agriculture: 1 },
+    grant: ['hoe', 1],
+    costs: { Knowledge: 720, Copper: 50 },
+    effect: '农民产量 +33%。',
+  },
+  // legacy tech.js L7118-7137: iron_hoe → hoe:2
+  {
+    id: 'iron_hoe',
+    name: '铁锄',
+    description: '使用铁制造铁锄。',
+    category: 'agriculture',
+    era: '文明',
+    reqs: { hoe: 1, mining: 3, agriculture: 1 },
+    grant: ['hoe', 2],
+    costs: { Knowledge: 3600, Iron: 500 },
+    effect: '农民产量加成由 +33% 提升到 +66%。',
+  },
+  // legacy tech.js L7139-7158: steel_hoe → hoe:3
+  {
+    id: 'steel_hoe',
+    name: '钢锄',
+    description: '使用钢制造更好的钢锄。',
+    category: 'agriculture',
+    era: '发现',
+    reqs: { hoe: 2, smelting: 2, agriculture: 1 },
+    grant: ['hoe', 3],
+    costs: { Knowledge: 12600, Steel: 500 },
+    effect: '农民产量加成由 +66% 提升到 +100%。',
   },
 
   // legacy tech.js L2031-2056: smelting → smelting:1
@@ -223,6 +319,42 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['smelting', 2],
     costs: { Knowledge: 4950, Iron: 100 },
     effect: '解锁各种涉钢设施。开启钢材产量。',
+  },
+  // legacy tech.js L2086-2104: blast_furnace → smelting:3
+  {
+    id: 'blast_furnace',
+    name: '高炉',
+    description: '改良冶炼设备，提高熔炉产线效率。',
+    category: 'mining',
+    era: '发现',
+    reqs: { smelting: 2 },
+    grant: ['smelting', 3],
+    costs: { Knowledge: 13500, Coal: 2000 },
+    effect: '熔炉产线效率 +20%。',
+  },
+  // legacy tech.js L2111-2129: bessemer_process → smelting:4
+  {
+    id: 'bessemer_process',
+    name: '转炉炼钢法',
+    description: '利用更先进的炼钢工艺提高钢材产量。',
+    category: 'mining',
+    era: '发现',
+    reqs: { smelting: 3 },
+    grant: ['smelting', 4],
+    costs: { Knowledge: 19800, Coal: 5000 },
+    effect: '熔炉的钢材产量额外 +20%。',
+  },
+  // legacy tech.js L2134-2153: oxygen_converter → smelting:5
+  {
+    id: 'oxygen_converter',
+    name: '氧气转炉',
+    description: '向炼钢过程中引入氧气，进一步提高钢材产量。',
+    category: 'mining',
+    era: '工业化',
+    reqs: { smelting: 4, high_tech: 3 },
+    grant: ['smelting', 5],
+    costs: { Knowledge: 46800, Coal: 10000 },
+    effect: '冶炼厂的钢产量再次 +20%。',
   },
 
   // legacy tech.js L1987-2007: bayer_process → alumina:1
@@ -262,6 +394,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['cement', 1],
     costs: { Knowledge: 500 },
     effect: '解锁水泥厂和水泥工人。水泥显示。',
+  },
+  // legacy tech.js L8079-8098: rebar → cement:2
+  {
+    id: 'rebar',
+    name: '支撑柱',
+    description: '在混凝土中加入支撑柱，提高强度并降低建筑的水泥消耗。',
+    category: 'cement',
+    era: '文明',
+    reqs: { mining: 3, cement: 1 },
+    grant: ['cement', 2],
+    costs: { Knowledge: 3200, Iron: 750 },
+    effect: '建筑的 Cement 基础成本 -10%。',
+  },
+  // legacy tech.js L8100-8119: steel_rebar → cement:3
+  {
+    id: 'steel_rebar',
+    name: '钢筋',
+    description: '使用钢筋作为支撑结构，进一步降低建筑的水泥消耗。',
+    category: 'cement',
+    era: '文明',
+    reqs: { smelting: 2, cement: 2 },
+    grant: ['cement', 3],
+    costs: { Knowledge: 6750, Steel: 750 },
+    effect: '建筑的 Cement 基础成本加成为 -20%。',
   },
 
   // legacy tech.js L4085-4103: library → science:2
@@ -427,6 +583,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 70 },
     effect: '解锁兵营和士兵。',
   },
+  // legacy tech.js L7942-7962: black_powder → explosives:1
+  {
+    id: 'black_powder',
+    name: '黑火药',
+    description: '发现黑火药。',
+    category: 'mining',
+    era: '文明',
+    reqs: { mining: 4 },
+    grant: ['explosives', 1],
+    costs: { Knowledge: 4500, Coal: 500 },
+    effect: '迎来万物爆炸式发展的新时代，并解锁后续炸药科技。',
+  },
+  // legacy tech.js L7964-7983: dynamite → explosives:2
+  {
+    id: 'dynamite',
+    name: '炸药',
+    description: '使用炸药提高采矿效率。',
+    category: 'mining',
+    era: '文明',
+    reqs: { explosives: 1 },
+    grant: ['explosives', 2],
+    costs: { Knowledge: 4800, Coal: 750 },
+    effect: '采石场/铝精炼基础产量 +50%，矿工与煤矿工人基础产量 +25%。',
+  },
   // legacy tech.js L7397-7416: hospital → medic:1
   {
     id: 'hospital',
@@ -437,7 +617,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     reqs: { military: 1, alumina: 1 },
     grant: ['medic', 1],
     costs: { Knowledge: 5000 },
-    effect: '解锁医院建筑；伤兵治愈与人口增长联动待补齐。',
+    effect: '解锁医院建筑；伤兵治愈待军事系统接入，后续生育科技可使医院提高人口增长速率。',
   },
 
   // legacy tech.js L325-340: cottage → housing:2
@@ -452,6 +632,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 3600 },
     effect: '解锁茅屋建筑，每座提供 +2 人口上限。',
   },
+  // legacy tech.js L490-502: aphrodisiac → reproduction:1
+  {
+    id: 'aphrodisiac',
+    name: '催欲剂',
+    description: '研究如何促进人口增长。',
+    category: 'housing',
+    era: '文明',
+    reqs: { housing: 2 },
+    grant: ['reproduction', 1],
+    costs: { Knowledge: 4500 },
+    effect: '研制有助于人口增长的药剂。',
+  },
+  // legacy tech.js L392-408: steel_beams → housing_reduction:1
+  {
+    id: 'steel_beams',
+    name: '钢梁',
+    description: '引入坚固的钢梁，降低住房的建材需求。',
+    category: 'housing',
+    era: '发现',
+    reqs: { housing: 2, smelting: 2 },
+    grant: ['housing_reduction', 1],
+    costs: { Knowledge: 11250, Steel: 2500 },
+    effect: '小屋与茅屋的成本蠕变 -2%。',
+  },
 
   // legacy tech.js L3469-3492: trade
   {
@@ -464,6 +668,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['trade', 1],
     costs: { Knowledge: 4500 },
     effect: '解锁贸易站。',
+  },
+  // legacy tech.js L3494-3511: diplomacy → trade:2
+  {
+    id: 'diplomacy',
+    name: '外交',
+    description: '协商建立新的贸易路线。',
+    category: 'market',
+    era: '发现',
+    reqs: { trade: 1, high_tech: 1 },
+    grant: ['trade', 2],
+    costs: { Knowledge: 16200 },
+    effect: '贸易站的贸易路线 +1。',
+  },
+  // legacy tech.js L3513-3536: freight → trade:3
+  {
+    id: 'freight',
+    name: '货运列车',
+    description: '利用列车增加贸易量。',
+    category: 'market',
+    era: '工业化',
+    reqs: { trade: 2, high_tech: 3 },
+    grant: ['trade', 3],
+    costs: { Knowledge: 37800 },
+    effect: '贸易站的贸易路线再 +1。',
   },
 
   // legacy tech.js L1326-1344: foundry → foundry:1
@@ -553,6 +781,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 1800 },
     effect: '解锁更高级的经济和规划技术。',
   },
+  // legacy tech.js L3368-3385: tax_rates → currency:3
+  {
+    id: 'tax_rates',
+    name: '税率',
+    description: '启用税率调节。',
+    category: 'banking',
+    era: '文明',
+    reqs: { banking: 2, currency: 2, queue: 1 },
+    grant: ['currency', 3],
+    costs: { Knowledge: 3375 },
+    effect: '完善财政体系，并为大宗交易提供前置。',
+  },
+  // legacy tech.js L3403-3422: large_trades → currency:4
+  {
+    id: 'large_trades',
+    name: '大宗交易',
+    description: '市场可以处理更大的订单。',
+    category: 'market',
+    era: '文明',
+    reqs: { currency: 3 },
+    grant: ['currency', 4],
+    costs: { Knowledge: 6750 },
+    effect: '手动市场单次交易上限提升至 5000，单条贸易路线数量上限提升至 100。',
+  },
 
   // legacy tech.js L3601-3619: vault → banking:3
   {
@@ -621,6 +873,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 2700 },
     effect: '解锁装运站建筑，可使用板条箱扩展资源上限。',
   },
+  // legacy tech.js L2509-2534: reinforced_crates → container:2
+  {
+    id: 'reinforced_crates',
+    name: '加固板条箱',
+    description: '用金属板加固木质板条箱，提升单个板条箱的储量。',
+    category: 'storage',
+    era: '文明',
+    reqs: { container: 1, smelting: 2 },
+    grant: ['container', 2],
+    costs: { Knowledge: 6750, Sheet_Metal: 100 },
+    effect: '每个板条箱的基础储量由 350 提升到 500。',
+  },
+  // legacy tech.js L2536-2558: cranes → container:3
+  {
+    id: 'cranes',
+    name: '起重机',
+    description: '给货场配备货运起重机，提升板条箱槽位。',
+    category: 'storage',
+    era: '发现',
+    reqs: { container: 2, high_tech: 2 },
+    grant: ['container', 3],
+    costs: { Knowledge: 18000, Copper: 1000, Steel: 2500 },
+    effect: '每个货场的板条箱上限由 10 提升到 20。',
+  },
 
   // 对标原版 actions.js warehouse reqs: { steel_container: 1 }
   {
@@ -628,11 +904,23 @@ export const BASIC_TECHS: TechDefinition[] = [
     name: '钢制集装箱',
     description: '用钢制造更坚固的集装箱。',
     category: 'storage',
-    era: '文明',
-    reqs: { container: 1, smelting: 2 },
+    era: '发现',
+    reqs: { smelting: 2, container: 1 },
     grant: ['steel_container', 1],
-    costs: { Knowledge: 3600 },
+    costs: { Knowledge: 9000, Steel: 250 },
     effect: '解锁集装箱港口建筑，可使用集装箱进一步扩展资源上限。',
+  },
+  // legacy tech.js L2718-2740: gantry_crane → steel_container:2
+  {
+    id: 'gantry_crane',
+    name: '门式起重机',
+    description: '在集装箱港口增设门式起重机，提升集装箱槽位。',
+    category: 'storage',
+    era: '发现',
+    reqs: { steel_container: 1, high_tech: 2 },
+    grant: ['steel_container', 2],
+    costs: { Knowledge: 22500, Steel: 5000 },
+    effect: '每个集装箱港口的集装箱上限由 10 提升到 20。',
   },
 
   // ===== 娱乐系统 (Entertainment) =====
@@ -661,6 +949,55 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['theatre', 2],
     costs: { Knowledge: 1080 },
     effect: '每座圆形剧场的效果提升。',
+  },
+
+  // legacy tech.js L4208-4226: mad_science → high_tech:1
+  {
+    id: 'mad_science',
+    name: '疯狂科学',
+    description: '推动非常规实验与跨学科研究。',
+    category: 'science',
+    era: '发现',
+    reqs: { science: 2, smelting: 2 },
+    grant: ['high_tech', 1],
+    costs: { Money: 10000, Knowledge: 6750, Aluminium: 750 },
+    effect: '解锁沃登克里弗塔，并开启高科技研究线。',
+  },
+  // legacy tech.js L4230-4250: electricity → high_tech:2
+  {
+    id: 'electricity',
+    name: '电力',
+    description: '发现并利用稳定的电力。',
+    category: 'science',
+    era: '发现',
+    reqs: { high_tech: 1 },
+    grant: ['high_tech', 2],
+    costs: { Knowledge: 13500, Copper: 1000 },
+    effect: '为后续电力系统与工业化科技提供前置。',
+  },
+  // legacy tech.js L4252-4271: industrialization → high_tech:3
+  {
+    id: 'industrialization',
+    name: '工业化',
+    description: '以标准化与机械化推动社会进入工业时代。',
+    category: 'science',
+    era: '工业化',
+    reqs: { high_tech: 2, cement: 2, steel_container: 1 },
+    grant: ['high_tech', 3],
+    costs: { Knowledge: 25200 },
+    effect: '为工厂、钛与学术期刊等后续工业科技提供前置。',
+  },
+  // legacy tech.js L4273-4291: scientific_journal → science:5
+  {
+    id: 'scientific_journal',
+    name: '学术期刊',
+    description: '出版学术期刊。',
+    category: 'science',
+    era: '工业化',
+    reqs: { science: 4, high_tech: 3 },
+    grant: ['science', 5],
+    costs: { Knowledge: 27000 },
+    effect: '解锁科学家岗位；每位科学家使图书馆知识上限 +12%。',
   },
 
   // ===== 宗教系统 (Religion) =====

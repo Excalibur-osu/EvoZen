@@ -5,12 +5,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
+import type { ResourceState } from '@evozen/shared-types'
 
 const game = useGameStore()
 
 /** 显示的资源列表 */
 const visibleResources = computed(() => {
-  return Object.entries(game.state.resource)
+  return (Object.entries(game.state.resource) as Array<[string, ResourceState]>)
     .filter(([_, res]) => res.display)
     .map(([id, res]) => ({ id, ...res }))
 })

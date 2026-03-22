@@ -38,6 +38,28 @@ export const TRADABLE_RESOURCES = [
 
 export type TradableResourceId = (typeof TRADABLE_RESOURCES)[number];
 
+/**
+ * 手动市场每次交易的数量上限
+ *
+ * 对标 legacy resources.js tradeMax():
+ * - currency < 4 → 100
+ * - currency >= 4 → 5000
+ */
+export function getManualTradeLimit(state: GameState): number {
+  return (state.tech['currency'] ?? 0) >= 4 ? 5000 : 100;
+}
+
+/**
+ * 单条资源贸易路线的数量上限
+ *
+ * 对标 legacy resources.js importRouteEnabled/exportRouteEnabled():
+ * - currency < 4 → 25
+ * - currency >= 4 → 100
+ */
+export function getTradeRouteQtyLimit(state: GameState): number {
+  return (state.tech['currency'] ?? 0) >= 4 ? 100 : 25;
+}
+
 // ============================================================
 // 价格计算
 // ============================================================
@@ -82,6 +104,8 @@ export function buyResource(
   resourceId: string,
   qty: number = 1
 ): GameState | null {
+  qty = Math.max(1, Math.floor(qty));
+  qty = Math.min(qty, getManualTradeLimit(state));
   const price = getBuyPrice(resourceId, state) * qty;
   const money = state.resource['Money'];
   if (!money || money.amount < price) return null;
@@ -115,6 +139,8 @@ export function sellResource(
   resourceId: string,
   qty: number = 1
 ): GameState | null {
+  qty = Math.max(1, Math.floor(qty));
+  qty = Math.min(qty, getManualTradeLimit(state));
   const res = state.resource[resourceId];
   if (!res || res.amount < qty) return null;
 
@@ -192,17 +218,25 @@ export function tradeTick(state: GameState): Record<string, number> {
 /**
  * 获取当前可用的贸易路线数量上限
  *
- * 对标原版 `actions.city.trade.routes()`：
- * - `trade:1` 时每座贸易站提供 2 条路线
- * - `trade:2+` 时每座贸易站提供 3 条路线
+ * 对标原版 main.js L9865：
+ * - 普通种族下每座贸易站提供 `trade等级 + 1` 条路线
+ * - 当前阶段未实现 xenophobic / nomadic 等种族修正
  */
 export function getMaxTradeRoutes(state: GameState): number {
   const tradePost = state.city['trade_post'] as { count: number } | undefined;
-  const count = tradePost?.count ?? 0;
-  if (count <= 0) return 0;
+  const tradeLevel = state.tech['trade'] ?? 0;
+  const tradePostCount = tradePost?.count ?? 0;
+  const routesPerPost = tradeLevel >= 1 ? tradeLevel + 1 : 0;
+  let totalRoutes = tradePostCount * routesPerPost;
 
-  const routesPerPost = (state.tech['trade'] ?? 0) >= 2 ? 3 : 2;
-  return count * routesPerPost;
+  // 对标原版 main.js L9890-9893:
+  // freight (trade:3) 后每座 storage_yard 额外提供 1 条贸易路线
+  if (tradeLevel >= 3) {
+    const storageYards = (state.city['storage_yard'] as { count: number } | undefined)?.count ?? 0;
+    totalRoutes += storageYards;
+  }
+
+  return totalRoutes;
 }
 
 /**
@@ -218,6 +252,9 @@ export function setTradeRoute(
     (newState.city as any).trade_routes = [];
   }
   const routes = (newState.city as any).trade_routes as TradeRoute[];
-  routes[index] = route;
+  routes[index] = {
+    ...route,
+    qty: Math.max(1, Math.min(Math.floor(route.qty ?? 1), getTradeRouteQtyLimit(newState))),
+  };
   return newState;
 }

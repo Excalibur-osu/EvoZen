@@ -27,7 +27,7 @@ const currentGovType = computed(() => game.state.civic.govern?.type ?? 'anarchy'
 
 /** 当前政体定义 */
 const currentGovDef = computed(() =>
-  game.GOVERNMENT_DEFS.find(d => d.id === currentGovType.value)
+  game.GOVERNMENT_DEFS.find((d: { id: string }) => d.id === currentGovType.value)
 )
 
 /** 冷却计数器 */

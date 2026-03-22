@@ -7,11 +7,12 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
+import type { ResourceState } from '@evozen/shared-types'
 
 const game = useGameStore()
 
 const allResources = computed(() => {
-  return Object.entries(game.state.resource)
+  return (Object.entries(game.state.resource) as Array<[string, ResourceState]>)
     .filter(([_, res]) => res.display)
     .map(([id, res]) => ({ id, ...res }))
 })

@@ -24,7 +24,9 @@ import {
   sellResource as coreSellResource,
   getBuyPrice as coreGetBuyPrice,
   getSellPrice as coreGetSellPrice,
+  getManualTradeLimit,
   getMaxTradeRoutes,
+  getTradeRouteQtyLimit,
   setTradeRoute as coreSetTradeRoute,
   type TradeRoute,
   changeGovernment as coreChangeGovernment,
@@ -43,6 +45,7 @@ import {
   assignContainer as coreAssignContainer,
   unassignContainer as coreUnassignContainer,
   getStorageBonus,
+  getCrateValue,
   STORABLE_RESOURCES,
   CRATE_VALUE,
   CONTAINER_VALUE,
@@ -129,15 +132,18 @@ export const useGameStore = defineStore('game', () => {
     let popCap = 0
     const basicHousing = getStructCount('basic_housing')
     const cottages = getStructCount('cottage')
+    const farms = getStructCount('farm')
     popCap += basicHousing * 1
     popCap += cottages * 2
+    if ((s.tech['farm'] ?? 0) >= 1) {
+      popCap += farms
+    }
     if (s.resource[species]) {
       s.resource[species].max = Math.max(1, popCap)
     }
 
     // --- 食物上限 ---
     let foodMax = 250
-    const farms = getStructCount('farm')
     const silos = getStructCount('silo')
     const smokehouses = getStructCount('smokehouse')
     foodMax += farms * 50
@@ -215,8 +221,14 @@ export const useGameStore = defineStore('game', () => {
     let knowledgeMax = 100
     const libraries = getStructCount('library')
     const universities = getStructCount('university')
-    knowledgeMax += libraries * 125 * getLibraryKnowledgeCapMultiplier(s)
-    knowledgeMax += universities * 500
+    const wardenclyffes = getStructCount('wardenclyffe')
+    const scientists = (s.civic['scientist'] as { workers?: number } | undefined)?.workers ?? 0
+    const universityBase = (s.tech['science'] ?? 0) >= 8 ? 700 : 500
+    const universityMult = (s.tech['science'] ?? 0) >= 4 ? 1 + libraries * 0.02 : 1
+    const journalMult = (s.tech['science'] ?? 0) >= 5 ? 1 + scientists * 0.12 : 1
+    knowledgeMax += libraries * 125 * getLibraryKnowledgeCapMultiplier(s) * journalMult
+    knowledgeMax += universities * universityBase * universityMult
+    knowledgeMax += wardenclyffes * 1000
     s.resource['Knowledge'].max = knowledgeMax
 
     // --- 金币上限 ---
@@ -246,6 +258,8 @@ export const useGameStore = defineStore('game', () => {
     setJobMax('banker', banks)
     // 教授由大学决定；图书馆只影响知识产出
     setJobMax('professor', universities)
+    // 科学家由沃登克里弗塔决定
+    setJobMax('scientist', wardenclyffes)
 
     // --- 科技解锁资源显示 ---
     if ((s.tech['mining'] ?? 0) >= 3) {
@@ -288,11 +302,13 @@ export const useGameStore = defineStore('game', () => {
     // --- 板条箱/集装箱上限由装运站/集装箱港口决定 ---
     const storageYards = getStructCount('storage_yard')
     const warehouses = getStructCount('warehouse')
+    const crateCapacity = (s.tech['container'] ?? 0) >= 3 ? 20 : 10
+    const containerCapacity = (s.tech['steel_container'] ?? 0) >= 2 ? 20 : 10
     if (s.resource['Crates']) {
-      s.resource['Crates'].max = storageYards * 10
+      s.resource['Crates'].max = storageYards * crateCapacity
     }
     if (s.resource['Containers']) {
-      s.resource['Containers'].max = warehouses * 10
+      s.resource['Containers'].max = warehouses * containerCapacity
     }
 
     // --- 板条箱/集装箱显示 ---
@@ -400,6 +416,7 @@ export const useGameStore = defineStore('game', () => {
    * - 在 long loop（每 20 个 fast tick = 5秒）中执行一次
    * - Math.rand(0, upperBound) <= lowerBound 时新增 1 人
    * - lowerBound = reproduction 科技等级（无科技时为 0）
+   * - reproduction >= 2 时，hospital 数量会继续提高人口增长概率
    * - upperBound = 当前人口 × (3 - 2^time_multiplier)
    *
    * 简化实现：仍使用 tick 计数器模拟 long loop 频率
@@ -425,7 +442,10 @@ export const useGameStore = defineStore('game', () => {
     if (food.amount <= 0) return
 
     // reproduction 科技提高增长概率（原版 main.js L3917）
-    const lowerBound = s.tech['reproduction'] ?? 0
+    let lowerBound = s.tech['reproduction'] ?? 0
+    if ((s.tech['reproduction'] ?? 0) >= 2) {
+      lowerBound += getStructCount('hospital')
+    }
 
     // 原版 upperBound = currentPop * (3 - 2^0.25) ≈ currentPop * 1.811
     let upperBound = Math.floor(pop.amount * (3 - Math.pow(2, 0.25)))
@@ -812,6 +832,21 @@ export const useGameStore = defineStore('game', () => {
     state.value = coreSetTradeRoute(state.value, index, route)
   }
 
+  function setMarketTradeQty(qty: number) {
+    const limit = getManualTradeLimit(state.value)
+    const nextQty = Math.max(1, Math.min(Math.floor(qty), limit))
+    if (!state.value.city.market) {
+      ;(state.value.city as any).market = { active: false, qty: nextQty }
+      return
+    }
+    ;(state.value.city.market as { qty?: number }).qty = nextQty
+  }
+
+  function adjustMarketTradeQty(delta: number) {
+    const currentQty = (state.value.city.market as { qty?: number } | undefined)?.qty ?? 1
+    setMarketTradeQty(currentQty + delta)
+  }
+
   function getBuyPrice(resourceId: string): number {
     return coreGetBuyPrice(resourceId, state.value)
   }
@@ -933,8 +968,12 @@ export const useGameStore = defineStore('game', () => {
     tradeBuy,
     tradeSell,
     updateTradeRoute,
+    setMarketTradeQty,
+    adjustMarketTradeQty,
     getBuyPrice,
     getSellPrice,
+    getManualTradeLimit: () => getManualTradeLimit(state.value),
+    getTradeRouteQtyLimit: () => getTradeRouteQtyLimit(state.value),
     // 政府系统
     changeGov,
     setTaxRate,
@@ -957,6 +996,7 @@ export const useGameStore = defineStore('game', () => {
     STORABLE_RESOURCES,
     CRATE_VALUE,
     CONTAINER_VALUE,
+    getCrateValue,
     CRATE_COST_PLYWOOD,
     CONTAINER_COST_STEEL,
   }

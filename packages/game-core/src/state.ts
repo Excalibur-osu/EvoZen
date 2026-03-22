@@ -105,7 +105,7 @@ export function createNewGame(): GameState {
   const state: GameState = {
     seed: 2,
     warseed: 2,
-    version: '0.4.1',
+    version: '0.4.2',
 
     resource: {
       // 进化阶段
@@ -143,7 +143,7 @@ export function createNewGame(): GameState {
       biome: 'grassland',
       ptrait: 'none',
       geology: {},
-      market: { active: false },
+      market: { active: false, qty: 1 },
       // 铸造厂产线分配（工匠 → 合成品）
       foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0 },
       // 自动贸易路线

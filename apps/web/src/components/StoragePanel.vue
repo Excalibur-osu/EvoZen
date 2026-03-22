@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
+import type { ResourceState } from '@evozen/shared-types'
 
 const game = useGameStore()
 
@@ -23,7 +24,7 @@ const showContainers = computed(() => containersState.value?.display ?? false)
 /** 计算已分配的板条箱总数 */
 const totalAssignedCrates = computed(() => {
   let total = 0
-  for (const res of Object.values(game.state.resource)) {
+  for (const res of Object.values(game.state.resource) as ResourceState[]) {
     total += res.crates ?? 0
   }
   return total
@@ -32,7 +33,7 @@ const totalAssignedCrates = computed(() => {
 /** 计算已分配的集装箱总数 */
 const totalAssignedContainers = computed(() => {
   let total = 0
-  for (const res of Object.values(game.state.resource)) {
+  for (const res of Object.values(game.state.resource) as ResourceState[]) {
     total += res.containers ?? 0
   }
   return total
@@ -46,13 +47,13 @@ const freeContainers = computed(() => (containersState.value?.amount ?? 0) - tot
 /** 可分配资源列表 */
 const storableResources = computed(() => {
   return game.STORABLE_RESOURCES
-    .filter(id => game.state.resource[id]?.display)
-    .map(id => ({
+    .filter((id: string) => game.state.resource[id]?.display)
+    .map((id: string) => ({
       id,
       name: getResourceName(id),
       crates: game.state.resource[id]?.crates ?? 0,
       containers: game.state.resource[id]?.containers ?? 0,
-      crateBonus: (game.state.resource[id]?.crates ?? 0) * game.CRATE_VALUE,
+      crateBonus: (game.state.resource[id]?.crates ?? 0) * game.getCrateValue(game.state),
       containerBonus: (game.state.resource[id]?.containers ?? 0) * game.CONTAINER_VALUE,
     }))
 })

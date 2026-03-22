@@ -41,7 +41,7 @@ function getCount(id: string): number {
 
 function formatCost(structureId: string): Array<{ resId: string; amount: number; affordable: boolean }> {
   const costs = game.getBuildCost(structureId)
-  return Object.entries(costs).map(([resId, amount]) => ({
+  return (Object.entries(costs) as Array<[string, number]>).map(([resId, amount]) => ({
     resId,
     amount: Math.ceil(amount),
     affordable: (game.state.resource[resId]?.amount ?? 0) >= amount,

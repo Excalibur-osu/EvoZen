@@ -16,8 +16,8 @@ import type { GameState } from '@evozen/shared-types';
 // 常量
 // ============================================================
 
-/** 每个板条箱增加的资源上限 — 原版 resources.js crateValue() 基础值 */
-export const CRATE_VALUE = 350;
+/** 每个板条箱增加的资源上限基础值 — 原版 resources.js crateValue() */
+export const BASE_CRATE_VALUE = 350;
 
 /** 每个集装箱增加的资源上限 — 原版 resources.js containerValue() 基础值 */
 export const CONTAINER_VALUE = 800;
@@ -35,6 +35,16 @@ export const STORABLE_RESOURCES = [
 ] as const;
 
 export type StorableResourceId = typeof STORABLE_RESOURCES[number];
+
+/** 获取当前单个板条箱提供的上限值 */
+export function getCrateValue(state: GameState): number {
+  return (state.tech['container'] ?? 0) >= 2 ? 500 : BASE_CRATE_VALUE;
+}
+
+/** 获取当前单个集装箱提供的上限值 */
+export function getContainerValue(_state: GameState): number {
+  return CONTAINER_VALUE;
+}
 
 // ============================================================
 // 板条箱操作
@@ -185,7 +195,7 @@ export function getTotalAssignedContainers(state: GameState): number {
 export function getStorageBonus(state: GameState, resourceId: string): number {
   const res = state.resource[resourceId];
   if (!res) return 0;
-  const crateBonus = (res.crates ?? 0) * CRATE_VALUE;
-  const containerBonus = (res.containers ?? 0) * CONTAINER_VALUE;
+  const crateBonus = (res.crates ?? 0) * getCrateValue(state);
+  const containerBonus = (res.containers ?? 0) * getContainerValue(state);
   return crateBonus + containerBonus;
 }

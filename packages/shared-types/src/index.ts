@@ -298,7 +298,7 @@ export interface CityState {
   biome: string;
   ptrait: string;
   geology: Record<string, number>;
-  market: { active: boolean };
+  market: { active: boolean; qty?: number };
   /** 建筑 */
   [structureId: string]: StructureState | CalendarState | string | Record<string, number> | unknown;
 }

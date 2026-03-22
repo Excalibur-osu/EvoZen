@@ -35,6 +35,48 @@ function scaleCost(base: number, mult: number): CostFunction {
   return (_state, count) => Math.ceil(base * Math.pow(mult, count));
 }
 
+function hasCityTrait(state: GameState, trait: string): boolean {
+  return state.city.ptrait === trait;
+}
+
+function scaleCostMinus(base: number, mult: number, subtract: number): CostFunction {
+  return (state, count) => Math.max(0, scaleCost(base, mult)(state, count) - subtract);
+}
+
+function scaleConditionalCost(
+  base: number,
+  mult: number,
+  predicate: (state: GameState, count: number) => boolean
+): CostFunction {
+  return (state, count) => {
+    if (!predicate(state, count)) return 0;
+    return scaleCost(base, mult)(state, count);
+  };
+}
+
+// 原版 functions.js costMultiplier():
+// housing_reduction 会让 basic_housing / cottage 的成本蠕变每级 -0.02
+function scaleHousingCost(base: number, mult: number): CostFunction {
+  return (state, count) => {
+    const reduction = state.tech['housing_reduction'] ?? 0;
+    const effectiveMult = Math.max(mult - reduction * 0.02, 1.01);
+    return Math.ceil(base * Math.pow(effectiveMult, count));
+  };
+}
+
+// 原版 functions.js rebarAdjust():
+// cement >= 2 时建筑 Cement 成本 ×0.9，cement >= 3 时 ×0.8
+function scaleCementCost(base: number, mult: number): CostFunction {
+  const rawCost = scaleCost(base, mult);
+  return (state, count) => {
+    const cost = rawCost(state, count);
+    const cementTech = state.tech['cement'] ?? 0;
+    if (cementTech >= 3) return Math.round(cost * 0.8);
+    if (cementTech >= 2) return Math.round(cost * 0.9);
+    return cost;
+  };
+}
+
 /**
  * 第一阶段基础建筑
  * 数据来源：legacy/src/actions.js
@@ -49,7 +91,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'housing',
     reqs: { housing: 1 },
     costs: {
-      Lumber: scaleCost(10, 1.23),
+      Lumber: scaleHousingCost(10, 1.23),
     },
     effect: '市民上限 +1',
   },
@@ -62,10 +104,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'housing',
     reqs: { housing: 2 },
     costs: {
-      Money: scaleCost(900, 1.15),
-      Plywood: scaleCost(25, 1.25),
-      Brick: scaleCost(20, 1.25),
-      Wrought_Iron: scaleCost(15, 1.25),
+      Money: scaleHousingCost(900, 1.15),
+      Plywood: scaleHousingCost(25, 1.25),
+      Brick: scaleHousingCost(20, 1.25),
+      Wrought_Iron: scaleHousingCost(15, 1.25),
     },
     effect: '市民上限 +2',
   },
@@ -95,7 +137,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(1000, 1.31),
       Lumber: scaleCost(600, 1.33),
       Iron: scaleCost(150, 1.33),
-      Cement: scaleCost(125, 1.33),
+      Cement: scaleCementCost(125, 1.33),
     },
     effect: '食物产量 +3%（风车时代 +5%）',
   },
@@ -152,6 +194,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(480, 1.4),
       Lumber: scaleCost(250, 1.36),
+      Iron: scaleConditionalCost(28, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Wrought_Iron: scaleCost(18, 1.36),
     },
     effect: '解锁煤矿工人岗位。',
@@ -229,6 +272,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(250, 1.35),
       Lumber: scaleCost(75, 1.32),
       Stone: scaleCost(100, 1.35),
+      Iron: scaleConditionalCost(30, 1.3, (state, count) => hasCityTrait(state, 'unstable') && count >= 2),
     },
     effect: '金钱上限增加。',
   },
@@ -243,6 +287,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(500, 1.36),
       Lumber: scaleCost(125, 1.36),
       Stone: scaleCost(50, 1.36),
+      Iron: scaleConditionalCost(15, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Furs: scaleCost(65, 1.36),
     },
     effect: '贸易路线 +2。',
@@ -258,9 +303,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'science',
     reqs: { science: 1 },
     costs: {
-      Money: scaleCost(900, 1.5),
-      Lumber: scaleCost(500, 1.36),
-      Stone: scaleCost(750, 1.36),
+      Money: scaleCostMinus(900, 1.5, 500),
+      Lumber: scaleCostMinus(500, 1.36, 200),
+      Stone: scaleCostMinus(750, 1.36, 350),
+      Iron: scaleConditionalCost(25, 1.36, (state, count) => hasCityTrait(state, 'unstable') && count >= 3),
     },
     effect: '知识上限 +500，教授上限 +1。',
   },
@@ -274,11 +320,28 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { science: 2 },
     costs: {
       Money: scaleCost(45, 1.2),
+      Iron: scaleConditionalCost(4, 1.2, (state) => hasCityTrait(state, 'unstable')),
       Furs: scaleCost(22, 1.2),
       Plywood: scaleCost(20, 1.2),
       Brick: scaleCost(15, 1.2),
     },
     effect: '知识上限 +125。',
+  },
+  // actions.js city.wardenclyffe
+  {
+    id: 'wardenclyffe',
+    name: '沃登克里弗塔',
+    description: '先进的科学设备，为科学家提供实验环境并提升知识容量。',
+    category: 'science',
+    reqs: { high_tech: 1 },
+    costs: {
+      Money: scaleCost(5000, 1.22),
+      Knowledge: scaleCost(1000, 1.22),
+      Copper: scaleCost(500, 1.22),
+      Cement: scaleCementCost(350, 1.22),
+      Sheet_Metal: scaleCost(125, 1.2),
+    },
+    effect: '科学家上限 +1，知识上限 +1000。',
   },
 
   // ---- 军事 ----
@@ -305,9 +368,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(22000, 1.32),
       Furs: scaleCost(4000, 1.32),
+      Iron: scaleConditionalCost(500, 1.32, (state) => hasCityTrait(state, 'unstable')),
       Aluminium: scaleCost(10000, 1.32),
     },
-    effect: '伤兵治愈与人口增长加成待接入。',
+    effect: '伤兵治愈待军事系统接入；后续生育科技可使医院提高人口增长速率。',
   },
 
   // ---- 制造与精炼设施 ----
@@ -322,7 +386,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(1000, 1.32),
       Iron: scaleCost(500, 1.33),
     },
-    effect: '逐渐将铁转化为钢。',
+    effect: '初期提升铁产出；钢铁科技后转化铁与煤生产钢，高炉/转炉科技可进一步提高产线效率。',
   },
   // actions.js L2909-2950: metal_refinery
   {
@@ -333,6 +397,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { alumina: 1 },
     costs: {
       Money: scaleCost(2500, 1.35),
+      Iron: scaleConditionalCost(125, 1.35, (state) => hasCityTrait(state, 'unstable')),
       Steel: scaleCost(350, 1.35),
     },
     effect: '解锁和生产铝资源。',
@@ -350,6 +415,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { foundry: 1 },
     costs: {
       Money: scaleCost(750, 1.36),
+      Iron: scaleConditionalCost(40, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Copper: scaleCost(250, 1.36),
       Stone: scaleCost(100, 1.36),
     },
@@ -370,7 +436,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Brick: scaleCost(3, 1.35),
       Wrought_Iron: scaleCost(5, 1.35),
     },
-    effect: '板条箱上限 +10。',
+    effect: '板条箱上限 +10（起重机后提升到 +20）；货运列车后每座额外 +1 贸易路线。',
   },
 
   // actions.js L2299-2351: warehouse (集装箱港口)
@@ -383,10 +449,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { steel_container: 1 },
     costs: {
       Money: scaleCost(400, 1.26),
-      Cement: scaleCost(75, 1.26),
+      Cement: scaleCementCost(75, 1.26),
       Sheet_Metal: scaleCost(25, 1.25),
     },
-    effect: '集装箱上限 +10。',
+    effect: '集装箱上限 +10（门式起重机后提升到 +20）。',
   },
 
   // ---- 娱乐 ----
@@ -402,6 +468,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(500, 1.55),
       Lumber: scaleCost(50, 1.75),
       Stone: scaleCost(200, 1.75),
+      Iron: scaleConditionalCost(18, 1.36, (state) => hasCityTrait(state, 'unstable')),
     },
     effect: '娱乐者上限 +1，士气上限 +1。',
   },
@@ -418,7 +485,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(50, 1.36),
       Lumber: scaleCost(25, 1.36),
       Furs: scaleCost(15, 1.36),
-      Cement: scaleCost(10, 1.36),
+      Cement: scaleCementCost(10, 1.36),
     },
     effect: '牧师上限 +1（后续接入士气/信仰加成）。',
   },
@@ -432,7 +499,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(3000, 1.26),
       Iron: scaleCost(400, 1.26),
-      Cement: scaleCost(420, 1.26),
+      Cement: scaleCementCost(420, 1.26),
     },
     effect: '木材上限 +200，伐木工木材产量 +5%。',
   },

@@ -46,6 +46,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const workers = (id: string) =>
     (state.civic[id] as { workers: number } | undefined)?.workers ?? 0;
   const techLevel = (id: string) => state.tech[id] ?? 0;
+  const explosiveLevel = techLevel('explosives');
 
   // ============================================================
   // 1. 食物
@@ -75,6 +76,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 有农场时的额外加成（原版 jobs.js L799-800）
   if (farmers > 0 && structCount('farm') > 0) {
     farmerBase += techLevel('agriculture') >= 2 ? 1.15 : 0.65;
+  }
+  // 锄头科技加成 — 原版 jobs.js L806: hoe 每级 +33%
+  const hoeLevel = techLevel('hoe');
+  if (hoeLevel > 0) {
+    farmerBase *= 1 + hoeLevel / 3;
   }
   // 磨坊建筑加成（原版 main.js L3587-3591）
   // agriculture >= 5 → 5%/座, 否则 3%/座（非电力化磨坊）
@@ -128,6 +134,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (hammerLevel > 0) {
     stoneBase *= 1 + hammerLevel * 0.4;
   }
+  // 炸药科技加成 — 原版 main.js: explosives >= 2 时采石场/铝精炼基础产量 + (tech * 25%)
+  const quarryExplosiveMult = explosiveLevel >= 2 ? 1 + explosiveLevel * 0.25 : 1;
+  stoneBase *= quarryExplosiveMult;
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   let stoneMult = 1 + quarries * 0.02;
@@ -140,17 +149,21 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 铜系数 main.js L6158: copper_mult = 1/7
   // 铁系数 main.js L6225: iron_mult  = 1/4
   const miners = workers('miner');
-  deltas['Copper'] = miners * (1 / 7);  // ≈0.143
+  const pickaxeLevel = techLevel('pickaxe');
+  const minerToolMult = 1 + pickaxeLevel * 0.15;
+  const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
+  deltas['Copper'] = miners * (1 / 7) * minerToolMult * minerExplosiveMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = miners * 0.25;  // 1/4
+    deltas['Iron'] = miners * 0.25 * minerToolMult * minerExplosiveMult;  // 1/4
   }
 
   // ============================================================
   // 6. 煤炭 — 煤矿工人
   // ============================================================
   const coalMiners = workers('coal_miner');
-  deltas['Coal'] = coalMiners * 0.2;
+  const coalToolMult = 1 + pickaxeLevel * 0.12;
+  deltas['Coal'] = coalMiners * 0.2 * coalToolMult * minerExplosiveMult;
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -228,6 +241,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   const smelters = structCount('smelter');
   if (smelters > 0) {
+    const blastFurnaceMult = techLevel('smelting') >= 3 ? 1.2 : 1;
+    const bessemerMult = techLevel('smelting') >= 4 ? 1.2 : 1;
+    const oxygenConverterMult = techLevel('smelting') >= 5 ? 1.2 : 1;
     // 根据 tech.ts，'steel' 科技赋予 'smelting: 2'
     if (techLevel('smelting') >= 2) {
       // 生产钢 (消耗 铁和煤)
@@ -238,7 +254,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       const maxByIron = Math.floor(availableIron / ironCost);
       const maxByCoal = Math.floor(availableCoal / coalCost);
       const effectiveSmelters = Math.min(smelters, Math.min(maxByIron, maxByCoal));
-      deltas['Steel'] = (deltas['Steel'] ?? 0) + effectiveSmelters * 0.5;
+      deltas['Steel'] = (deltas['Steel'] ?? 0)
+        + effectiveSmelters * 0.5 * blastFurnaceMult * bessemerMult * oxygenConverterMult;
       deltas['Iron'] = (deltas['Iron'] ?? 0) - effectiveSmelters * ironCost;
       deltas['Coal'] = (deltas['Coal'] ?? 0) - effectiveSmelters * coalCost;
     } else {
@@ -246,7 +263,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       const lumberCost = 5;
       const availableLumber = state.resource['Lumber']?.amount ?? 0;
       const effectiveSmelters = Math.min(smelters, Math.floor(availableLumber / lumberCost));
-      deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * 2.0;
+      deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * 2.0 * blastFurnaceMult;
       deltas['Lumber'] = (deltas['Lumber'] ?? 0) - effectiveSmelters * lumberCost;
     }
   }
@@ -257,7 +274,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const stoneCost = 5;
     const availableStone = (state.resource['Stone']?.amount ?? 0) + (deltas['Stone'] ?? 0);
     const effectiveRefineries = Math.min(metalRefineries, Math.floor(Math.max(0, availableStone) / stoneCost));
-    deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + effectiveRefineries * 1.0;
+    deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + effectiveRefineries * 1.0 * quarryExplosiveMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveRefineries * stoneCost;
   }
 

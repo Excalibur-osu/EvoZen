@@ -27,6 +27,9 @@ const visibleTradables = computed(() => {
 
 /** 获取当前可用金额 */
 const money = computed(() => Math.floor(game.state.resource['Money']?.amount ?? 0))
+const marketQty = computed(() => ((game.state.city.market as { qty?: number } | undefined)?.qty ?? 1))
+const marketQtyLimit = computed(() => game.getManualTradeLimit())
+const routeQtyLimit = computed(() => game.getTradeRouteQtyLimit())
 
 function cycleAction(index: number) {
   const route = tradeRoutes.value[index]
@@ -39,6 +42,12 @@ function changeRouteResource(index: number, resourceId: string) {
   const route = tradeRoutes.value[index]
   if (!route) return
   game.updateTradeRoute(index, { ...route, resource: resourceId })
+}
+
+function adjustRouteQty(index: number, delta: number) {
+  const route = tradeRoutes.value[index]
+  if (!route) return
+  game.updateTradeRoute(index, { ...route, qty: (route.qty ?? 1) + delta })
 }
 
 function actionLabel(action: string): string {
@@ -58,6 +67,14 @@ function actionClass(action: string): string {
       <span class="money-badge">💰 {{ money }}</span>
     </h3>
 
+    <div class="market-tools">
+      <span class="tool-label">单次交易数量</span>
+      <button class="qty-btn" @click="game.adjustMarketTradeQty(-1)" :disabled="marketQty <= 1">−</button>
+      <span class="qty-value">{{ marketQty }}</span>
+      <button class="qty-btn" @click="game.adjustMarketTradeQty(1)" :disabled="marketQty >= marketQtyLimit">+</button>
+      <span class="tool-hint">上限 {{ marketQtyLimit }}</span>
+    </div>
+
     <div class="market-grid">
       <div
         v-for="resId in visibleTradables"
@@ -70,19 +87,19 @@ function actionClass(action: string): string {
         <div class="trade-btns">
           <button
             class="btn btn-buy"
-            :disabled="money < game.getBuyPrice(resId)"
-            @click="game.tradeBuy(resId)"
-            :title="`买入: ${game.getBuyPrice(resId)} 金`"
+            :disabled="money < game.getBuyPrice(resId) * marketQty"
+            @click="game.tradeBuy(resId, marketQty)"
+            :title="`买入 ${marketQty}: ${game.getBuyPrice(resId) * marketQty} 金`"
           >
-            买 ${{ game.getBuyPrice(resId) }}
+            买 {{ marketQty }} / ${{ game.getBuyPrice(resId) * marketQty }}
           </button>
           <button
             class="btn btn-sell"
-            :disabled="(game.state.resource[resId]?.amount ?? 0) < 1"
-            @click="game.tradeSell(resId)"
-            :title="`卖出: ${game.getSellPrice(resId)} 金`"
+            :disabled="(game.state.resource[resId]?.amount ?? 0) < marketQty"
+            @click="game.tradeSell(resId, marketQty)"
+            :title="`卖出 ${marketQty}: ${game.getSellPrice(resId) * marketQty} 金`"
           >
-            卖 ${{ game.getSellPrice(resId) }}
+            卖 {{ marketQty }} / ${{ game.getSellPrice(resId) * marketQty }}
           </button>
         </div>
       </div>
@@ -122,6 +139,12 @@ function actionClass(action: string): string {
           >
             {{ actionLabel(route.action) }}
           </button>
+
+          <div class="route-qty">
+            <button class="qty-btn" @click="adjustRouteQty(idx, -1)" :disabled="(route.qty ?? 1) <= 1">−</button>
+            <span class="qty-value">{{ route.qty ?? 1 }}</span>
+            <button class="qty-btn" @click="adjustRouteQty(idx, 1)" :disabled="(route.qty ?? 1) >= routeQtyLimit">+</button>
+          </div>
         </div>
       </div>
     </div>
@@ -157,6 +180,27 @@ function actionClass(action: string): string {
   font-size: 13px;
   font-weight: 600;
   color: var(--success, #22c55e);
+}
+
+.market-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.tool-label,
+.tool-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tool-hint {
+  margin-left: auto;
 }
 
 /* 市场网格 */
@@ -259,6 +303,38 @@ function actionClass(action: string): string {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
+}
+
+.route-qty {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qty-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  padding: 0;
+}
+
+.qty-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.qty-value {
+  min-width: 28px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .btn-action {

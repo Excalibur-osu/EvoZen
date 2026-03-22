@@ -25,7 +25,7 @@ const completedTechs = computed(() => {
 })
 
 function formatCost(techId: string): Array<{ resId: string; amount: number; affordable: boolean }> {
-  return Object.entries(game.getTechCost(techId)).map(([resId, amount]) => ({
+  return (Object.entries(game.getTechCost(techId)) as Array<[string, number]>).map(([resId, amount]) => ({
     resId,
     amount: Math.ceil(amount),
     affordable: (game.state.resource[resId]?.amount ?? 0) >= amount,
