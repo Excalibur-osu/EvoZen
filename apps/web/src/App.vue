@@ -15,10 +15,13 @@ import TechPanel from './components/TechPanel.vue'
 import JobPanel from './components/JobPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
 import TradePanel from './components/TradePanel.vue'
+import GovernmentPanel from './components/GovernmentPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 
 const game = useGameStore()
 const activeTab = ref<'city' | 'civic' | 'research' | 'resources' | 'industry' | 'market'>('city')
+/** 市政 Tab 下的子 Tab */
+const civicSubTab = ref<'jobs' | 'government'>('jobs')
 
 onMounted(() => {
   game.init()
@@ -89,7 +92,24 @@ const cityTabLabel = computed(() => {
           </div>
           <div class="tab-content">
             <BuildPanel v-if="activeTab === 'city'" />
-            <JobPanel v-if="activeTab === 'civic'" />
+            <!-- 市政：内部分 jobs / government 子 Tab -->
+            <template v-if="activeTab === 'civic'">
+              <div class="subtab-bar">
+                <button
+                  class="subtab-btn"
+                  :class="{ active: civicSubTab === 'jobs' }"
+                  @click="civicSubTab = 'jobs'"
+                >岗位</button>
+                <button
+                  v-if="(game.state.tech['govern'] ?? 0) >= 1"
+                  class="subtab-btn"
+                  :class="{ active: civicSubTab === 'government' }"
+                  @click="civicSubTab = 'government'"
+                >政府</button>
+              </div>
+              <JobPanel v-if="civicSubTab === 'jobs'" />
+              <GovernmentPanel v-if="civicSubTab === 'government'" />
+            </template>
             <TechPanel v-if="activeTab === 'research'" />
             <ResourceDetailPanel v-if="activeTab === 'resources'" />
             <CraftPanel v-if="activeTab === 'industry'" />
@@ -181,5 +201,34 @@ const cityTabLabel = computed(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
+}
+
+/* 市政子 Tab */
+.subtab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0;
+}
+.subtab-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+  font-family: var(--font-sans);
+  margin-bottom: -1px;
+}
+.subtab-btn:hover {
+  color: var(--text-primary);
+}
+.subtab-btn.active {
+  color: var(--text-accent);
+  border-bottom-color: var(--accent);
 }
 </style>

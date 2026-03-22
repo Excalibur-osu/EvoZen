@@ -27,6 +27,10 @@ import {
   getMaxTradeRoutes,
   setTradeRoute as coreSetTradeRoute,
   type TradeRoute,
+  changeGovernment as coreChangeGovernment,
+  getMaxTaxRate,
+  GOVERNMENT_DEFS,
+  type GovernmentType,
 } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
@@ -647,6 +651,35 @@ export const useGameStore = defineStore('game', () => {
     state.value = coreSetTradeRoute(state.value, index, route)
   }
 
+  // ---- 政府操作 ----
+
+  /**
+   * 切换政体
+   * 对标 legacy/src/civics.js setGov()；冷却期间（govern.rev > 0）不可再次切换
+   */
+  function changeGov(govType: GovernmentType) {
+    const result = coreChangeGovernment(state.value, govType)
+    if (result) {
+      state.value = result
+      const def = GOVERNMENT_DEFS.find(d => d.id === govType)
+      addMessage(`⚖️ 政体已变更为「${def?.name ?? govType}」，新制度冷却中…`, 'special', 'progress')
+    } else {
+      addMessage('政体切换条件未满足或仍在冷却中。', 'warning', 'progress')
+    }
+  }
+
+  /**
+   * 设置税率，钳位在 [0, maxTaxRate] 范围
+   * 对标 legacy/src/civics.js taxRates 绑定
+   */
+  function setTaxRate(rate: number) {
+    const maxRate = getMaxTaxRate(state.value)
+    const clamped = Math.max(0, Math.min(maxRate, Math.round(rate)))
+    if (state.value.civic.taxes) {
+      state.value.civic.taxes.tax_rate = clamped
+    }
+  }
+
   return {
     state,
     messages,
@@ -684,5 +717,10 @@ export const useGameStore = defineStore('game', () => {
     updateTradeRoute,
     getBuyPrice,
     getSellPrice,
+    // 政府系统
+    changeGov,
+    setTaxRate,
+    getMaxTaxRate: () => getMaxTaxRate(state.value),
+    GOVERNMENT_DEFS,
   }
 })

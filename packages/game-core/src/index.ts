@@ -32,3 +32,12 @@ export {
   type TradeRoute,
   type TradableResourceId,
 } from './trade';
+export {
+  GOVERNMENT_DEFS,
+  changeGovernment,
+  getTaxMultiplier,
+  getProductionMultiplier,
+  getMaxTaxRate,
+  type GovernmentType,
+  type GovernmentDef,
+} from './government';

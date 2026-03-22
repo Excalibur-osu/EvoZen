@@ -356,4 +356,17 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 650 },
     effect: '解锁铸造厂建筑和工匠岗位，允许合成胶合板、砖块和锻铁。',
   },
+
+  // legacy tech.js L3028-3054: government → govern:1
+  {
+    id: 'government',
+    name: '政府',
+    description: '建立有组织的政府体系。',
+    category: 'government',
+    era: '文明',
+    reqs: { currency: 1 },
+    grant: ['govern', 1],
+    costs: { Knowledge: 750 },
+    effect: '解锁政体选择，允许采用独裁、民主或寡头制度，影响税收与市民效能。',
+  },
 ];

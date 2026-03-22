@@ -10,6 +10,7 @@
 import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
 import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
+import { getTaxMultiplier, getProductionMultiplier, tickGovernmentCooldown } from './government';
 
 /**
  * 原版全局时间缩放因子
@@ -47,6 +48,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 1. 食物
   // ============================================================
+  // 政体生产力乘数（预留接口，当前恒为 1.0）
+  // 原版中民主/独裁的生产力影响通过士气(morale)系统作用于 global_multiplier，
+  // 而非直接乘此值。待士气系统实装后，本处应调整为 morale/100 的全局加乘。
+  // 参考：legacy/src/main.js L3274-3288, .dev_notes.md § 政府复查修正
+  const prodMult = getProductionMultiplier(state);
+
   // 猎人产出 — 基础 0.5/人, 军事科技加成
   const hunters = workers('hunter');
   let hunterRate = 0.5;
@@ -80,7 +87,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const unemployed = workers('unemployed');
   const foodConsumption = pop - (unemployed + hunters) * 0.5;
 
-  deltas['Food'] = hunterFood + farmerFood - foodConsumption;
+  deltas['Food'] = (hunterFood + farmerFood) * prodMult - foodConsumption;
 
   // ============================================================
   // 2. 毛皮（猎人副产品）
@@ -104,7 +111,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 伐木场加成 +2%/座（原版 main.js L5575-5576）
   const lumberYards = structCount('lumber_yard');
   let lumberMult = 1 + lumberYards * 0.02;
-  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult;
+  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * prodMult;
 
   // ============================================================
   // 4. 石头 — 石工
@@ -115,7 +122,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   let stoneMult = 1 + quarries * 0.02;
-  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult;
+  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * prodMult;
 
   // ============================================================
   // 5. 铜 / 铁 — 矿工
@@ -185,6 +192,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // income_base = citizens * 0.4（非 truepath）
   // banking >= 2 时: income_base *= 1 + (bankers * impact)
   // income_base *= tax_rate / 20
+  // 政体加成（civics.js govEffect）：getTaxMultiplier() 返回政体税收乘数
   const taxRate = state.civic.taxes?.tax_rate ?? 20;
   const bankers = workers('banker');
   const citizens = pop - unemployed;  // 原版 L7587
@@ -195,6 +203,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     incomeBase *= 1 + bankers * bankerImpact;
   }
   incomeBase *= taxRate / 20;  // 原版 L7626
+  // 政体税收加成（civics.js govEffect.autocracy/oligarchy）
+  incomeBase *= getTaxMultiplier(state);
   deltas['Money'] = incomeBase;
 
   // ============================================================
@@ -315,6 +325,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
 
   // 统计（days 已在日历推进内更新）
+
+  // ============================================================
+  // 13. 政体切换冷却推进
+  // ============================================================
+  tickGovernmentCooldown(newState);
 
   return {
     state: newState,
