@@ -25,7 +25,9 @@ export type BasicResourceId =
   | 'Plywood'
   | 'Brick'
   | 'Wrought_Iron'
-  | 'Steel';
+  | 'Steel'
+  | 'Aluminium'
+  | 'Sheet_Metal';
 
 /** 特殊/进化阶段资源 */
 export type EvoResourceId = 'RNA' | 'DNA';
@@ -71,7 +73,9 @@ export type BasicStructureId =
   | 'bank'
   | 'temple'
   | 'university'
-  | 'wardenclyffe';
+  | 'wardenclyffe'
+  | 'smelter'
+  | 'metal_refinery';
 
 /** 单个建筑的状态 */
 export interface StructureState {
@@ -258,6 +262,8 @@ export interface QueueItem {
   qs: number;
   time: number;
   t_max: number;
+  cost?: Record<string, number>;
+  progress?: Record<string, number>;
 }
 
 export interface QueueState {

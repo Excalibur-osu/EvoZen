@@ -31,6 +31,10 @@ import {
   getMaxTaxRate,
   GOVERNMENT_DEFS,
   type GovernmentType,
+  canEnqueue as coreCanEnqueue,
+  isQueueUnlocked as coreIsQueueUnlocked,
+  toggleQueueMode as coreToggleQueueMode,
+  getQueueMax,
 } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
@@ -161,6 +165,15 @@ export const useGameStore = defineStore('game', () => {
     fursMax += sheds * 40
     s.resource['Furs'].max = fursMax
 
+    // --- 钢和铝上限 ---
+    let steelMax = 50
+    steelMax += sheds * 20
+    s.resource['Steel'].max = steelMax
+
+    let aluminiumMax = 50
+    aluminiumMax += sheds * 20
+    s.resource['Aluminium'].max = aluminiumMax
+
     // --- 毛皮显示（有猎人工作时自动显示）---
     const hunterWorkers = (s.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0
     if (hunterWorkers > 0) {
@@ -178,7 +191,11 @@ export const useGameStore = defineStore('game', () => {
     // --- 金币上限 ---
     let moneyMax = 1000
     const banks = getStructCount('bank')
-    moneyMax += banks * 1800
+    let bankCapacity = 1800
+    if ((s.tech['banking'] ?? 0) >= 3) {
+      bankCapacity = 4000
+    }
+    moneyMax += banks * bankCapacity
     s.resource['Money'].max = moneyMax
 
     // --- 岗位上限 ---
@@ -218,6 +235,12 @@ export const useGameStore = defineStore('game', () => {
     if ((s.tech['mining'] ?? 0) >= 1) {
       s.resource['Copper'].display = true
     }
+    if ((s.tech['smelting'] ?? 0) >= 2) {
+      s.resource['Steel'].display = true
+    }
+    if ((s.tech['alumina'] ?? 0) >= 1) {
+      s.resource['Aluminium'].display = true
+    }
 
     // --- 工匠上限由铸造厂决定 ---
     const foundries = getStructCount('foundry')
@@ -228,10 +251,18 @@ export const useGameStore = defineStore('game', () => {
       s.resource['Plywood'].display = true
       s.resource['Brick'].display = true
       s.resource['Wrought_Iron'].display = true
+      if ((s.tech['alumina'] ?? 0) >= 1) {
+        s.resource['Sheet_Metal'].display = true
+      }
       // 确保铸造厂 foundry 状态存在
       if (!s.city['foundry']) {
         (s.city as Record<string, unknown>)['foundry'] = {
-          count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0
+          count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0
+        }
+      } else {
+        // 向前兼容：确保存在 Sheet_Metal
+        if ((s.city['foundry'] as any).Sheet_Metal === undefined) {
+          (s.city['foundry'] as any).Sheet_Metal = 0
         }
       }
     }
@@ -435,6 +466,59 @@ export const useGameStore = defineStore('game', () => {
     if (building.on !== undefined) building.on++
 
     addMessage(`${def.name}已竣工。`, 'success', 'progress')
+  }
+
+  // ---- 建筑队列操作 ----
+
+  const isQueueUnlocked = computed(() => coreIsQueueUnlocked(state.value))
+  const queueMax = computed(() => getQueueMax(state.value))
+  const canEnqueueBuilding = computed(() => coreCanEnqueue(state.value))
+
+  function enqueueBuilding(structureId: string) {
+    if (!coreCanEnqueue(state.value)) return
+    const def = BASIC_STRUCTURES.find(s => s.id === structureId)
+    if (!def) return
+    
+    const count = getStructCount(structureId)
+    const cost: Record<string, number> = {}
+    for (const [resId, costFn] of Object.entries(def.costs)) {
+      cost[resId] = costFn(state.value, count)
+    }
+    
+    state.value.queue.queue = state.value.queue.queue || []
+    state.value.queue.queue.push({
+      id: structureId,
+      action: `city.${structureId}`,
+      type: 'building',
+      label: def.name,
+      q: 1,
+      qs: state.value.queue.queue.length,
+      time: 0,
+      t_max: 0,
+      cost,
+      progress: {}
+    })
+    
+    addMessage(`已将 ${def.name} 加入建造队列。`, 'info', 'progress')
+  }
+
+  function dequeueBuilding(index: number) {
+    if (state.value.queue.queue && index >= 0 && index < state.value.queue.queue.length) {
+      const item = state.value.queue.queue[index]
+      if (item.progress) {
+        // 返还已投入的资源
+        for (const [resId, amount] of Object.entries(item.progress)) {
+           if (state.value.resource[resId]) {
+             state.value.resource[resId].amount += amount
+           }
+        }
+      }
+      state.value.queue.queue.splice(index, 1)
+    }
+  }
+
+  function toggleQueue() {
+    coreToggleQueueMode(state.value)
   }
 
   // ---- 科技操作 ----
@@ -722,5 +806,12 @@ export const useGameStore = defineStore('game', () => {
     setTaxRate,
     getMaxTaxRate: () => getMaxTaxRate(state.value),
     GOVERNMENT_DEFS,
+    // 队列系统
+    isQueueUnlocked,
+    queueMax,
+    canEnqueueBuilding,
+    enqueueBuilding,
+    dequeueBuilding,
+    toggleQueue,
   }
 })

@@ -105,7 +105,7 @@ export function createNewGame(): GameState {
   const state: GameState = {
     seed: 2,
     warseed: 2,
-    version: '0.1.0',
+    version: '0.3.1',
 
     resource: {
       // 进化阶段
@@ -122,11 +122,13 @@ export function createNewGame(): GameState {
       Cement: { ...makeResource('水泥', 100, 1), value: 15 },
       Coal: { ...makeResource('煤', 50, 1), value: 20 },
       Knowledge: { ...makeResource('知识', 100, 1), value: 0 },
-      Steel: { ...makeResource('钢', 50, 1), value: 100 },
+      Steel: { ...makeResource('钢', 50, 1), value: 0 },
+      Aluminium: { ...makeResource('铝', 50, 1), value: 0 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },
       Brick: { ...makeResource('砖', -1, 0), value: 0 },
       Wrought_Iron: { ...makeResource('锻铁', -1, 0), value: 0 },
+      Sheet_Metal: { ...makeResource('金属板', -1, 0), value: 0 },
       // 容器
       Crates: { ...makeResource('板条箱', 0, 0) },
       Containers: { ...makeResource('集装箱', 0, 0) },
@@ -143,7 +145,7 @@ export function createNewGame(): GameState {
       geology: {},
       market: { active: false },
       // 铸造厂产线分配（工匠 → 合成品）
-      foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0 },
+      foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0 },
       // 自动贸易路线
       trade_routes: [],
     } as CityState,

@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { BASIC_STRUCTURES } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
+import QueuePanel from './QueuePanel.vue'
 
 const game = useGameStore()
 
@@ -56,6 +57,8 @@ function isStorageFull(resId: string): boolean {
 
 <template>
   <div class="build-panel">
+    <QueuePanel />
+    
     <!-- 手动采集区 -->
     <div class="gather-section">
       <h3 class="section-title">🖐️ 手动采集</h3>
@@ -85,8 +88,17 @@ function isStorageFull(resId: string): boolean {
         @click="game.build(def.id)"
       >
         <div class="build-header">
-          <span class="build-name">{{ def.name }}</span>
-          <span class="build-count font-mono" v-if="getCount(def.id) > 0">{{ getCount(def.id) }}</span>
+          <div class="build-header-left">
+            <span class="build-name">{{ def.name }}</span>
+            <span class="build-count font-mono" v-if="getCount(def.id) > 0">{{ getCount(def.id) }}</span>
+          </div>
+          <button 
+            v-if="game.isQueueUnlocked"
+            class="q-btn" 
+            :disabled="!game.canEnqueueBuilding"
+            @click.stop="game.enqueueBuilding(def.id)"
+            title="加入建造队列"
+          >+Q</button>
         </div>
         <p class="build-effect">{{ def.effect }}</p>
         <div class="build-costs">
@@ -202,6 +214,31 @@ function isStorageFull(resId: string): boolean {
   justify-content: space-between;
   margin-bottom: 3px;
 }
+.build-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.q-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-accent);
+  padding: 1px 6px;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.q-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.q-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .build-name {
   font-weight: 600;
   font-size: 13px;

@@ -282,7 +282,37 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     effect: '士兵上限 +2。',
   },
 
-  // ---- 制造 ----
+  // ---- 制造与精炼设施 ----
+  // actions.js L2843-2900: smelter
+  {
+    id: 'smelter',
+    name: '熔炉',
+    description: '通过燃烧燃料将铁提纯成少量钢材。',
+    category: 'resource',
+    reqs: { smelting: 1 },
+    costs: {
+      Money: scaleCost(1000, 1.32),
+      Iron: scaleCost(500, 1.33),
+    },
+    effect: '逐渐将铁转化为钢。',
+  },
+  // actions.js L2909-2950: metal_refinery
+  {
+    id: 'metal_refinery',
+    name: '金属精炼厂',
+    description: '通过耗电电解，开采和提炼铝。',
+    category: 'resource',
+    reqs: { alumina: 1 },
+    costs: {
+      Money: scaleCost(2500, 1.35),
+      Steel: scaleCost(350, 1.35),
+    },
+    effect: '解锁和生产铝资源。',
+    powered: true,
+    powerCost: 2,
+  },
+
+  // ---- 制造（工匠） ----
   // actions.js L2714-2770: foundry
   {
     id: 'foundry',

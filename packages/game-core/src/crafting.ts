@@ -17,10 +17,10 @@ import { CRAFT_COSTS, type CraftRecipe } from './resources';
 // ============================================================
 
 /** 第一阶段支持的合成品 ID */
-export type CraftableId = 'Plywood' | 'Brick' | 'Wrought_Iron';
+export type CraftableId = 'Plywood' | 'Brick' | 'Wrought_Iron' | 'Sheet_Metal';
 
 /** 所有可合成的产品 ID 列表 */
-export const CRAFTABLE_IDS: CraftableId[] = ['Plywood', 'Brick', 'Wrought_Iron'];
+export const CRAFTABLE_IDS: CraftableId[] = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal'];
 
 // ============================================================
 // 合成产线数据结构（存储在 city.foundry 中）

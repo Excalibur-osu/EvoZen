@@ -41,3 +41,9 @@ export {
   type GovernmentType,
   type GovernmentDef,
 } from './government';
+export {
+  getQueueMax,
+  canEnqueue,
+  isQueueUnlocked,
+  toggleQueueMode
+} from './queue';

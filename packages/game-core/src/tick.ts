@@ -11,6 +11,7 @@ import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-type
 import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
 import { getTaxMultiplier, getProductionMultiplier, tickGovernmentCooldown } from './government';
+import { BASIC_STRUCTURES } from './structures';
 
 /**
  * 原版全局时间缩放因子
@@ -119,6 +120,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 原版 main.js L5663-5677: impact = 1.0（不是 0.8）
   const quarryWorkers = workers('quarry_worker');
   let stoneBase = 1.0;  // quarry_worker.impact = 1.0
+  // hammer 科技加成 — 原版 jobs.js L119: 每级 hammer +40%
+  const hammerLevel = techLevel('hammer');
+  if (hammerLevel > 0) {
+    stoneBase *= 1 + hammerLevel * 0.4;
+  }
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   let stoneMult = 1 + quarries * 0.02;
@@ -208,6 +214,44 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   deltas['Money'] = incomeBase;
 
   // ============================================================
+  // 9a. 冶金系统 (Metallurgy)
+  // ============================================================
+  const smelters = structCount('smelter');
+  if (smelters > 0) {
+    // 根据 tech.ts，'steel' 科技赋予 'smelting: 2'
+    if (techLevel('smelting') >= 2) {
+      // 生产钢 (消耗 铁和煤)
+      const ironCost = 2;
+      const coalCost = 2;
+      const availableIron = state.resource['Iron']?.amount ?? 0;
+      const availableCoal = state.resource['Coal']?.amount ?? 0;
+      const maxByIron = Math.floor(availableIron / ironCost);
+      const maxByCoal = Math.floor(availableCoal / coalCost);
+      const effectiveSmelters = Math.min(smelters, Math.min(maxByIron, maxByCoal));
+      deltas['Steel'] = (deltas['Steel'] ?? 0) + effectiveSmelters * 0.5;
+      deltas['Iron'] = (deltas['Iron'] ?? 0) - effectiveSmelters * ironCost;
+      deltas['Coal'] = (deltas['Coal'] ?? 0) - effectiveSmelters * coalCost;
+    } else {
+      // 初期仅生产铁 (消耗木材)
+      const lumberCost = 5;
+      const availableLumber = state.resource['Lumber']?.amount ?? 0;
+      const effectiveSmelters = Math.min(smelters, Math.floor(availableLumber / lumberCost));
+      deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * 2.0;
+      deltas['Lumber'] = (deltas['Lumber'] ?? 0) - effectiveSmelters * lumberCost;
+    }
+  }
+
+  const metalRefineries = structCount('metal_refinery');
+  if (metalRefineries > 0) {
+    // 生产铝 (消耗 石头)
+    const stoneCost = 5;
+    const availableStone = (state.resource['Stone']?.amount ?? 0) + (deltas['Stone'] ?? 0);
+    const effectiveRefineries = Math.min(metalRefineries, Math.floor(Math.max(0, availableStone) / stoneCost));
+    deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + effectiveRefineries * 1.0;
+    deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveRefineries * stoneCost;
+  }
+
+  // ============================================================
   // 10a. 工匠合成产线（自动消耗原料、产出合成品）
   // ============================================================
   const craftDeltas = craftingTick(state);
@@ -263,6 +307,56 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, res] of Object.entries(newState.resource)) {
     if (!deltas.hasOwnProperty(resId)) {
       res.diff = 0;
+    }
+  }
+
+  // ============================================================
+  // 10c. 建造队列处理
+  // ============================================================
+  if (newState.queue?.queue && newState.queue.queue.length > 0) {
+    const item = newState.queue.queue[0];
+    const def = BASIC_STRUCTURES.find(d => d.id === item.id);
+    if (def) {
+      const structObj = newState.city[item.id] as { count?: number } | undefined;
+      const currCount = structObj?.count ?? 0;
+      
+      let finished = true;
+      for (const [resId, costFunc] of Object.entries(def.costs)) {
+        const reqAmount = costFunc(newState, currCount);
+        item.progress = item.progress || {};
+        const current = item.progress[resId] || 0;
+        
+        if (current < reqAmount) {
+          finished = false;
+          const missing = reqAmount - current;
+          const available = newState.resource[resId]?.amount ?? 0;
+          const take = Math.min(missing, available);
+          
+          if (take > 0) {
+            newState.resource[resId].amount -= take;
+            item.progress[resId] = current + take;
+            // 此时不减去 diff，因为 diff 是显示用的产量速度
+          }
+        }
+      }
+
+      if (finished) {
+        if (!newState.city[item.id]) {
+          newState.city[item.id] = { count: 0 };
+        }
+        (newState.city[item.id] as { count: number }).count++;
+        
+        messages.push({
+          text: `✔️ 建造完成：${item.label}`,
+          type: 'success',
+          category: 'progress'
+        });
+        
+        newState.queue.queue.shift();
+      }
+    } else {
+      // 防止无效项卡死队列
+      newState.queue.queue.shift();
     }
   }
 

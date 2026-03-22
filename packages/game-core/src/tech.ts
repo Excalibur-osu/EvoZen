@@ -199,6 +199,45 @@ export const BASIC_TECHS: TechDefinition[] = [
     effect: '解锁煤矿和煤矿工人。煤炭显示。',
   },
 
+  // legacy tech.js L2031-2056: smelting → smelting:1
+  {
+    id: 'smelting',
+    name: '熔炼',
+    description: '学习高温提炼金属。',
+    category: 'mining',
+    era: '文明',
+    reqs: { mining: 3 },
+    grant: ['smelting', 1],
+    costs: { Knowledge: 4050 },
+    effect: '解锁熔炉建筑。',
+  },
+
+  // legacy tech.js L2057-2084: steel → smelting:2
+  {
+    id: 'steel',
+    name: '钢铁',
+    description: '制造更坚固的金属合金。',
+    category: 'mining',
+    era: '文明',
+    reqs: { smelting: 1, mining: 4 },
+    grant: ['smelting', 2],
+    costs: { Knowledge: 4950, Iron: 100 },
+    effect: '解锁各种涉钢设施。开启钢材产量。',
+  },
+
+  // legacy tech.js L1987-2007: bayer_process → alumina:1
+  {
+    id: 'bayer_process',
+    name: '拜耳法',
+    description: '从铝土矿中精炼氧化铝。',
+    category: 'mining',
+    era: '文明',
+    reqs: { smelting: 2 },
+    grant: ['alumina', 1],
+    costs: { Knowledge: 4500 },
+    effect: '解锁金属精炼厂和铝资源。',
+  },
+
   // legacy tech.js L2342-2360: storage → storage:1
   {
     id: 'storage',
@@ -368,5 +407,83 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['govern', 1],
     costs: { Knowledge: 750 },
     effect: '解锁政体选择，允许采用独裁、民主或寡头制度，影响税收与市民效能。',
+  },
+
+  // legacy tech.js L3560-3578: investing → banking:2
+  {
+    id: 'investing',
+    name: '投资',
+    description: '通过放贷获取利息。',
+    category: 'banking',
+    era: '文明',
+    reqs: { banking: 1 },
+    grant: ['banking', 2],
+    costs: { Money: 2500, Knowledge: 900 },
+    effect: '解锁银行家岗位，产生被动金钱利息。',
+  },
+
+  // legacy tech.js L10074-10091: market → currency:2
+  {
+    id: 'market',
+    name: '市场',
+    description: '集中化的贸易场所。',
+    category: 'banking',
+    era: '文明',
+    reqs: { banking: 1, govern: 1 },
+    grant: ['currency', 2],
+    costs: { Knowledge: 1800 },
+    effect: '解锁更高级的经济和规划技术。',
+  },
+
+  // legacy tech.js L3601-3619: vault → banking:3
+  {
+    id: 'vault',
+    name: '金库',
+    description: '高度安全的资金储存设施。',
+    category: 'banking',
+    era: '文明',
+    reqs: { banking: 2, cement: 1 },
+    grant: ['banking', 3],
+    costs: { Money: 2000, Knowledge: 3600, Iron: 500, Cement: 750 },
+    effect: '提升金钱上限。',
+  },
+
+  // legacy tech.js L2912-2939: urban_planning → queue:1
+  {
+    id: 'urban_planning',
+    name: '城市规划',
+    description: '规划建筑布局，优化资源分配。',
+    category: 'queues',
+    era: '文明',
+    reqs: { banking: 2, currency: 2 },
+    grant: ['queue', 1],
+    costs: { Knowledge: 2500 },
+    effect: '解锁建造队列功能。',
+  },
+
+  // legacy tech.js L2941-2966: zoning_permits → queue:2
+  {
+    id: 'zoning_permits',
+    name: '分区许可',
+    description: '规范化土地使用，扩展规划规模。',
+    category: 'queues',
+    era: '工业化',
+    reqs: { queue: 1, high_tech: 3 },
+    grant: ['queue', 2],
+    costs: { Knowledge: 28000 },
+    effect: '建造队列容量 +1。',
+  },
+
+  // legacy tech.js L2968-2993: urbanization → queue:3
+  {
+    id: 'urbanization',
+    name: '城市化',
+    description: '向大规模城市集群发展。',
+    category: 'queues',
+    era: '全球化',
+    reqs: { queue: 2, high_tech: 6 },
+    grant: ['queue', 3],
+    costs: { Knowledge: 95000 },
+    effect: '建造队列容量 +1。',
   },
 ];

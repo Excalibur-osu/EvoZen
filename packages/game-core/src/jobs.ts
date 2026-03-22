@@ -91,8 +91,8 @@ export const BASE_JOBS: JobDefinition[] = [
     name: '银行家',
     impact: 0.1,
     stress: 6,
-    requiredTech: { banking: 1 },
-    description: '银行家管理银行与税收。',
+    requiredTech: { banking: 2 },
+    description: '银行家管理银行与产生被动利息。',
   },
   {
     id: 'entertainer',
