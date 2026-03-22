@@ -87,6 +87,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const mills = structCount('mill');
   const millBonus = techLevel('agriculture') >= 5 ? 0.05 : 0.03;
   let foodMult = 1 + mills * millBonus;
+  if (techLevel('agriculture') >= 7) {
+    foodMult *= 1.1;
+  }
   const farmerFood = farmers * farmerBase * foodMult;
 
   // 食物消耗 — 原版 main.js L3711:
@@ -175,7 +178,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const availableStone = state.resource['Stone']?.amount ?? 0;
     const maxByStone = Math.floor(availableStone / stonePerCement);
     const effectiveCement = Math.min(cementWorkers, maxByStone);
-    deltas['Cement'] = effectiveCement * 0.4;
+    const cementLevel = techLevel('cement');
+    const cementTechMult = cementLevel >= 7 ? 1.45 : (cementLevel >= 4 ? 1.2 : 1);
+    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
   }
 
@@ -193,16 +198,24 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const libraries = structCount('library');
   // 教授基础产出 — 原版 main.js L9313:
   // professor.impact = 0.5 + (library_count * 0.01)
-  const profImpact = 0.5 + getProfessorTraitBonus(state) + libraries * 0.01;
+  let profImpact = 0.5 + getProfessorTraitBonus(state) + libraries * 0.01;
+  if (techLevel('anthropology') >= 3) {
+    profImpact *= 1 + structCount('temple') * 0.05;
+  }
   // 神权政体惩罚——原版 main.js L4183-4184:
   // if (govern.type === 'theocracy') professors_base *= 1 - (govEffect.theocracy()[1] / 100)
   const profGovMult = getKnowledgeMultiplier(state, 'professor');
   const professorsBase = professors * profImpact * profGovMult;
   // 科学家产出 — impact = 1.0
+  let sciImpact = 1.0;
+  const wardenclyffes = structCount('wardenclyffe');
+  if (techLevel('science') >= 6 && wardenclyffes > 0) {
+    sciImpact *= 1 + professors * wardenclyffes * 0.01;
+  }
   // 神权政体惩罚——原版 main.js L4200-4201:
   // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
   const sciGovMult = getKnowledgeMultiplier(state, 'scientist');
-  const scientistBase = scientists * 1.0 * sciGovMult;
+  const scientistBase = scientists * sciImpact * sciGovMult;
   // 教授+科学家受饥饿影响，日晷不受（原版 L4228-4229）
   let knowledgeDelta = (professorsBase + scientistBase) + sundialBase;
   // 图书馆全局加成 — 原版 main.js L4259:
@@ -227,7 +240,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   let incomeBase = citizens * 0.4;  // 原版 L7592, non-truepath
   // 银行家加成（需要 banking:2）— 原版 L7601-7615
   if (techLevel('banking') >= 2 && bankers > 0) {
-    const bankerImpact = 0.1;  // 基础 impact
+    let bankerImpact = 0.1;  // 基础 impact
+    if (techLevel('banking') >= 10) {
+      bankerImpact += 0.02 * techLevel('stock_exchange');
+    }
+    if (state.civic.govern?.type === 'republic') {
+      bankerImpact *= 1.25;
+    }
     incomeBase *= 1 + bankers * bankerImpact;
   }
   incomeBase *= getTaxIncomeTraitMultiplier(state);
