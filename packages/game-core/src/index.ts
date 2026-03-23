@@ -78,6 +78,8 @@ export {
   getTotalAssignedCrates,
   getTotalAssignedContainers,
   getStorageBonus,
+  getStorageMultiplier,
+  SHED_BASE_VALUES,
   BASE_CRATE_VALUE as CRATE_VALUE,
   CONTAINER_VALUE,
   getCrateValue,

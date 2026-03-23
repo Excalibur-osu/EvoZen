@@ -277,6 +277,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         + effectiveSmelters * 0.5 * blastFurnaceMult * bessemerMult * oxygenConverterMult;
       deltas['Iron'] = (deltas['Iron'] ?? 0) - effectiveSmelters * ironCost;
       deltas['Coal'] = (deltas['Coal'] ?? 0) - effectiveSmelters * coalCost;
+
+      // 钛副产物 (titanium tech >= 1) — 对标 legacy main.js L5130-5144
+      // 原版: smelter_output / divisor, divisor = titanium >= 3 ? 10 : 25
+      if (techLevel('titanium') >= 1) {
+        const steelOutput = effectiveSmelters * 0.5 * blastFurnaceMult * bessemerMult * oxygenConverterMult;
+        const titaniumDivisor = techLevel('titanium') >= 3 ? 10 : 25;
+        deltas['Titanium'] = (deltas['Titanium'] ?? 0) + steelOutput / titaniumDivisor;
+      }
     } else {
       // 初期仅生产铁 (消耗木材)
       const lumberCost = 5;
@@ -285,6 +293,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * 2.0 * blastFurnaceMult;
       deltas['Lumber'] = (deltas['Lumber'] ?? 0) - effectiveSmelters * lumberCost;
     }
+  }
+
+  // ============================================================
+  // 9b. 石油产出 — 对标 legacy main.js L6720-6760
+  // ============================================================
+  // 每座油井产出 0.4 Oil/tick (oil tech >= 4 时 0.48，暂设 0.4)
+  const oilWells = structCount('oil_well');
+  if (oilWells > 0 && techLevel('oil') >= 1) {
+    const oilPerWell = 0.4;
+    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWells * oilPerWell;
   }
 
   const metalRefineries = structCount('metal_refinery');

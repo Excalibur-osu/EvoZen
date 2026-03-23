@@ -246,6 +246,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     effect: '食物上限 +100，降低腐坏（待接入）。',
   },
   // actions.js L2104-2200: shed
+  // 原版 shed 建造成本随 storage 科技等级变化：
+  // storage < 3: Money + Lumber + Stone
+  // storage >= 3 (barns): Stone → Cement
+  // storage >= 4 (warehouse): Lumber → Iron
   {
     id: 'shed',
     name: '仓库',
@@ -254,8 +258,26 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { storage: 1 },
     costs: {
       Money: scaleCost(75, 1.22),
-      Lumber: scaleCost(55, 1.32),
-      Stone: scaleCost(45, 1.32),
+      Lumber: (state, count) => {
+        if (state.tech['storage'] && state.tech['storage'] >= 4) return 0;
+        return scaleCost(55, 1.32)(state, count);
+      },
+      Stone: (state, count) => {
+        if (state.tech['storage'] && state.tech['storage'] >= 3) return 0;
+        return scaleCost(45, 1.32)(state, count);
+      },
+      Iron: (state, count) => {
+        if (state.tech['storage'] && state.tech['storage'] >= 4) {
+          return scaleCost(22, 1.32)(state, count);
+        }
+        return 0;
+      },
+      Cement: (state, count) => {
+        if (state.tech['storage'] && state.tech['storage'] >= 3) {
+          return scaleCementCost(18, 1.32)(state, count);
+        }
+        return 0;
+      },
     },
     effect: '木材/石头等上限增加，提供板条箱位。',
   },
@@ -502,5 +524,33 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Cement: scaleCementCost(420, 1.26),
     },
     effect: '木材上限 +200，伐木工木材产量 +5%。',
+  },
+  // actions.js L3053-3095: oil_well
+  {
+    id: 'oil_well',
+    name: '油井',
+    description: '钻探石油资源。',
+    category: 'resource',
+    reqs: { oil: 1 },
+    costs: {
+      Money: scaleCost(5000, 1.5),
+      Cement: scaleCementCost(5250, 1.5),
+      Steel: scaleCost(6000, 1.5),
+    },
+    effect: '每座油井产出 0.4 石油/tick，石油上限 +500。',
+  },
+  // actions.js L3097-3140: oil_depot
+  {
+    id: 'oil_depot',
+    name: '石油仓库',
+    description: '专门存储石油的大型设施。',
+    category: 'storage',
+    reqs: { oil: 2 },
+    costs: {
+      Money: scaleCost(2500, 1.46),
+      Cement: scaleCementCost(3750, 1.46),
+      Sheet_Metal: scaleCost(100, 1.45),
+    },
+    effect: '石油储存上限 +1000。',
   },
 ];

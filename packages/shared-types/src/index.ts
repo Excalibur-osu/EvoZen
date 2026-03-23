@@ -27,6 +27,8 @@ export type BasicResourceId =
   | 'Wrought_Iron'
   | 'Steel'
   | 'Aluminium'
+  | 'Oil'
+  | 'Titanium'
   | 'Sheet_Metal';
 
 /** 特殊/进化阶段资源 */
@@ -80,7 +82,9 @@ export type BasicStructureId =
   | 'metal_refinery'
   | 'storage_yard'
   | 'warehouse'
-  | 'amphitheatre';
+  | 'amphitheatre'
+  | 'oil_well'
+  | 'oil_depot';
 
 /** 单个建筑的状态 */
 export interface StructureState {

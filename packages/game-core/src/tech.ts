@@ -317,7 +317,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     era: '文明',
     reqs: { smelting: 1, mining: 4 },
     grant: ['smelting', 2],
-    costs: { Knowledge: 4950, Iron: 100 },
+    costs: { Knowledge: 4950, Steel: 25 },
     effect: '解锁各种涉钢设施。开启钢材产量。',
   },
   // legacy tech.js L2086-2104: blast_furnace → smelting:3
@@ -381,6 +381,30 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['storage', 1],
     costs: { Knowledge: 20 },
     effect: '解锁仓库建筑。',
+  },
+  // legacy tech.js L2362-2382: reinforced_shed → storage:2
+  {
+    id: 'reinforced_shed',
+    name: '加强窝棚',
+    description: '升级窝棚。',
+    category: 'storage',
+    era: '文明',
+    reqs: { storage: 1, cement: 1, mining: 3 },
+    grant: ['storage', 2],
+    costs: { Money: 3750, Knowledge: 2550, Iron: 750, Cement: 500 },
+    effect: '用新材料加固窝棚，资源储量上限 +125%。',
+  },
+  // legacy tech.js L2384-2406: barns → storage:3
+  {
+    id: 'barns',
+    name: '谷仓',
+    description: '将窝棚替换成谷仓。',
+    category: 'storage',
+    era: '发现',
+    reqs: { storage: 2, smelting: 2, alumina: 1 },
+    grant: ['storage', 3],
+    costs: { Knowledge: 15750, Aluminium: 3000, Steel: 3000 },
+    effect: '将窝棚替换成更大的谷仓，显著提升储量上限。建造谷仓的材料由石头改为水泥，资源储量上限 +133%。',
   },
 
   // legacy tech.js L8058-8077: cement
@@ -987,6 +1011,43 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 25200 },
     effect: '为工厂、钛与学术期刊等后续工业科技提供前置。',
   },
+  // legacy tech.js L6086-6104: oil_well → oil:1
+  {
+    id: 'oil_well',
+    name: '油井',
+    description: '开采地下石油资源。',
+    category: 'power_generation',
+    era: '工业化',
+    reqs: { high_tech: 3 },
+    grant: ['oil', 1],
+    costs: { Knowledge: 27000 },
+    effect: '解锁油井建筑，开始开采石油。',
+  },
+  // legacy tech.js L6106-6124: oil_depot → oil:2
+  {
+    id: 'oil_depot',
+    name: '石油仓库',
+    description: '建造专用石油储存设施。',
+    category: 'storage',
+    era: '工业化',
+    reqs: { oil: 1 },
+    grant: ['oil', 2],
+    costs: { Knowledge: 32000 },
+    effect: '解锁石油仓库建筑，增加石油储存上限。',
+  },
+  // legacy tech.js L8204-8223: hunter_process → titanium:1
+  {
+    id: 'hunter_process',
+    name: '亨特法',
+    description: '一种从钢中提取钛的冶炼工艺。',
+    category: 'mining',
+    era: '工业化',
+    reqs: { high_tech: 3, smelting: 2 },
+    grant: ['titanium', 1],
+    costs: { Knowledge: 45000, Titanium: 1000 },
+    effect: '冶炼厂生产钢时同时产出钛作为副产物。',
+  },
+
   // legacy tech.js L4273-4291: scientific_journal → science:5
   {
     id: 'scientific_journal',

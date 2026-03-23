@@ -45,6 +45,8 @@ import {
   assignContainer as coreAssignContainer,
   unassignContainer as coreUnassignContainer,
   getStorageBonus,
+  getStorageMultiplier,
+  SHED_BASE_VALUES,
   getCrateValue,
   STORABLE_RESOURCES,
   CRATE_VALUE,
@@ -151,14 +153,17 @@ export const useGameStore = defineStore('game', () => {
     foodMax += smokehouses * 100
     s.resource['Food'].max = foodMax
 
+    // --- 仓库(shed)存储乘数 — 对标 legacy storageMultipler() ---
+    const sheds = getStructCount('shed')
+    const storageMult = getStorageMultiplier(s)
+
     // --- 木材上限 ---
     let lumberMax = 200
     const lumberYards = getStructCount('lumber_yard')
     const sawmills = getStructCount('sawmill')
-    const sheds = getStructCount('shed')
     lumberMax += lumberYards * 100
     lumberMax += sawmills * 200
-    lumberMax += sheds * 75
+    lumberMax += Math.round(sheds * (SHED_BASE_VALUES['Lumber'] ?? 0) * storageMult)
     lumberMax += getStorageBonus(s, 'Lumber')
     s.resource['Lumber'].max = lumberMax
 
@@ -166,50 +171,79 @@ export const useGameStore = defineStore('game', () => {
     let stoneMax = 200
     const quarries = getStructCount('rock_quarry')
     stoneMax += quarries * 100
-    stoneMax += sheds * 75
+    stoneMax += Math.round(sheds * (SHED_BASE_VALUES['Stone'] ?? 0) * storageMult)
     stoneMax += getStorageBonus(s, 'Stone')
     s.resource['Stone'].max = stoneMax
 
     // --- 铜上限 ---
     let copperMax = 100
-    copperMax += sheds * 50
+    copperMax += Math.round(sheds * (SHED_BASE_VALUES['Copper'] ?? 0) * storageMult)
     copperMax += getStorageBonus(s, 'Copper')
     s.resource['Copper'].max = copperMax
 
     // --- 铁上限 ---
     let ironMax = 100
-    ironMax += sheds * 50
+    ironMax += Math.round(sheds * (SHED_BASE_VALUES['Iron'] ?? 0) * storageMult)
     ironMax += getStorageBonus(s, 'Iron')
     s.resource['Iron'].max = ironMax
 
     // --- 水泥上限 ---
     let cementMax = 100
-    cementMax += sheds * 40
+    cementMax += Math.round(sheds * (SHED_BASE_VALUES['Cement'] ?? 0) * storageMult)
     cementMax += getStorageBonus(s, 'Cement')
     s.resource['Cement'].max = cementMax
 
     // --- 煤上限 ---
     let coalMax = 50
-    coalMax += sheds * 30
+    coalMax += Math.round(sheds * (SHED_BASE_VALUES['Coal'] ?? 0) * storageMult)
     coalMax += getStorageBonus(s, 'Coal')
     s.resource['Coal'].max = coalMax
 
     // --- 毛皮上限 ---
     let fursMax = 100
-    fursMax += sheds * 40
+    fursMax += Math.round(sheds * (SHED_BASE_VALUES['Furs'] ?? 0) * storageMult)
     fursMax += getStorageBonus(s, 'Furs')
     s.resource['Furs'].max = fursMax
 
-    // --- 钢和铝上限 ---
+    // --- 钢上限 (storage >= 3 时 shed 才提供钢上限) ---
     let steelMax = 50
-    steelMax += sheds * 20
+    if ((s.tech['storage'] ?? 0) >= 3) {
+      steelMax += Math.round(sheds * (SHED_BASE_VALUES['Steel'] ?? 0) * storageMult)
+    }
     steelMax += getStorageBonus(s, 'Steel')
     s.resource['Steel'].max = steelMax
 
+    // --- 铝上限 ---
     let aluminiumMax = 50
-    aluminiumMax += sheds * 20
+    aluminiumMax += Math.round(sheds * (SHED_BASE_VALUES['Aluminium'] ?? 0) * storageMult)
     aluminiumMax += getStorageBonus(s, 'Aluminium')
     s.resource['Aluminium'].max = aluminiumMax
+
+    // --- 石油上限 --- 对标 legacy main.js L9139-9148
+    // base = 0, oil_well: +500/座, oil_depot: +1000/座
+    const oilWells = getStructCount('oil_well')
+    const oilDepots = getStructCount('oil_depot')
+    let oilMax = 0
+    oilMax += oilWells * 500
+    oilMax += oilDepots * 1000
+    s.resource['Oil'].max = oilMax
+    // Oil 在 oil:1 后显示
+    if ((s.tech['oil'] ?? 0) >= 1) {
+      s.resource['Oil'].display = true
+    }
+
+    // --- 钛上限 --- 对标 legacy main.js L8211 (base 50)
+    // shed 在 storage >= 4 时提供 +20×storageMult
+    let titaniumMax = 50
+    if ((s.tech['storage'] ?? 0) >= 4) {
+      titaniumMax += Math.round(sheds * (SHED_BASE_VALUES['Titanium'] ?? 0) * storageMult)
+    }
+    titaniumMax += getStorageBonus(s, 'Titanium')
+    s.resource['Titanium'].max = titaniumMax
+    // Titanium 在 high_tech:3 后显示 — 对标 legacy tech.js L4901
+    if ((s.tech['high_tech'] ?? 0) >= 3) {
+      s.resource['Titanium'].display = true
+    }
 
     // --- 毛皮显示（有猎人工作时自动显示）---
     const hunterWorkers = (s.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0

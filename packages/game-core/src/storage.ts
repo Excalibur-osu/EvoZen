@@ -36,6 +36,40 @@ export const STORABLE_RESOURCES = [
 
 export type StorableResourceId = typeof STORABLE_RESOURCES[number];
 
+/**
+ * 仓库(shed)每座对各资源的基础上限加成 — 对标 legacy actions.js shed.val()
+ * 这些值会乘以 storageMultiplier 后使用
+ */
+export const SHED_BASE_VALUES: Record<string, number> = {
+  Lumber: 300,
+  Stone: 300,
+  Furs: 125,
+  Copper: 90,
+  Iron: 125,
+  Aluminium: 90,
+  Cement: 100,
+  Coal: 75,
+  Steel: 40,
+  Titanium: 20,
+};
+
+/**
+ * 仓储科技等级对仓库资源上限的乘数 — 对标 legacy actions.js storageMultipler()
+ *
+ * storage:1 → 1.0
+ * storage:2 → 2.25 (加强窝棚: +125%)
+ * storage:3 → 5.25 (谷仓: 3.5 × 1.5)
+ * storage:4+ → 更高倍率（warehouse tech, 暂未实装）
+ */
+export function getStorageMultiplier(state: GameState): number {
+  const storageTech = state.tech['storage'] ?? 1;
+  let multiplier = (storageTech - 1) * 1.25 + 1;
+  if (storageTech >= 3) {
+    multiplier *= storageTech >= 4 ? 3 : 1.5;
+  }
+  return multiplier;
+}
+
 /** 获取当前单个板条箱提供的上限值 */
 export function getCrateValue(state: GameState): number {
   return (state.tech['container'] ?? 0) >= 2 ? 500 : BASE_CRATE_VALUE;
