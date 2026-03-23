@@ -105,7 +105,7 @@ export function createNewGame(): GameState {
   const state: GameState = {
     seed: 2,
     warseed: 2,
-    version: '0.4.4',
+    version: '0.4.5',
 
     resource: {
       // 进化阶段

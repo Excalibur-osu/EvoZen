@@ -89,3 +89,8 @@ export {
   STORABLE_RESOURCES,
   type StorableResourceId,
 } from './storage';
+export {
+  calculateMorale,
+  randomizeWeather,
+  type MoraleResult,
+} from './morale';

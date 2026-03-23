@@ -79,6 +79,22 @@ export const useGameStore = defineStore('game', () => {
     const s = state.value.city.calendar?.season ?? 0
     return ['春', '夏', '秋', '冬'][s] ?? '春'
   })
+  const morale = computed(() => state.value.city.morale?.current ?? 100)
+  const moraleCap = computed(() => state.value.city.morale?.cap ?? 125)
+  const globalMultiplier = computed(() => {
+    const m = morale.value
+    if (m < 100) return +(m / 100).toFixed(2)
+    return +(1 + (m - 100) / 200).toFixed(2)
+  })
+  const weatherLabel = computed(() => {
+    const w = state.value.city.calendar?.weather ?? 2
+    const t = state.value.city.calendar?.temp ?? 1
+    const wind = state.value.city.calendar?.wind ?? 0
+    const weatherNames = ['🌧️ 雨', '☁️ 多云', '☀️ 晴']
+    let label = weatherNames[w] ?? '☀️ 晴'
+    if (w === 0 && t > 0 && wind === 1) label = '⛈️ 雷暴'
+    return label
+  })
 
   // ---- 方法 ----
 
@@ -975,6 +991,10 @@ export const useGameStore = defineStore('game', () => {
     year,
     day,
     season,
+    morale,
+    moraleCap,
+    globalMultiplier,
+    weatherLabel,
     init,
     togglePause,
     save,

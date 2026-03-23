@@ -10,9 +10,10 @@
 import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
 import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
-import { getTaxMultiplier, getProductionMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from './government';
+import { getTaxMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from './government';
 import { BASIC_STRUCTURES } from './structures';
 import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier } from './traits';
+import { calculateMorale, randomizeWeather } from './morale';
 
 /**
  * 原版全局时间缩放因子
@@ -49,13 +50,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const explosiveLevel = techLevel('explosives');
 
   // ============================================================
+  // 0. 士气 & 全局乘数
+  // ============================================================
+  // 对标 legacy/src/main.js L1286-3290:
+  // morale 决定 global_multiplier，影响所有工人产出
+  const moraleResult = calculateMorale(state);
+  const prodMult = moraleResult.globalMultiplier;
+
+  // ============================================================
   // 1. 食物
   // ============================================================
-  // 政体生产力乘数（预留接口，当前恒为 1.0）
-  // 原版中民主/独裁的生产力影响通过士气(morale)系统作用于 global_multiplier，
-  // 而非直接乘此值。待士气系统实装后，本处应调整为 morale/100 的全局加乘。
-  // 参考：legacy/src/main.js L3274-3288, .dev_notes.md § 政府复查修正
-  const prodMult = getProductionMultiplier(state);
 
   // 猎人产出 — 基础 0.5/人, 军事科技加成
   const hunters = workers('hunter');
@@ -155,10 +159,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const pickaxeLevel = techLevel('pickaxe');
   const minerToolMult = 1 + pickaxeLevel * 0.15;
   const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
-  deltas['Copper'] = miners * (1 / 7) * minerToolMult * minerExplosiveMult;  // ≈0.143
+  deltas['Copper'] = miners * (1 / 7) * minerToolMult * minerExplosiveMult * prodMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = miners * 0.25 * minerToolMult * minerExplosiveMult;  // 1/4
+    deltas['Iron'] = miners * 0.25 * minerToolMult * minerExplosiveMult * prodMult;  // 1/4
   }
 
   // ============================================================
@@ -166,7 +170,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   const coalMiners = workers('coal_miner');
   const coalToolMult = 1 + pickaxeLevel * 0.12;
-  deltas['Coal'] = coalMiners * 0.2 * coalToolMult * minerExplosiveMult;
+  deltas['Coal'] = coalMiners * 0.2 * coalToolMult * minerExplosiveMult * prodMult;
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -180,7 +184,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const effectiveCement = Math.min(cementWorkers, maxByStone);
     const cementLevel = techLevel('cement');
     const cementTechMult = cementLevel >= 7 ? 1.45 : (cementLevel >= 4 ? 1.2 : 1);
-    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult;
+    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * prodMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
   }
 
@@ -223,7 +227,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 注意：原版 L4261 是 delta *= library_mult，即日晷也受此加成
   const libraryMult = 1 + libraries * 0.05;
   knowledgeDelta *= libraryMult;
-  deltas['Knowledge'] = knowledgeDelta;
+  deltas['Knowledge'] = knowledgeDelta * prodMult;
 
   // ============================================================
   // 9. 金币 — 税收 + 银行家
@@ -456,6 +460,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       newState.city.calendar.day++;
       newState.stats.days = (newState.stats.days ?? 0) + 1;
 
+      // 每天随机化天气 — 对标 legacy main.js L1222-1265
+      randomizeWeather(newState);
+
       if (newState.city.calendar.day > newState.city.calendar.orbit) {
         newState.city.calendar.day = 1;
         newState.city.calendar.year++;
@@ -483,6 +490,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
 
   // 统计（days 已在日历推进内更新）
+
+  // ============================================================
+  // 12a. 存储士气数据 — 供 UI 展示
+  // ============================================================
+  newState.city.morale = moraleResult.breakdown;
 
   // ============================================================
   // 13. 政体切换冷却推进

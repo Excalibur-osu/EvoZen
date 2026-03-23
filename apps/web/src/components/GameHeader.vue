@@ -4,6 +4,7 @@
 -->
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
+import { computed } from 'vue'
 
 const game = useGameStore()
 
@@ -11,6 +12,23 @@ const speciesLabels: Record<string, string> = {
   human: '人类', elven: '精灵', orc: '兽人', dwarf: '矮人', goblin: '地精',
   protoplasm: '原生质'
 }
+
+const moraleTooltip = computed(() => {
+  const m = game.state.city.morale
+  if (!m) return '士气: 100%'
+  const lines = [
+    `基础: 100%`,
+    m.season !== 0 ? `季节: ${m.season > 0 ? '+' : ''}${m.season}%` : '',
+    m.weather !== 0 ? `天气: ${m.weather > 0 ? '+' : ''}${m.weather}%` : '',
+    m.entertain !== 0 ? `娱乐: +${m.entertain}%` : '',
+    m.stress !== 0 ? `压力: ${m.stress.toFixed(1)}%` : '',
+    m.unemployed !== 0 ? `失业: ${m.unemployed}%` : '',
+    `———`,
+    `当前: ${m.current}% (上限 ${m.cap}%)`,
+    `产出乘数: ×${game.globalMultiplier}`,
+  ]
+  return lines.filter(l => l).join('\n')
+})
 </script>
 
 <template>
@@ -26,6 +44,18 @@ const speciesLabels: Record<string, string> = {
       <span class="cal-year">年 <b>{{ game.year }}</b></span>
       <span class="cal-day">日 <b>{{ game.day }}</b></span>
       <span class="cal-season" :class="'season-' + game.state.city.calendar?.season">{{ game.season }}</span>
+      <span class="cal-weather">{{ game.weatherLabel }}</span>
+      <span
+        class="morale-badge"
+        :class="{
+          'morale-low': game.morale < 100,
+          'morale-ok': game.morale === 100,
+          'morale-high': game.morale > 100,
+        }"
+        :title="moraleTooltip"
+      >
+        😊 {{ game.morale }}%
+      </span>
     </div>
 
     <div class="bar-right">
@@ -114,5 +144,33 @@ const speciesLabels: Record<string, string> = {
   background: var(--bg-card-hover);
   color: var(--text-primary);
   border-color: var(--border-hover);
+}
+
+/* 天气 */
+.cal-weather {
+  font-size: 12px;
+}
+
+/* 士气 */
+.morale-badge {
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: help;
+  white-space: pre-line;
+}
+.morale-low {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+.morale-ok {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+.morale-high {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
 }
 </style>

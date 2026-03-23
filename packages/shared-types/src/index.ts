@@ -297,14 +297,33 @@ export interface CalendarState {
   dayTick?: number;
 }
 
+/** 士气系统状态 — 对标 legacy global.city.morale */
+export interface MoraleState {
+  /** 当前有效士气（clamp后） */
+  current: number;
+  /** 士气上限 */
+  cap: number;
+  /** 压力贡献（负值） */
+  stress: number;
+  /** 娱乐贡献 */
+  entertain: number;
+  /** 季节贡献 */
+  season: number;
+  /** 天气贡献 */
+  weather: number;
+  /** 失业惩罚（负值） */
+  unemployed: number;
+}
+
 export interface CityState {
   calendar: CalendarState;
   biome: string;
   ptrait: string;
   geology: Record<string, number>;
   market: { active: boolean; qty?: number };
+  morale?: MoraleState;
   /** 建筑 */
-  [structureId: string]: StructureState | CalendarState | string | Record<string, number> | unknown;
+  [structureId: string]: StructureState | CalendarState | MoraleState | string | Record<string, number> | unknown;
 }
 
 // ============================================================
