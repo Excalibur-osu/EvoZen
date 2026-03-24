@@ -84,7 +84,9 @@ export type BasicStructureId =
   | 'warehouse'
   | 'amphitheatre'
   | 'oil_well'
-  | 'oil_depot';
+  | 'oil_depot'
+  | 'coal_power'
+  | 'oil_power';
 
 /** 单个建筑的状态 */
 export interface StructureState {
@@ -315,6 +317,16 @@ export interface MoraleState {
   unemployed: number;
 }
 
+/** 电力网格状态 */
+export interface PowerState {
+  /** 总发电量 (MW) */
+  generated: number;
+  /** 总耗电量 (MW) */
+  consumed: number;
+  /** 净余电力 (MW) */
+  surplus: number;
+}
+
 export interface CityState {
   calendar: CalendarState;
   biome: string;
@@ -322,8 +334,9 @@ export interface CityState {
   geology: Record<string, number>;
   market: { active: boolean; qty?: number };
   morale?: MoraleState;
+  power?: PowerState;
   /** 建筑 */
-  [structureId: string]: StructureState | CalendarState | MoraleState | string | Record<string, number> | unknown;
+  [structureId: string]: StructureState | CalendarState | MoraleState | PowerState | string | Record<string, number> | unknown;
 }
 
 // ============================================================

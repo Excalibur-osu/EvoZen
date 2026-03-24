@@ -14,6 +14,7 @@ import { getTaxMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from
 import { BASIC_STRUCTURES } from './structures';
 import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier } from './traits';
 import { calculateMorale, randomizeWeather } from './morale';
+import { powerTick } from './power';
 
 /**
  * 原版全局时间缩放因子
@@ -56,6 +57,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // morale 决定 global_multiplier，影响所有工人产出
   const moraleResult = calculateMorale(state);
   const prodMult = moraleResult.globalMultiplier;
+
+  // ============================================================
+  // 0a. 电力网格
+  // ============================================================
+  // 在资源产出计算前执行电力分配，确定用电建筑实际开启数
+  const powerResult = powerTick(state);
+  // 合入燃料消耗 delta
+  for (const [resId, delta] of Object.entries(powerResult.fuelDeltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+  }
+  // 用电建筑实际开启数
+  const poweredOn = powerResult.activeConsumers;
 
   // ============================================================
   // 1. 食物
@@ -155,22 +168,24 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 原版 main.js L6117-6119: miner_base = workers * impact(1.0)
   // 铜系数 main.js L6158: copper_mult = 1/7
   // 铁系数 main.js L6225: iron_mult  = 1/4
-  const miners = workers('miner');
+  const miners = poweredOn['mine'] ?? workers('miner');
+  const actualMiners = Math.min(workers('miner'), miners);
   const pickaxeLevel = techLevel('pickaxe');
   const minerToolMult = 1 + pickaxeLevel * 0.15;
   const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
-  deltas['Copper'] = miners * (1 / 7) * minerToolMult * minerExplosiveMult * prodMult;  // ≈0.143
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * prodMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = miners * 0.25 * minerToolMult * minerExplosiveMult * prodMult;  // 1/4
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * prodMult;  // 1/4
   }
 
   // ============================================================
   // 6. 煤炭 — 煤矿工人
   // ============================================================
-  const coalMiners = workers('coal_miner');
+  const coalMineActive = poweredOn['coal_mine'] ?? workers('coal_miner');
+  const actualCoalMiners = Math.min(workers('coal_miner'), coalMineActive);
   const coalToolMult = 1 + pickaxeLevel * 0.12;
-  deltas['Coal'] = coalMiners * 0.2 * coalToolMult * minerExplosiveMult * prodMult;
+  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * prodMult;
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -310,11 +325,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
 
   const metalRefineries = structCount('metal_refinery');
-  if (metalRefineries > 0) {
+  const maxRefineries = poweredOn['metal_refinery'] ?? metalRefineries;
+  const activeRefineries = Math.min(metalRefineries, maxRefineries);
+  if (activeRefineries > 0) {
     // 生产铝 (消耗 石头)
     const stoneCost = 5;
     const availableStone = (state.resource['Stone']?.amount ?? 0) + (deltas['Stone'] ?? 0);
-    const effectiveRefineries = Math.min(metalRefineries, Math.floor(Math.max(0, availableStone) / stoneCost));
+    const effectiveRefineries = Math.min(activeRefineries, Math.floor(Math.max(0, availableStone) / stoneCost));
     deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + effectiveRefineries * 1.0 * quarryExplosiveMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveRefineries * stoneCost;
   }
@@ -495,6 +512,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 12a. 存储士气数据 — 供 UI 展示
   // ============================================================
   newState.city.morale = moraleResult.breakdown;
+
+  // ============================================================
+  // 12b. 存储电力数据 — 供 UI 展示
+  // ============================================================
+  newState.city.power = {
+    generated: powerResult.totalGenerated,
+    consumed: powerResult.totalConsumed,
+    surplus: powerResult.totalGenerated - powerResult.totalConsumed,
+  };
 
   // ============================================================
   // 13. 政体切换冷却推进

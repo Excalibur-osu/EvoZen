@@ -1145,4 +1145,20 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 1200 },
     effect: '解锁神权政体。神庙加成 +12%，但教授效率 -25%，科学家效率 -50%。',
   },
+
+  // ===== 电力系统 (Power) =====
+
+  // legacy tech.js L6126-6150: oil_power → oil:3
+  // reqs: { oil: 2 }, grant: ['oil',3], cost: Knowledge 44000
+  {
+    id: 'oil_powerplant',
+    name: '石油发电',
+    description: '利用石油驱动涡轮机发电。',
+    category: 'power_generation',
+    era: '工业化',
+    reqs: { oil: 2 },
+    grant: ['oil', 3],
+    costs: { Knowledge: 44000 },
+    effect: '解锁石油发电站建筑。',
+  },
 ];

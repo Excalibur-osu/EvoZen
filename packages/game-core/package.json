@@ -1,6 +1,6 @@
 {
   "name": "@evozen/game-core",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "EvoZen core game logic — pure TypeScript, no UI dependencies",
   "type": "module",
   "main": "./src/index.ts",

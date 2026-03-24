@@ -1,6 +1,6 @@
 {
   "name": "evozen",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "EvoZen — 进化之禅",
   "private": true,
   "workspaces": [

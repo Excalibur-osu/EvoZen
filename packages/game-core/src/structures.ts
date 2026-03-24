@@ -17,7 +17,7 @@ export interface StructureDefinition {
   id: string;
   name: string;
   description: string;
-  category: 'housing' | 'food' | 'resource' | 'storage' | 'commerce' | 'science' | 'military' | 'craft';
+  category: 'housing' | 'food' | 'resource' | 'storage' | 'commerce' | 'science' | 'military' | 'craft' | 'power';
   /** 前置科技要求 */
   reqs: Record<string, number>;
   /** 各资源费用（基于已有数量递增） */
@@ -91,6 +91,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'housing',
     reqs: { housing: 1 },
     costs: {
+      Money: (_state, count) => {
+        if (count >= 5) return Math.ceil(20 * Math.pow(1.17, count));
+        return 0;
+      },
       Lumber: scaleHousingCost(10, 1.23),
     },
     effect: '市民上限 +1',
@@ -108,6 +112,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Plywood: scaleHousingCost(25, 1.25),
       Brick: scaleHousingCost(20, 1.25),
       Wrought_Iron: scaleHousingCost(15, 1.25),
+      Iron: scaleConditionalCost(5, 1.25, (state) => hasCityTrait(state, 'unstable')),
     },
     effect: '市民上限 +2',
   },
@@ -121,6 +126,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'food',
     reqs: { agriculture: 1 },
     costs: {
+      Money: (_state, count) => {
+        if (count >= 3) return Math.ceil(50 * Math.pow(1.32, count));
+        return 0;
+      },
       Lumber: scaleCost(20, 1.36),
       Stone: scaleCost(10, 1.36),
     },
@@ -151,6 +160,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { axe: 1 },
     costs: {
+      Money: (_state, count) => {
+        if (count >= 5) return Math.ceil(5 * Math.pow(1.85, count));
+        return 0;
+      },
       Lumber: scaleCost(6, 1.9),
       Stone: scaleCost(2, 1.95),
     },
@@ -164,6 +177,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { mining: 1 },
     costs: {
+      Money: (_state, count) => {
+        if (count >= 2) return Math.ceil(20 * Math.pow(1.45, count));
+        return 0;
+      },
       Lumber: scaleCost(50, 1.36),
       Stone: scaleCost(10, 1.36),
     },
@@ -228,6 +245,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(85, 1.32),
       Lumber: scaleCost(65, 1.36),
       Stone: scaleCost(50, 1.36),
+      Iron: scaleConditionalCost(10, 1.36, (state, count) => hasCityTrait(state, 'unstable') && count >= 4),
     },
     effect: '食物上限 +500',
   },
@@ -506,6 +524,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(50, 1.36),
       Lumber: scaleCost(25, 1.36),
+      Iron: scaleConditionalCost(6, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Furs: scaleCost(15, 1.36),
       Cement: scaleCementCost(10, 1.36),
     },
@@ -521,7 +540,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(3000, 1.26),
       Iron: scaleCost(400, 1.26),
-      Cement: scaleCementCost(420, 1.26),
+      Cement: scaleCost(420, 1.26),
     },
     effect: '木材上限 +200，伐木工木材产量 +5%。',
   },
@@ -534,6 +553,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { oil: 1 },
     costs: {
       Money: scaleCost(5000, 1.5),
+      Iron: scaleConditionalCost(450, 1.5, (state) => hasCityTrait(state, 'unstable')),
       Cement: scaleCementCost(5250, 1.5),
       Steel: scaleCost(6000, 1.5),
     },
@@ -552,5 +572,41 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Sheet_Metal: scaleCost(100, 1.45),
     },
     effect: '石油储存上限 +1000。',
+  },
+
+  // ---- 发电设施 ----
+  // actions.js L3999-4057: coal_power (燃煤发电站)
+  // 对标原版：reqs { high_tech: 2 }，每座 +5MW，消耗 0.35 Coal/tick
+  {
+    id: 'coal_power',
+    name: '燃煤发电站',
+    description: '利用煤炭燃烧驱动蒸汽轮机发电。',
+    category: 'power',
+    reqs: { high_tech: 2 },
+    costs: {
+      Money: scaleCostMinus(10000, 1.22, 0),
+      Copper: scaleCostMinus(1800, 1.22, 1000),
+      Iron: scaleConditionalCost(175, 1.22, (state) => hasCityTrait(state, 'unstable')),
+      Cement: scaleCementCost(600, 1.22),
+      Steel: scaleCostMinus(2000, 1.22, 1000),
+    },
+    effect: '每座 +5MW 电力，消耗 0.35 煤/tick。',
+  },
+  // actions.js L4058-4119: oil_power (石油发电站)
+  // 对标原版：reqs { oil: 3 }，每座 +6MW，消耗 0.65 Oil/tick
+  {
+    id: 'oil_power',
+    name: '石油发电站',
+    description: '利用石油燃烧驱动涡轮机发电。',
+    category: 'power',
+    reqs: { oil: 3 },
+    costs: {
+      Money: scaleCostMinus(50000, 1.22, 0),
+      Copper: (state, count) => scaleCost(6500, 1.22)(state, count) + 1000,
+      Iron: scaleConditionalCost(180, 1.22, (state) => hasCityTrait(state, 'unstable')),
+      Aluminium: scaleCost(12000, 1.22),
+      Cement: (state, count) => scaleCementCost(5600, 1.22)(state, count) + 1000,
+    },
+    effect: '每座 +6MW 电力，消耗 0.65 石油/tick。',
   },
 ];

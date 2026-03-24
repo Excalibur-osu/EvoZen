@@ -105,7 +105,7 @@ export function createNewGame(): GameState {
   const state: GameState = {
     seed: 2,
     warseed: 2,
-    version: '0.4.5',
+    version: '0.5.0',
 
     resource: {
       // 进化阶段
@@ -151,6 +151,9 @@ export function createNewGame(): GameState {
       // 自动贸易路线
       trade_routes: [],
     } as CityState,
+
+    // 电力网格初始化
+    // power state 由 tick 动态计算，无需持久化
 
     space: {},
     interstellar: {},

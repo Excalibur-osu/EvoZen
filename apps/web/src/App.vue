@@ -17,6 +17,7 @@ import CraftPanel from './components/CraftPanel.vue'
 import TradePanel from './components/TradePanel.vue'
 import GovernmentPanel from './components/GovernmentPanel.vue'
 import StoragePanel from './components/StoragePanel.vue'
+import PowerPanel from './components/PowerPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 
 const game = useGameStore()
@@ -93,6 +94,7 @@ const cityTabLabel = computed(() => {
             </button>
           </div>
           <div class="tab-content">
+            <PowerPanel v-if="activeTab === 'city'" />
             <BuildPanel v-if="activeTab === 'city'" />
             <!-- 市政：内部分 jobs / government 子 Tab -->
             <template v-if="activeTab === 'civic'">

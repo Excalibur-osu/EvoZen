@@ -94,3 +94,8 @@ export {
   randomizeWeather,
   type MoraleResult,
 } from './morale';
+export {
+  powerTick,
+  isPoweredBuilding,
+  type PowerTickResult,
+} from './power';
