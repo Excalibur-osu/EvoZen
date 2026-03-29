@@ -15,6 +15,7 @@ import { BASIC_STRUCTURES } from './structures';
 import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier } from './traits';
 import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
+import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
 
 /**
  * 原版全局时间缩放因子
@@ -526,6 +527,41 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 13. 政体切换冷却推进
   // ============================================================
   tickGovernmentCooldown(newState);
+
+  // ============================================================
+  // 14. 军事系统 tick
+  // 对标 legacy main.js L8008-8057
+  // ============================================================
+  if (newState.civic.garrison && newState.civic.garrison.display) {
+    // 14a. 士兵训练
+    tickTraining(newState, TIME_MULTIPLIER);
+
+    // 14b. 伤兵治愈
+    tickHealing(newState, TIME_MULTIPLIER);
+
+    // 14c. 士兵狩猎产出皮毛
+    // 对标 legacy main.js L3622: hunting = armyRating(garrisonSize(),'hunting') / 3
+    const gSize = garrisonSize(newState);
+    if (gSize > 0 && newState.resource.Furs) {
+      const hunting = armyRating(gSize, newState) / 3;
+      const fursProd = hunting * TIME_MULTIPLIER;
+      if (fursProd > 0) {
+        newState.resource.Furs.amount = Math.min(
+          newState.resource.Furs.amount + fursProd,
+          newState.resource.Furs.max >= 0 ? newState.resource.Furs.max : Infinity
+        );
+        deltas['Furs'] = (deltas['Furs'] ?? 0) + fursProd;
+      }
+    }
+
+    // 14d. 厌战衰减
+    if (newState.civic.garrison.protest > 0) {
+      newState.civic.garrison.protest = Math.max(0, newState.civic.garrison.protest - 0.5 * TIME_MULTIPLIER);
+    }
+    if (newState.civic.garrison.fatigue > 0) {
+      newState.civic.garrison.fatigue = Math.max(0, newState.civic.garrison.fatigue - 0.25 * TIME_MULTIPLIER);
+    }
+  }
 
   return {
     state: newState,

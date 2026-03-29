@@ -12,6 +12,7 @@ import type {
   JobState,
   CityState,
   CalendarState,
+  GarrisonState,
 } from '@evozen/shared-types';
 
 /** 默认设置 */
@@ -164,6 +165,7 @@ export function createNewGame(): GameState {
     civic: {
       taxes: { tax_rate: 20 },
       govern: { type: 'anarchy', rev: 0, fr: 0 },
+      garrison: makeGarrison(),
       foreign: {
         gov0: makeForeignGov(),
         gov1: makeForeignGov(),
@@ -199,6 +201,8 @@ export function createNewGame(): GameState {
       start: Date.now(),
       days: 0,
       tdays: 0,
+      attacks: 0,
+      died: 0,
     } as StatsState,
 
     settings: defaultSettings(),
@@ -222,6 +226,26 @@ export function createNewGame(): GameState {
   };
 
   return state;
+}
+
+/** 创建默认驻军状态 — 对标 legacy commisionGarrison */
+function makeGarrison(): GarrisonState {
+  return {
+    display: false,
+    disabled: false,
+    rate: 0,
+    progress: 0,
+    tactic: 0,
+    workers: 0,
+    wounded: 0,
+    raid: 0,
+    max: 0,
+    mercs: false,
+    fatigue: 0,
+    protest: 0,
+    m_use: 0,
+    crew: 0,
+  };
 }
 
 function makeForeignGov() {

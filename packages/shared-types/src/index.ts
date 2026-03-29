@@ -72,6 +72,7 @@ export type BasicStructureId =
   | 'garrison'
   | 'sawmill'
   | 'hospital'
+  | 'boot_camp'
   | 'mine'
   | 'coal_mine'
   | 'bank'
@@ -164,9 +165,40 @@ export interface ForeignGovState {
   buy: boolean;
 }
 
+/** 驻军状态 — 对标 legacy commisionGarrison */
+export interface GarrisonState {
+  display: boolean;
+  disabled: boolean;
+  /** 当前训练速率 */
+  rate: number;
+  /** 训练进度 0-100 */
+  progress: number;
+  /** 战术等级 0-4 (ambush/raid/pillage/assault/siege) */
+  tactic: number;
+  /** 当前士兵数 */
+  workers: number;
+  /** 受伤士兵数 */
+  wounded: number;
+  /** 出征人数 */
+  raid: number;
+  /** 士兵上限 */
+  max: number;
+  /** 是否解锁雇佣兵 */
+  mercs: boolean;
+  /** 战争疲劳 */
+  fatigue: number;
+  /** 厌战抗议 */
+  protest: number;
+  /** 已雇佣佣兵计数（影响佣兵价格递增） */
+  m_use: number;
+  /** 船员数（后续 space 阶段用） */
+  crew: number;
+}
+
 export interface CivicState {
   taxes: TaxState;
   govern: GovState;
+  garrison: GarrisonState;
   foreign: {
     gov0: ForeignGovState;
     gov1: ForeignGovState;
@@ -174,7 +206,7 @@ export interface CivicState {
   };
   d_job: string;
   /** 各岗位的状态 */
-  [jobId: string]: JobState | TaxState | GovState | string | unknown;
+  [jobId: string]: JobState | TaxState | GovState | GarrisonState | string | unknown;
 }
 
 // ============================================================
@@ -202,6 +234,10 @@ export interface StatsState {
   bioseed?: number;
   blackhole?: number;
   portals?: number;
+  /** 发起战役次数 */
+  attacks: number;
+  /** 阵亡士兵总数 */
+  died: number;
   achieve?: Record<string, { l: number; a?: number; e?: number }>;
   [key: string]: unknown;
 }

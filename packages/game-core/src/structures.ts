@@ -413,6 +413,34 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '伤兵治愈待军事系统接入；后续生育科技可使医院提高人口增长速率。',
   },
+  // actions.js L1961-2019: garrison（兵营）
+  {
+    id: 'garrison',
+    name: '兵营',
+    description: '驻扎军队的军事营房，增加最大士兵数。',
+    category: 'military',
+    reqs: { military: 1, housing: 1 },
+    costs: {
+      Money: scaleCost(240, 1.5),
+      Stone: scaleCost(260, 1.46),
+    },
+    effect: '每座兵营 +2 最大士兵（军事科技 ≥5 后 +3）。',
+  },
+  // actions.js L2057-2103: boot_camp
+  {
+    id: 'boot_camp',
+    name: '训练营',
+    description: '系统化训练新兵，加快士兵训练速度。',
+    category: 'military',
+    reqs: { boot_camp: 1 },
+    costs: {
+      Money: scaleCost(50000, 1.32),
+      Lumber: scaleCost(21500, 1.32),
+      Aluminium: scaleCost(12000, 1.32),
+      Brick: scaleCost(1400, 1.32),
+    },
+    effect: '每座训练营使士兵训练速度 +5%（VR训练科技后 +8%）。',
+  },
 
   // ---- 制造与精炼设施 ----
   // actions.js L2843-2900: smelter

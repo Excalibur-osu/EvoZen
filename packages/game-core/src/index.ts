@@ -99,3 +99,16 @@ export {
   isPoweredBuilding,
   type PowerTickResult,
 } from './power';
+export {
+  weaponTechModifier,
+  armyRating,
+  armorCalc,
+  tickTraining,
+  tickHealing,
+  mercCost,
+  hireMerc,
+  warCampaign,
+  garrisonSize,
+  TACTIC_NAMES,
+  type WarResult,
+} from './military';

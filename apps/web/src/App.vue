@@ -18,12 +18,13 @@ import TradePanel from './components/TradePanel.vue'
 import GovernmentPanel from './components/GovernmentPanel.vue'
 import StoragePanel from './components/StoragePanel.vue'
 import PowerPanel from './components/PowerPanel.vue'
+import MilitaryPanel from './components/MilitaryPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 
 const game = useGameStore()
-const activeTab = ref<'city' | 'civic' | 'research' | 'resources' | 'industry' | 'market' | 'storage'>('city')
+const activeTab = ref<'city' | 'civic' | 'research' | 'resources' | 'industry' | 'market' | 'storage' | 'military'>('city')
 /** 市政 Tab 下的子 Tab */
-const civicSubTab = ref<'jobs' | 'government'>('jobs')
+const civicSubTab = ref<'jobs' | 'government' | 'military'>('jobs')
 
 onMounted(() => {
   game.init()
@@ -110,9 +111,16 @@ const cityTabLabel = computed(() => {
                   :class="{ active: civicSubTab === 'government' }"
                   @click="civicSubTab = 'government'"
                 >政府</button>
+                <button
+                  v-if="game.state.settings.showMil"
+                  class="subtab-btn"
+                  :class="{ active: civicSubTab === 'military' }"
+                  @click="civicSubTab = 'military'"
+                >军事</button>
               </div>
               <JobPanel v-if="civicSubTab === 'jobs'" />
               <GovernmentPanel v-if="civicSubTab === 'government'" />
+              <MilitaryPanel v-if="civicSubTab === 'military'" />
             </template>
             <TechPanel v-if="activeTab === 'research'" />
             <ResourceDetailPanel v-if="activeTab === 'resources'" />

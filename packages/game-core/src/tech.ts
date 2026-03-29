@@ -607,6 +607,67 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 70 },
     effect: '解锁兵营和士兵。',
   },
+  // legacy tech.js L7479-7501: bows → military:2
+  {
+    id: 'bows',
+    name: '弓箭',
+    description: '为士兵装备弓箭，提升战斗力。',
+    category: 'military',
+    era: '文明',
+    reqs: { military: 1 },
+    grant: ['military', 2],
+    costs: { Knowledge: 225, Lumber: 250 },
+    effect: '士兵战斗力提升。',
+  },
+  // legacy tech.js L7503-7526: flintlock_rifle → military:3
+  {
+    id: 'flintlock_rifle',
+    name: '燧发枪',
+    description: '用火药驱动的远程武器。',
+    category: 'military',
+    era: '文明',
+    reqs: { military: 2, explosives: 1 },
+    grant: ['military', 3],
+    costs: { Knowledge: 5400, Coal: 750 },
+    effect: '士兵战斗力再次提升。',
+  },
+  // legacy tech.js L7352-7375: mercs → mercs:1
+  {
+    id: 'mercs_tech',
+    name: '雇佣兵',
+    description: '允许花钱雇佣佣兵。',
+    category: 'military',
+    era: '文明',
+    reqs: { military: 1 },
+    grant: ['mercs', 1],
+    costs: { Money: 10000, Knowledge: 4500 },
+    effect: '解锁雇佣兵功能，可以花费金币征募额外士兵。',
+  },
+  // legacy tech.js L7438-7457: boot_camp → boot_camp:1
+  {
+    id: 'boot_camp_tech',
+    name: '训练营',
+    description: '建造专门的训练设施加速新兵训练。',
+    category: 'military',
+    era: '发现',
+    reqs: { high_tech: 1 },
+    grant: ['boot_camp', 1],
+    costs: { Knowledge: 8000 },
+    effect: '解锁训练营建筑。',
+  },
+  // legacy tech.js L7811-7850: armor → armor:1
+  {
+    id: 'armor',
+    name: '护甲',
+    description: '为士兵配备护甲，减少战损。',
+    category: 'military',
+    era: '文明',
+    reqs: { military: 1 },
+    grant: ['armor', 1],
+    costs: { Money: 250, Knowledge: 225, Furs: 250 },
+    effect: '士兵死亡率降低（护甲提供战斗减伤）。',
+  },
+
   // legacy tech.js L7942-7962: black_powder → explosives:1
   {
     id: 'black_powder',
@@ -892,7 +953,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     description: '标准化的货物装载系统。',
     category: 'storage',
     era: '文明',
-    reqs: { cement: 1, mining: 1, storage: 1 },
+    reqs: { cement: 1, mining: 1, storage: 1, science: 1 },
     grant: ['container', 1],
     costs: { Knowledge: 2700 },
     effect: '解锁装运站建筑，可使用板条箱扩展资源上限。',

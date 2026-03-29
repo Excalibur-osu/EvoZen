@@ -57,6 +57,13 @@ import {
   getLibraryKnowledgeCapMultiplier,
   getModifiedTechCosts,
   getSpeciesTraitDescriptors,
+  // 军事系统
+  mercCost as coreMercCost,
+  hireMerc as coreHireMerc,
+  warCampaign as coreWarCampaign,
+  armyRating as coreArmyRating,
+  garrisonSize as coreGarrisonSize,
+  TACTIC_NAMES,
 } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
@@ -604,6 +611,17 @@ export const useGameStore = defineStore('game', () => {
     if (building.on !== undefined) building.on++
 
     addMessage(`${def.name}已竣工。`, 'success', 'progress')
+
+    // 兵营特殊逻辑：建造时增加士兵上限并激活驻军显示
+    if (structureId === 'garrison') {
+      const soldiers = (state.value.tech['military'] ?? 0) >= 5 ? 3 : 2;
+      state.value.civic.garrison.max += soldiers;
+      if (!state.value.civic.garrison.display) {
+        state.value.civic.garrison.display = true;
+        state.value.settings.showMil = true;
+        state.value.resource.Furs.display = true;
+      }
+    }
   }
 
   // ---- 建筑队列操作 ----
@@ -982,6 +1000,61 @@ export const useGameStore = defineStore('game', () => {
     if (result) { state.value = result }
   }
 
+  // ---- 军事操作 ----
+
+  /** 设置战术等级 (0-4) */
+  function setTactic(level: number) {
+    const garrison = state.value.civic.garrison;
+    if (!garrison) return;
+    garrison.tactic = Math.max(0, Math.min(4, Math.floor(level)));
+  }
+
+  /** 调整出征人数 */
+  function setRaid(count: number) {
+    const garrison = state.value.civic.garrison;
+    if (!garrison) return;
+    const maxRaid = Math.max(0, garrison.workers - garrison.crew);
+    garrison.raid = Math.max(0, Math.min(maxRaid, Math.floor(count)));
+  }
+
+  /** 雇佣佣兵 */
+  function doHireMerc() {
+    const result = coreHireMerc(state.value);
+    if (result.success) {
+      addMessage(`💰 花费 ${result.cost} 金币雇佣了一名佣兵！`, 'success', 'combat');
+    } else {
+      if (state.value.civic.garrison.workers >= state.value.civic.garrison.max) {
+        addMessage('兵营已满，无法雇佣更多佣兵。', 'warning', 'combat');
+      } else {
+        addMessage(`金币不足。需要 ${result.cost} 金币。`, 'warning', 'combat');
+      }
+    }
+  }
+
+  /** 发起战役 */
+  function doWarCampaign(govIndex: number) {
+    const result = coreWarCampaign(state.value, govIndex);
+    for (const msg of result.messages) {
+      messages.value.push(msg);
+    }
+  }
+
+  /** 获取佣兵费用 */
+  function getMercCost(): number {
+    return coreMercCost(state.value);
+  }
+
+  /** 获取军队评级 */
+  function getArmyRating(soldiers?: number): number {
+    const count = soldiers ?? coreGarrisonSize(state.value);
+    return coreArmyRating(count, state.value);
+  }
+
+  /** 获取可用兵力 */
+  function getGarrisonSize(): number {
+    return coreGarrisonSize(state.value);
+  }
+
   return {
     state,
     messages,
@@ -1053,5 +1126,14 @@ export const useGameStore = defineStore('game', () => {
     getCrateValue,
     CRATE_COST_PLYWOOD,
     CONTAINER_COST_STEEL,
+    // 军事系统
+    setTactic,
+    setRaid,
+    doHireMerc,
+    doWarCampaign,
+    getMercCost,
+    getArmyRating,
+    getGarrisonSize,
+    TACTIC_NAMES,
   }
 })
