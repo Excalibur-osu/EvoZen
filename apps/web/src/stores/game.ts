@@ -6,26 +6,33 @@ import { ref, computed } from 'vue'
 import type { GameState, GameMessage } from '@evozen/shared-types'
 import {
   createNewGame,
-  gameTick,
   saveGame,
   loadGame,
   exportSave,
   importSave,
+  getBuildCost as coreGetBuildCost,
+  canBuildStructure as coreCanBuildStructure,
+  buildStructure as coreBuildStructure,
+  enqueueStructure as coreEnqueueStructure,
+  dequeueStructure as coreDequeueStructure,
+  isTechAvailable as coreIsTechAvailable,
+  getResearchCost as coreGetResearchCost,
+  canResearchTech as coreCanResearchTech,
+  researchTech as coreResearchTech,
+  assignWorker as coreAssignWorker,
+  removeWorker as coreRemoveWorker,
+  setTaxRate as coreSetTaxRate,
   BASIC_STRUCTURES,
   BASIC_TECHS,
-  BASE_JOBS,
   manualCraft,
   assignCraftsman as coreAssignCraftsman,
   removeCraftsman as coreRemoveCraftsman,
-  CRAFTABLE_IDS,
   type CraftableId,
-  type FoundryState,
   buyResource as coreBuyResource,
   sellResource as coreSellResource,
   getBuyPrice as coreGetBuyPrice,
   getSellPrice as coreGetSellPrice,
   getManualTradeLimit,
-  getMaxTradeRoutes,
   getTradeRouteQtyLimit,
   setTradeRoute as coreSetTradeRoute,
   type TradeRoute,
@@ -37,16 +44,12 @@ import {
   isQueueUnlocked as coreIsQueueUnlocked,
   toggleQueueMode as coreToggleQueueMode,
   getQueueMax,
-  // 仓储系统
   buildCrate as coreBuildCrate,
   buildContainer as coreBuildContainer,
   assignCrate as coreAssignCrate,
   unassignCrate as coreUnassignCrate,
   assignContainer as coreAssignContainer,
   unassignContainer as coreUnassignContainer,
-  getStorageBonus,
-  getStorageMultiplier,
-  SHED_BASE_VALUES,
   getCrateValue,
   STORABLE_RESOURCES,
   CRATE_VALUE,
@@ -54,9 +57,8 @@ import {
   CRATE_COST_PLYWOOD,
   CONTAINER_COST_STEEL,
   assignSpeciesTraits,
-  getLibraryKnowledgeCapMultiplier,
-  getModifiedTechCosts,
   getSpeciesTraitDescriptors,
+  runSimulationTick,
   // 军事系统
   mercCost as coreMercCost,
   hireMerc as coreHireMerc,
@@ -131,336 +133,15 @@ export const useGameStore = defineStore('game', () => {
 
   /** 执行一个 tick */
   function doTick() {
-    // 先计算建筑对资源上限的影响
-    applyBuildingEffects()
-    // 然后执行 tick
-    const tickOutput = gameTick(state.value)
+    const tickOutput = runSimulationTick(state.value)
     state.value = tickOutput.state
     for (const msg of tickOutput.result.messages) {
       messages.value.push(msg)
     }
-    // 人口增长
-    handlePopGrowth()
     // 自动存档（每 100 tick）
     if ((state.value.stats.days ?? 0) % 100 === 0 && state.value.stats.days > 0) {
       saveGame(state.value)
     }
-  }
-
-  /** 计算并应用建筑效果到资源上限 */
-  function applyBuildingEffects() {
-    if (isEvolving.value) return
-    const s = state.value
-    const species = s.race.species
-
-    // --- 人口上限 ---
-    let popCap = 0
-    const basicHousing = getStructCount('basic_housing')
-    const cottages = getStructCount('cottage')
-    const farms = getStructCount('farm')
-    popCap += basicHousing * 1
-    popCap += cottages * 2
-    if ((s.tech['farm'] ?? 0) >= 1) {
-      popCap += farms
-    }
-    if (s.resource[species]) {
-      s.resource[species].max = Math.max(1, popCap)
-    }
-
-    // --- 食物上限 ---
-    let foodMax = 250
-    const silos = getStructCount('silo')
-    const smokehouses = getStructCount('smokehouse')
-    foodMax += farms * 50
-    foodMax += silos * 500
-    foodMax += smokehouses * 100
-    s.resource['Food'].max = foodMax
-
-    // --- 仓库(shed)存储乘数 — 对标 legacy storageMultipler() ---
-    const sheds = getStructCount('shed')
-    const storageMult = getStorageMultiplier(s)
-
-    // --- 木材上限 ---
-    let lumberMax = 200
-    const lumberYards = getStructCount('lumber_yard')
-    const sawmills = getStructCount('sawmill')
-    lumberMax += lumberYards * 100
-    lumberMax += sawmills * 200
-    lumberMax += Math.round(sheds * (SHED_BASE_VALUES['Lumber'] ?? 0) * storageMult)
-    lumberMax += getStorageBonus(s, 'Lumber')
-    s.resource['Lumber'].max = lumberMax
-
-    // --- 石头上限 ---
-    let stoneMax = 200
-    const quarries = getStructCount('rock_quarry')
-    stoneMax += quarries * 100
-    stoneMax += Math.round(sheds * (SHED_BASE_VALUES['Stone'] ?? 0) * storageMult)
-    stoneMax += getStorageBonus(s, 'Stone')
-    s.resource['Stone'].max = stoneMax
-
-    // --- 铜上限 ---
-    let copperMax = 100
-    copperMax += Math.round(sheds * (SHED_BASE_VALUES['Copper'] ?? 0) * storageMult)
-    copperMax += getStorageBonus(s, 'Copper')
-    s.resource['Copper'].max = copperMax
-
-    // --- 铁上限 ---
-    let ironMax = 100
-    ironMax += Math.round(sheds * (SHED_BASE_VALUES['Iron'] ?? 0) * storageMult)
-    ironMax += getStorageBonus(s, 'Iron')
-    s.resource['Iron'].max = ironMax
-
-    // --- 水泥上限 ---
-    let cementMax = 100
-    cementMax += Math.round(sheds * (SHED_BASE_VALUES['Cement'] ?? 0) * storageMult)
-    cementMax += getStorageBonus(s, 'Cement')
-    s.resource['Cement'].max = cementMax
-
-    // --- 煤上限 ---
-    let coalMax = 50
-    coalMax += Math.round(sheds * (SHED_BASE_VALUES['Coal'] ?? 0) * storageMult)
-    coalMax += getStorageBonus(s, 'Coal')
-    s.resource['Coal'].max = coalMax
-
-    // --- 毛皮上限 ---
-    let fursMax = 100
-    fursMax += Math.round(sheds * (SHED_BASE_VALUES['Furs'] ?? 0) * storageMult)
-    fursMax += getStorageBonus(s, 'Furs')
-    s.resource['Furs'].max = fursMax
-
-    // --- 钢上限 (storage >= 3 时 shed 才提供钢上限) ---
-    let steelMax = 50
-    if ((s.tech['storage'] ?? 0) >= 3) {
-      steelMax += Math.round(sheds * (SHED_BASE_VALUES['Steel'] ?? 0) * storageMult)
-    }
-    steelMax += getStorageBonus(s, 'Steel')
-    s.resource['Steel'].max = steelMax
-
-    // --- 铝上限 ---
-    let aluminiumMax = 50
-    aluminiumMax += Math.round(sheds * (SHED_BASE_VALUES['Aluminium'] ?? 0) * storageMult)
-    aluminiumMax += getStorageBonus(s, 'Aluminium')
-    s.resource['Aluminium'].max = aluminiumMax
-
-    // --- 石油上限 --- 对标 legacy main.js L9139-9148
-    // base = 0, oil_well: +500/座, oil_depot: +1000/座
-    const oilWells = getStructCount('oil_well')
-    const oilDepots = getStructCount('oil_depot')
-    let oilMax = 0
-    oilMax += oilWells * 500
-    oilMax += oilDepots * 1000
-    s.resource['Oil'].max = oilMax
-    // Oil 在 oil:1 后显示
-    if ((s.tech['oil'] ?? 0) >= 1) {
-      s.resource['Oil'].display = true
-    }
-
-    // --- 钛上限 --- 对标 legacy main.js L8211 (base 50)
-    // shed 在 storage >= 4 时提供 +20×storageMult
-    let titaniumMax = 50
-    if ((s.tech['storage'] ?? 0) >= 4) {
-      titaniumMax += Math.round(sheds * (SHED_BASE_VALUES['Titanium'] ?? 0) * storageMult)
-    }
-    titaniumMax += getStorageBonus(s, 'Titanium')
-    s.resource['Titanium'].max = titaniumMax
-    // Titanium 在 high_tech:3 后显示 — 对标 legacy tech.js L4901
-    if ((s.tech['high_tech'] ?? 0) >= 3) {
-      s.resource['Titanium'].display = true
-    }
-
-    // --- 毛皮显示（有猎人工作时自动显示）---
-    const hunterWorkers = (s.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0
-    if (hunterWorkers > 0) {
-      s.resource['Furs'].display = true
-    }
-
-    // --- 知识上限 ---
-    let knowledgeMax = 100
-    const libraries = getStructCount('library')
-    const universities = getStructCount('university')
-    const wardenclyffes = getStructCount('wardenclyffe')
-    const scientists = (s.civic['scientist'] as { workers?: number } | undefined)?.workers ?? 0
-    const universityBase = (s.tech['science'] ?? 0) >= 8 ? 700 : 500
-    const universityMult = (s.tech['science'] ?? 0) >= 4 ? 1 + libraries * 0.02 : 1
-    const journalMult = (s.tech['science'] ?? 0) >= 5 ? 1 + scientists * 0.12 : 1
-    knowledgeMax += libraries * 125 * getLibraryKnowledgeCapMultiplier(s) * journalMult
-    knowledgeMax += universities * universityBase * universityMult
-    knowledgeMax += wardenclyffes * 1000
-    s.resource['Knowledge'].max = knowledgeMax
-
-    // --- 金币上限 ---
-    let moneyMax = 1000
-    const banks = getStructCount('bank')
-    let bankCapacity = 1800
-    if ((s.tech['banking'] ?? 0) >= 3) {
-      bankCapacity = 4000
-    }
-    moneyMax += banks * bankCapacity
-    s.resource['Money'].max = moneyMax
-
-    // --- 岗位上限 ---
-    // 农民上限由农场决定
-    setJobMax('farmer', farms)
-    // 伐木工无固定上限
-    setJobMax('lumberjack', -1)
-    // 石工无固定上限
-    setJobMax('quarry_worker', -1)
-    // 矿工上限由矿井决定
-    setJobMax('miner', getStructCount('mine'))
-    // 煤矿工人由煤矿决定
-    setJobMax('coal_miner', getStructCount('coal_mine'))
-    // 水泥工人由水泥厂决定（原版每座 +2）
-    setJobMax('cement_worker', getStructCount('cement_plant') * 2)
-    // 银行家由银行数量决定
-    setJobMax('banker', banks)
-    // 教授由大学决定；图书馆只影响知识产出
-    setJobMax('professor', universities)
-    // 科学家由沃登克里弗塔决定
-    setJobMax('scientist', wardenclyffes)
-
-    // --- 科技解锁资源显示 ---
-    if ((s.tech['mining'] ?? 0) >= 3) {
-      s.resource['Iron'].display = true
-    }
-    if ((s.tech['mining'] ?? 0) >= 4) {
-      s.resource['Coal'].display = true
-    }
-    if ((s.tech['cement'] ?? 0) >= 1) {
-      s.resource['Cement'].display = true
-    }
-    if ((s.tech['currency'] ?? 0) >= 1) {
-      s.resource['Money'].display = true
-    }
-    if ((s.tech['primitive'] ?? 0) >= 3) {
-      s.resource['Knowledge'].display = true
-    }
-    if ((s.tech['mining'] ?? 0) >= 1) {
-      s.resource['Copper'].display = true
-    }
-    if ((s.tech['smelting'] ?? 0) >= 2) {
-      s.resource['Steel'].display = true
-    }
-    if ((s.tech['alumina'] ?? 0) >= 1) {
-      s.resource['Aluminium'].display = true
-    }
-
-    // --- 工匠上限由铸造厂决定 ---
-    const foundries = getStructCount('foundry')
-    setJobMax('craftsman', foundries)
-
-    // --- 娱乐者上限由圆形剧场决定 ---
-    const amphitheatres = getStructCount('amphitheatre')
-    setJobMax('entertainer', amphitheatres)
-
-    // --- 牧师上限由神庙决定 ---
-    const temples = getStructCount('temple')
-    setJobMax('priest', temples)
-
-    // --- 信仰上限 — 神龛 +25/座，寺庙 +50/座（theology:2 解锁寺庙）---
-    const shrines = getStructCount('shrine')
-    let faithMax = 100
-    faithMax += shrines * 25
-    faithMax += temples * 50
-    if (s.resource['Faith']) {
-      s.resource['Faith'].max = faithMax
-      // theology:1 解锁后显示信仰资源
-      if ((s.tech['theology'] ?? 0) >= 1) {
-        s.resource['Faith'].display = true
-      }
-    }
-
-    // --- 板条箱/集装箱上限由装运站/集装箱港口决定 ---
-    const storageYards = getStructCount('storage_yard')
-    const warehouses = getStructCount('warehouse')
-    const crateCapacity = (s.tech['container'] ?? 0) >= 3 ? 20 : 10
-    const containerCapacity = (s.tech['steel_container'] ?? 0) >= 2 ? 20 : 10
-    if (s.resource['Crates']) {
-      s.resource['Crates'].max = storageYards * crateCapacity
-    }
-    if (s.resource['Containers']) {
-      s.resource['Containers'].max = warehouses * containerCapacity
-    }
-
-    // --- 板条箱/集装箱显示 ---
-    if ((s.tech['container'] ?? 0) >= 1) {
-      s.resource['Crates'].display = true
-      s.settings.showStorage = true
-    }
-    if ((s.tech['steel_container'] ?? 0) >= 1) {
-      s.resource['Containers'].display = true
-    }
-
-    // --- 铸造科技解锁合成资源显示 ---
-    if ((s.tech['foundry'] ?? 0) >= 1) {
-      s.resource['Plywood'].display = true
-      s.resource['Brick'].display = true
-      s.resource['Wrought_Iron'].display = true
-      if ((s.tech['alumina'] ?? 0) >= 1) {
-        s.resource['Sheet_Metal'].display = true
-      }
-      // 确保铸造厂 foundry 状态存在
-      if (!s.city['foundry']) {
-        (s.city as Record<string, unknown>)['foundry'] = {
-          count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0
-        }
-      } else {
-        // 向前兼容：确保存在 Sheet_Metal
-        if ((s.city['foundry'] as any).Sheet_Metal === undefined) {
-          (s.city['foundry'] as any).Sheet_Metal = 0
-        }
-      }
-    }
-
-    // --- 贸易路线自动调整 ---
-    if ((s.tech['trade'] ?? 0) >= 1) {
-      s.settings.showMarket = true
-      const maxRoutes = getMaxTradeRoutes(s)
-      if (!(s.city as any).trade_routes) {
-        (s.city as any).trade_routes = []
-      }
-      const routes = (s.city as any).trade_routes as TradeRoute[]
-      // 扩充路线槽位
-      while (routes.length < maxRoutes) {
-        routes.push({ resource: 'Food', action: 'none', qty: 1 })
-      }
-      // 缩减路线槽位（如果贸易站被拆除）
-      if (routes.length > maxRoutes) {
-        routes.length = maxRoutes
-      }
-    }
-
-    // --- 科技解锁岗位显示 ---
-    for (const job of BASE_JOBS) {
-      if (job.id === 'unemployed' || job.id === 'hunter') continue
-      if (!job.requiredTech) continue
-      let unlocked = true
-      for (const [techId, lvl] of Object.entries(job.requiredTech)) {
-        if ((s.tech[techId] ?? 0) < lvl) { unlocked = false; break }
-      }
-      const civicJob = s.civic[job.id] as { display?: boolean } | undefined
-      if (civicJob && unlocked) {
-        civicJob.display = true
-      }
-    }
-
-    // --- 市政 Tab 自动显示 ---
-    const hasAnyJob = BASE_JOBS.some(j => {
-      if (j.id === 'unemployed' || j.id === 'hunter') return false
-      return (s.civic[j.id] as { display?: boolean } | undefined)?.display
-    })
-    if (hasAnyJob) {
-      s.settings.showCivic = true
-    }
-
-    // --- 资源 Tab 自动显示 (5种以上资源可见时) ---
-    const visibleResCount = Object.values(s.resource).filter(r => r.display).length
-    if (visibleResCount >= 6) {
-      s.settings.showResources = true
-    }
-  }
-
-  function getStructCount(id: string): number {
-    return (state.value.city[id] as { count: number } | undefined)?.count ?? 0
   }
 
   function syncRaceTraits() {
@@ -468,71 +149,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function getTechCost(techId: string): Record<string, number> {
-    const def = BASIC_TECHS.find(t => t.id === techId)
-    if (!def) return {}
-    return getModifiedTechCosts(state.value, def.costs, def.category)
-  }
-
-  function setJobMax(jobId: string, max: number) {
-    const job = state.value.civic[jobId] as { max: number } | undefined
-    if (job) job.max = max
-  }
-
-  /**
-   * 人口增长：基于概率的增长系统
-   * 对标原版 legacy/src/main.js L3906-3973
-   *
-   * 原版逻辑：
-   * - 在 long loop（每 20 个 fast tick = 5秒）中执行一次
-   * - Math.rand(0, upperBound) <= lowerBound 时新增 1 人
-   * - lowerBound = reproduction 科技等级（无科技时为 0）
-   * - reproduction >= 2 时，hospital 数量会继续提高人口增长概率
-   * - upperBound = 当前人口 × (3 - 2^time_multiplier)
-   *
-   * 简化实现：仍使用 tick 计数器模拟 long loop 频率
-   */
-  function handlePopGrowth() {
-    if (isEvolving.value) return
-    const s = state.value
-    const species = s.race.species
-    const pop = s.resource[species]
-    if (!pop) return
-
-    const food = s.resource['Food']
-    if (!food || food.amount <= 0) return
-
-    // 跟踪 long loop 计数器（每20个tick执行一次增长检查）
-    if (!(s as any)._popGrowthTick) (s as any)._popGrowthTick = 0
-    ;(s as any)._popGrowthTick++
-    if ((s as any)._popGrowthTick < 20) return
-    ;(s as any)._popGrowthTick = 0
-
-    // 有食物且人口未达上限时，才尝试增长
-    if (pop.amount >= pop.max) return
-    if (food.amount <= 0) return
-
-    // reproduction 科技提高增长概率（原版 main.js L3917）
-    let lowerBound = s.tech['reproduction'] ?? 0
-    if ((s.tech['reproduction'] ?? 0) >= 2) {
-      lowerBound += getStructCount('hospital')
-    }
-
-    // 原版 upperBound = currentPop * (3 - 2^0.25) ≈ currentPop * 1.811
-    let upperBound = Math.floor(pop.amount * (3 - Math.pow(2, 0.25)))
-    if (upperBound < 2) upperBound = 2  // 防止初始人口太少时永远无法增长
-
-    // 原版使用整数随机：Math.rand(0, upperBound) <= lowerBound
-    // Math.rand(0, N) = Math.floor(Math.random() * N)，返回 0..N-1，共 N 个值
-    // P(rand <= K) = (K+1) / N
-    // 因此 lowerBound=0 时概率 = 1/upperBound
-    if (Math.random() < (lowerBound + 1) / upperBound) {
-      pop.amount = Math.floor(pop.amount) + 1
-      const newPop = Math.floor(pop.amount)
-      addMessage(`一位新市民加入了你的部落！人口: ${newPop}`, 'success', 'progress')
-      // 新市民默认为失业
-      const unemployed = s.civic['unemployed'] as { workers: number }
-      if (unemployed) unemployed.workers++
-    }
+    return coreGetResearchCost(state.value, techId)
   }
 
   /** 暂停/恢复 */
@@ -575,66 +192,22 @@ export const useGameStore = defineStore('game', () => {
 
   /** 检查是否能购买建筑 */
   function canAfford(structureId: string): boolean {
-    const def = BASIC_STRUCTURES.find(s => s.id === structureId)
-    if (!def) return false
-    for (const [techId, lvl] of Object.entries(def.reqs)) {
-      if ((state.value.tech[techId] ?? 0) < lvl) return false
-    }
-    const count = getStructCount(structureId)
-    for (const [resId, costFn] of Object.entries(def.costs)) {
-      const cost = costFn(state.value, count)
-      const have = state.value.resource[resId]?.amount ?? 0
-      if (have < cost) return false
-    }
-    return true
+    return coreCanBuildStructure(state.value, structureId)
   }
 
   /** 获取建筑费用 */
   function getBuildCost(structureId: string): Record<string, number> {
-    const def = BASIC_STRUCTURES.find(s => s.id === structureId)
-    if (!def) return {}
-    const count = getStructCount(structureId)
-    const costs: Record<string, number> = {}
-    for (const [resId, costFn] of Object.entries(def.costs)) {
-      costs[resId] = costFn(state.value, count)
-    }
-    return costs
+    return coreGetBuildCost(state.value, structureId)
   }
 
   /** 建造建筑 */
   function build(structureId: string) {
-    if (!canAfford(structureId)) return
     const def = BASIC_STRUCTURES.find(s => s.id === structureId)
     if (!def) return
-
-    const count = getStructCount(structureId)
-
-    // 扣除资源
-    for (const [resId, costFn] of Object.entries(def.costs)) {
-      const cost = costFn(state.value, count)
-      state.value.resource[resId].amount -= cost
-    }
-
-    // 增加建筑
-    if (!state.value.city[structureId]) {
-      (state.value.city as Record<string, unknown>)[structureId] = { count: 0, on: 0 }
-    }
-    const building = state.value.city[structureId] as { count: number; on?: number }
-    building.count++
-    if (building.on !== undefined) building.on++
-
+    const result = coreBuildStructure(state.value, structureId)
+    if (!result) return
+    state.value = result
     addMessage(`${def.name}已竣工。`, 'success', 'progress')
-
-    // 兵营特殊逻辑：建造时增加士兵上限并激活驻军显示
-    if (structureId === 'garrison') {
-      const soldiers = (state.value.tech['military'] ?? 0) >= 5 ? 3 : 2;
-      state.value.civic.garrison.max += soldiers;
-      if (!state.value.civic.garrison.display) {
-        state.value.civic.garrison.display = true;
-        state.value.settings.showMil = true;
-        state.value.resource.Furs.display = true;
-      }
-    }
   }
 
   // ---- 建筑队列操作 ----
@@ -644,45 +217,18 @@ export const useGameStore = defineStore('game', () => {
   const canEnqueueBuilding = computed(() => coreCanEnqueue(state.value))
 
   function enqueueBuilding(structureId: string) {
-    if (!coreCanEnqueue(state.value)) return
     const def = BASIC_STRUCTURES.find(s => s.id === structureId)
     if (!def) return
-    
-    const count = getStructCount(structureId)
-    const cost: Record<string, number> = {}
-    for (const [resId, costFn] of Object.entries(def.costs)) {
-      cost[resId] = costFn(state.value, count)
-    }
-    
-    state.value.queue.queue = state.value.queue.queue || []
-    state.value.queue.queue.push({
-      id: structureId,
-      action: `city.${structureId}`,
-      type: 'building',
-      label: def.name,
-      q: 1,
-      qs: state.value.queue.queue.length,
-      time: 0,
-      t_max: 0,
-      cost,
-      progress: {}
-    })
-    
+    const result = coreEnqueueStructure(state.value, structureId)
+    if (!result) return
+    state.value = result
     addMessage(`已将 ${def.name} 加入建造队列。`, 'info', 'progress')
   }
 
   function dequeueBuilding(index: number) {
-    if (state.value.queue.queue && index >= 0 && index < state.value.queue.queue.length) {
-      const item = state.value.queue.queue[index]
-      if (item.progress) {
-        // 返还已投入的资源
-        for (const [resId, amount] of Object.entries(item.progress)) {
-           if (state.value.resource[resId]) {
-             state.value.resource[resId].amount += amount
-           }
-        }
-      }
-      state.value.queue.queue.splice(index, 1)
+    const result = coreDequeueStructure(state.value, index)
+    if (result) {
+      state.value = result
     }
   }
 
@@ -694,76 +240,35 @@ export const useGameStore = defineStore('game', () => {
 
   /** 检查科技是否可见可研究 */
   function isTechAvailable(techId: string): boolean {
-    const def = BASIC_TECHS.find(t => t.id === techId)
-    if (!def) return false
-    const [grantKey, grantLvl] = def.grant
-    if ((state.value.tech[grantKey] ?? 0) >= grantLvl) return false
-    for (const [reqKey, reqLvl] of Object.entries(def.reqs)) {
-      if ((state.value.tech[reqKey] ?? 0) < reqLvl) return false
-    }
-    return true
+    return coreIsTechAvailable(state.value, techId)
   }
 
   function canAffordTech(techId: string): boolean {
-    const def = BASIC_TECHS.find(t => t.id === techId)
-    if (!def) return false
-    const costs = getTechCost(techId)
-    for (const [resId, cost] of Object.entries(costs)) {
-      if ((state.value.resource[resId]?.amount ?? 0) < cost) return false
-    }
-    return true
+    return coreCanResearchTech(state.value, techId)
   }
 
   function research(techId: string) {
     const def = BASIC_TECHS.find(t => t.id === techId)
-    if (!def || !canAffordTech(techId)) return
-    const costs = getTechCost(techId)
-    for (const [resId, cost] of Object.entries(costs)) {
-      state.value.resource[resId].amount -= cost
-    }
-    const [grantKey, grantLvl] = def.grant
-    state.value.tech[grantKey] = grantLvl
+    if (!def) return
+    const result = coreResearchTech(state.value, techId)
+    if (!result) return
+    state.value = result
     addMessage(`🔬 ${def.name} 研发完成！`, 'special', 'progress')
   }
 
   // ---- 岗位操作 ----
 
   function assignWorker(jobId: string) {
-    const job = state.value.civic[jobId] as { workers: number; max: number; display?: boolean } | undefined
-    const unemployed = state.value.civic['unemployed'] as { workers: number } | undefined
-    if (!job || !unemployed || unemployed.workers <= 0) return
-    if (job.max >= 0 && job.workers >= job.max) return
-    job.workers++
-    unemployed.workers--
+    const result = coreAssignWorker(state.value, jobId)
+    if (result) {
+      state.value = result
+    }
   }
 
   function removeWorker(jobId: string) {
-    const job = state.value.civic[jobId] as { workers: number } | undefined
-    const unemployed = state.value.civic['unemployed'] as { workers: number } | undefined
-    if (!job || !unemployed || job.workers <= 0) return
-    job.workers--
-    unemployed.workers++
-
-    // 如果移除的是工匠，同步清理分配
-    if (jobId === 'craftsman') {
-      const foundry = state.value.city['foundry'] as FoundryState | undefined
-      if (foundry) {
-        let totalAssigned = 0
-        for (const id of CRAFTABLE_IDS) {
-          totalAssigned += foundry[id] ?? 0
-        }
-        // 如果总分配超过工匠数，从后往前减
-        while (totalAssigned > job.workers) {
-          for (let i = CRAFTABLE_IDS.length - 1; i >= 0; i--) {
-            const cid = CRAFTABLE_IDS[i]
-            if ((foundry[cid] ?? 0) > 0) {
-              foundry[cid] = (foundry[cid] ?? 0) - 1
-              totalAssigned--
-              break
-            }
-          }
-        }
-      }
+    const result = coreRemoveWorker(state.value, jobId)
+    if (result) {
+      state.value = result
     }
   }
 
@@ -958,11 +463,7 @@ export const useGameStore = defineStore('game', () => {
    * 对标 legacy/src/civics.js taxRates 绑定
    */
   function setTaxRate(rate: number) {
-    const maxRate = getMaxTaxRate(state.value)
-    const clamped = Math.max(0, Math.min(maxRate, Math.round(rate)))
-    if (state.value.civic.taxes) {
-      state.value.civic.taxes.tax_rate = clamped
-    }
+    state.value = coreSetTaxRate(state.value, rate)
   }
 
   // ---- 仓储操作 ----

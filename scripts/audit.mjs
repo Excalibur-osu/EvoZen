@@ -249,6 +249,34 @@ function extractEvoZenTechs(src) {
   return techs;
 }
 
+// ─── Phase 1 建筑白名单 ───────────────────────────
+// 凡是列在这里的建筑，EvoZen 必须实现，缺失则报 error。
+// 仅包含文明时代/发现时代可获取的 city 建筑，不含 space/portal。
+const PHASE1_BUILDINGS = [
+  // 住宅
+  'basic_housing', 'cottage',
+  // 农业/食物
+  'farm', 'silo', 'smokehouse', 'mill',
+  // 林业/采矿
+  'lumber_yard', 'sawmill', 'rock_quarry', 'mine', 'coal_mine',
+  // 工业
+  'cement_plant', 'smelter', 'metal_refinery', 'foundry', 'factory',
+  // 仓储
+  'shed', 'storage_yard', 'warehouse',
+  // 能源
+  'coal_power', 'oil_power', 'oil_well', 'oil_depot',
+  // 金融/贸易
+  'bank', 'trade_post',
+  // 科研
+  'library', 'university', 'wardenclyffe',
+  // 军事
+  'garrison', 'hospital', 'boot_camp',
+  // 文娱/宗教
+  'amphitheatre', 'temple', 'shrine',
+  // 高级
+  'biolab', 'casino', 'wharf', 'tourist_center',
+];
+
 // ─── 5. 比对逻辑 ──────────────────────────────────
 function auditBuildings(legacy, evozen) {
   section('建筑覆盖率检查');
@@ -257,7 +285,6 @@ function auditBuildings(legacy, evozen) {
   const evozenIds = Object.keys(evozen);
 
   // 覆盖率
-  let missing = 0;
   for (const id of evozenIds) {
     if (legacy[id]) {
       ok(`${id}: 在 legacy 中找到`);
@@ -266,11 +293,22 @@ function auditBuildings(legacy, evozen) {
     }
   }
 
-  // 列出 legacy 有但 EvoZen 无的建筑（只列 city- 开头的，排除 space/portal 等后期内容）
+  // Phase 1 白名单检查：缺失建筑报 error
+  section('Phase 1 建筑白名单检查');
   const evozenSet = new Set(evozenIds);
-  const missingInEvozen = legacyIds.filter(id => !evozenSet.has(id));
+  for (const id of PHASE1_BUILDINGS) {
+    if (evozenSet.has(id)) {
+      ok(`${id}: 已实现`);
+    } else {
+      fail(`${id}: Phase 1 必须实现，但 EvoZen 中缺失`);
+    }
+  }
+
+  // 列出 legacy 有但不在白名单、且 EvoZen 也无的建筑（仅供参考）
+  const phase1Set = new Set(PHASE1_BUILDINGS);
+  const missingInEvozen = legacyIds.filter(id => !evozenSet.has(id) && !phase1Set.has(id));
   if (missingInEvozen.length > 0) {
-    console.log(`\n  Legacy 有但 EvoZen 尚无的建筑 (${missingInEvozen.length} 个):`);
+    console.log(`\n  Legacy 有但 EvoZen 尚无（非 Phase 1，暂不要求，${missingInEvozen.length} 个）:`);
     for (const id of missingInEvozen) {
       info(`  ${id}`);
     }
@@ -326,6 +364,54 @@ function auditBuildings(legacy, evozen) {
   }
 }
 
+// ─── Phase 1 科技白名单 ──────────────────────────
+// 已实装的所有科技 ID。缺失时报 error（防止回归）。
+const PHASE1_TECHS = [
+  // 原始阶段
+  'club','bone_tools','sundial','science',
+  // 农业
+  'agriculture','farm_house','irrigation','barns','smokehouse',
+  'copper_hoe','iron_hoe','steel_hoe',
+  // 林业
+  'axe','carpentry','copper_axes','iron_axes','steel_axes',
+  'iron_saw',
+  // 采矿
+  'mining','mining_2','mining_3','mining_4',
+  'shovel','iron_shovel','dowsing_rod','metal_detector',
+  'copper_pickaxe','iron_pickaxe','steel_pickaxe','dynamite','jackhammer',
+  // 建筑/住房
+  'housing','cottage_tech','urban_planning','urbanization','zoning_permits',
+  'cranes','gantry_crane','rebar','steel_beams','steel_rebar',
+  // 生产
+  'smelting','bessemer_process','blast_furnace','oxygen_converter',
+  'bayer_process','steel','reinforced_crates','steel_containers','containerization',
+  'cement','mill_tech','foundry_tech',
+  // 仓储
+  'storage','silo_tech','reinforced_shed',
+  // 科研/知识
+  'library_tech','thesis','research_grant','scientific_journal',
+  'apprentices','artisans',
+  // 政府/政治
+  'government','theocracy',
+  // 金融/贸易
+  'banking_tech','market','currency','investing','vault','tax_rates',
+  'trade','freight','large_trades',
+  // 娱乐/文化
+  'theatre','playwright','monument',
+  // 宗教
+  'faith','theology_tech',
+  // 军事
+  'military','armor','plate_armor','bows','flintlock_rifle','black_powder',
+  'mercs_tech','boot_camp_tech','hospital','hunter_process',
+  // 电力/工业
+  'electricity','industrialization','oil_well','oil_depot','oil_powerplant',
+  // 高级
+  'steel_hammer','copper_hammer','iron_hammer',
+  'mad_science','genetics','bioscience',
+  'casino','wharf','tourism',
+  'diplomacy','aphrodisiac',
+];
+
 function auditTechs(legacy, evozen) {
   section('科技覆盖率检查');
 
@@ -337,6 +423,17 @@ function auditTechs(legacy, evozen) {
       ok(`${id}: 在 legacy 中找到`);
     } else {
       warn(`${id}: legacy 中无对应（可能 ID 不同）`);
+    }
+  }
+
+  // Phase 1 白名单检查：已实装科技缺失时报 error
+  section('Phase 1 科技白名单检查');
+  const evozenTechSet = new Set(evozenIds);
+  for (const id of PHASE1_TECHS) {
+    if (evozenTechSet.has(id)) {
+      ok(`${id}: 已实现`);
+    } else {
+      fail(`${id}: Phase 1 科技缺失`);
     }
   }
 
@@ -571,50 +668,49 @@ function extractLegacyGovEffects(src) {
 }
 
 // ─── 15. 提取 EvoZen 政体效果 ─────────────────────
-function extractEvoZenGovEffects(src) {
-  const effects = {};
-
-  // autocracy effects from GOVERNMENT_DEFS effects text
-  // We parse the actual function values instead
-  // Check getTaxMultiplier, getTempleMultiplier, getKnowledgeMultiplier
+// 从实际代码常量提取，不依赖 tooltip 字符串
+// govSrc      = government.ts
+// moraleSrc   = morale.ts     (autocracy stress, democracy entertainer)
+// militarySrc = military.ts   (autocracy attack)
+function extractEvoZenGovEffects(govSrc, moraleSrc, militarySrc) {
   const govEffects = {};
 
-  // Tax multiplier for oligarchy
-  const taxMatch = src.match(/case 'oligarchy':\s*[\s\S]*?return 1 - \((\d+) \/ 100\)/);
-  const taxCap = src.match(/case 'oligarchy':\s*[\s\S]*?return (\d+);/);
-
-  // Temple multiplier for theocracy
-  const templeMatch = src.match(/govType === 'theocracy'\)\s*\{\s*return ([\d.]+)/);
-
-  // Knowledge multiplier
-  const profMatch = src.match(/role === 'professor' \? ([\d.]+) : ([\d.]+)/);
-
+  // ── autocracy ──
   govEffects.autocracy = {};
-  // From effects text: 压力容忍度 +25%, 军事战斗力 +35%
-  const autStress = src.match(/压力容忍度 \+(\d+)%/);
-  const autAttack = src.match(/军事战斗力 \+(\d+)%/);
-  if (autStress) govEffects.autocracy.stress = parseInt(autStress[1]);
-  if (autAttack) govEffects.autocracy.attack = parseInt(autAttack[1]);
+  // stress tolerance: morale.ts  autocracy → stress *= 0.75  → delta 25%
+  const autoStress = moraleSrc.match(/autocracy[\s\S]{0,80}stress \*= ([\d.]+)/);
+  if (autoStress) govEffects.autocracy.stress = Math.round((1 - parseFloat(autoStress[1])) * 100);
+  // attack boost: military.ts  army *= 1.35  → delta 35%
+  const autoAttack = militarySrc.match(/army\s*\*=\s*([\d.]+)/);
+  if (autoAttack) govEffects.autocracy.attack = Math.round((parseFloat(autoAttack[1]) - 1) * 100);
 
+  // ── democracy ──
   govEffects.democracy = {};
-  const demEnt = src.match(/娱乐业效率 \+(\d+)%/);
-  const demWork = src.match(/工作压力 -(\d+)%/);
-  if (demEnt) govEffects.democracy.entertainer = parseInt(demEnt[1]);
-  if (demWork) govEffects.democracy.work_malus = parseInt(demWork[1]);
+  // entertainer bonus: morale.ts  democracy → entertainment *= 1.2  → delta 20%
+  const demEnt = moraleSrc.match(/democracy[\s\S]{0,80}entertainment \*= ([\d.]+)/);
+  if (demEnt) govEffects.democracy.entertainer = Math.round((parseFloat(demEnt[1]) - 1) * 100);
 
+  // ── oligarchy ──
   govEffects.oligarchy = {};
-  if (taxMatch) govEffects.oligarchy.tax_penalty = parseInt(taxMatch[1]);
-  // legacy tax_cap is the +delta (e.g. 20), EvoZen stores the final (e.g. 40 = base20 + delta20)
-  // Convert EvoZen's final value back to delta for comparison
+  // tax penalty: government.ts getTaxMultiplier  return 1 - (5 / 100)
+  const taxPenalty = govSrc.match(/return 1 - \((\d+) \/ 100\)/);
+  if (taxPenalty) govEffects.oligarchy.tax_penalty = parseInt(taxPenalty[1]);
+  // tax cap: government.ts getMaxTaxRate oligarchy case  return 40 → delta = 40-20 = 20
+  const taxCap = govSrc.match(/case 'oligarchy':[\s\S]{0,80}return (\d+)/);
   if (taxCap) govEffects.oligarchy.tax_cap = parseInt(taxCap[1]) - 20;
 
+  // ── theocracy ──
   govEffects.theocracy = {};
-  const theTemple = src.match(/神庙效果 \+(\d+)%/);
-  const theProf = src.match(/教授效率 -(\d+)%/);
-  const theSci = src.match(/科学家效率 -(\d+)%/);
-  if (theTemple) govEffects.theocracy.temple = parseInt(theTemple[1]);
-  if (theProf) govEffects.theocracy.prof_malus = parseInt(theProf[1]);
-  if (theSci) govEffects.theocracy.sci_malus = parseInt(theSci[1]);
+  // temple: government.ts getTempleMultiplier  return 1.12  → delta 12%
+  const theTemple = govSrc.match(/getTempleMultiplier[\s\S]*?govType === 'theocracy'[\s\S]*?return ([\d.]+)/);
+  if (theTemple) govEffects.theocracy.temple = Math.round((parseFloat(theTemple[1]) - 1) * 100);
+  // prof/sci malus: government.ts getKnowledgeMultiplier
+  //   return role === 'professor' ? 0.75 : 0.50
+  const kMult = govSrc.match(/role === 'professor' \? ([\d.]+) : ([\d.]+)/);
+  if (kMult) {
+    govEffects.theocracy.prof_malus = Math.round((1 - parseFloat(kMult[1])) * 100);
+    govEffects.theocracy.sci_malus  = Math.round((1 - parseFloat(kMult[2])) * 100);
+  }
 
   return govEffects;
 }
@@ -873,6 +969,34 @@ function auditFormulaConstants(sources) {
      'legacy/src/actions.js L5808: storage>=4 ? 3 : 1.5'],
     ['storage>=3 乘数', 'storage.ts', /storageTech\s*>=\s*4\s*\?.*:\s*([\d.]+)/, 1.5,
      'legacy/src/actions.js L5808: storage>=3 ? 1.5'],
+
+    // === morale.ts: 士气系统 ===
+    ['moraleCap 基础值', 'morale.ts', /moraleCap\s*=\s*([\d.]+)/, 125,
+     'legacy/src/main.js L3164: moraleCap base = 125'],
+    ['士气下限', 'morale.ts', /if \(morale < ([\d.]+)\)/, 50,
+     'legacy/src/main.js L3264: morale floor = 50'],
+    ['globalMultiplier 奖励区除数', 'morale.ts', /\(morale - 100\) \/ ([\d.]+)/, 200,
+     'legacy/src/main.js L3288: 1 + (morale-100)/200'],
+    ['猎人压力除数', 'morale.ts', /hunters \/ ([\d.]+)/, 5,
+     'legacy/src/main.js L2968: hunter stress divisor = 5'],
+    ['春季士气加成', 'morale.ts', /season === 0[\s\S]*?seasonBonus\s*=\s*([\d.]+)/, 5,
+     'legacy/src/main.js L1317: spring bonus = +5'],
+    ['冬季士气惩罚', 'morale.ts', /season === 3[\s\S]*?seasonBonus\s*=\s*-([\d.]+)/, 5,
+     'legacy/src/main.js L1331: winter penalty = -5'],
+
+    // === trade.ts: 贸易系统 ===
+    ['卖出价格除数', 'trade.ts', /\(value \* ratio\) \/ ([\d.]+)/, 4,
+     'legacy/src/resources.js L1525: sell = value / divide, divide=4'],
+    ['手动贸易上限 低档 (currency<4)', 'trade.ts', /getManualTradeLimit[\s\S]*?>=.*4.*\?\s*[\d]+\s*:\s*([\d]+)/, 100,
+     'legacy/src/resources.js tradeMax: currency<4 → 100'],
+    ['手动贸易上限 高档 (currency>=4)', 'trade.ts', /getManualTradeLimit[\s\S]*?>=.*4.*\?\s*([\d]+)\s*:/, 5000,
+     'legacy/src/resources.js tradeMax: currency>=4 → 5000'],
+    ['路线数量上限 低档 (currency<4)', 'trade.ts', /getTradeRouteQtyLimit[\s\S]*?>=.*4.*\?\s*[\d]+\s*:\s*([\d]+)/, 25,
+     'legacy/src/resources.js importRouteEnabled: currency<4 → 25'],
+    ['路线数量上限 高档 (currency>=4)', 'trade.ts', /getTradeRouteQtyLimit[\s\S]*?>=.*4.*\?\s*([\d]+)\s*:/, 100,
+     'legacy/src/resources.js importRouteEnabled: currency>=4 → 100'],
+    ['wharf 每座贸易路线加成', 'trade.ts', /wharves\s*\*\s*([\d.]+)/, 2,
+     'legacy/src/actions.js L3214: wharf +2 trade routes'],
   ];
 
   for (const [desc, file, regex, expected, legacyRef] of checks) {
@@ -960,9 +1084,11 @@ try {
   const evozenJobsSrc = read('packages/game-core/src/jobs.ts');
   const evozenResourcesSrc = read('packages/game-core/src/resources.ts');
   const evozenGovSrc = read('packages/game-core/src/government.ts');
+  const evozenMoraleSrc = read('packages/game-core/src/morale.ts');
   const evozenTickSrc = read('packages/game-core/src/tick.ts');
   const evozenMilitarySrc = read('packages/game-core/src/military.ts');
   const evozenStorageSrc = read('packages/game-core/src/storage.ts');
+  const evozenTradeSrc = read('packages/game-core/src/trade.ts');
 
   // 提取数据
   const legacyBuildingsData = extractLegacyBuildings(legacyActions);
@@ -978,7 +1104,7 @@ try {
   const legacyTradeData = extractLegacyTradeRatios(legacyResources);
   const evozenTradeData = extractEvoZenTradeRatios(evozenResourcesSrc);
   const legacyGovData = extractLegacyGovEffects(legacyCivics);
-  const evozenGovData = extractEvoZenGovEffects(evozenGovSrc);
+  const evozenGovData = extractEvoZenGovEffects(evozenGovSrc, evozenMoraleSrc, evozenMilitarySrc);
 
   info(`Legacy 建筑: ${Object.keys(legacyBuildingsData).length} 个`);
   info(`EvoZen 建筑: ${Object.keys(evozenBuildingsData).length} 个`);
@@ -1005,6 +1131,8 @@ try {
     'packages/game-core/src/tick.ts': evozenTickSrc,
     'packages/game-core/src/military.ts': evozenMilitarySrc,
     'packages/game-core/src/storage.ts': evozenStorageSrc,
+    'packages/game-core/src/morale.ts': evozenMoraleSrc,
+    'packages/game-core/src/trade.ts': evozenTradeSrc,
   };
   auditFormulaConstants(formulaSources);
   auditShedValues(evozenStorageSrc);

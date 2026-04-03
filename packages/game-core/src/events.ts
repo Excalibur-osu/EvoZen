@@ -153,8 +153,9 @@ export const EVENTS: EventDefinition[] = [
         return `⚔️ 外敌来袭！守军成功击退入侵者。${killed > 0 ? `我方阵亡 ${killed} 人，` : ''}受伤 ${wounded} 人。`;
       } else {
         const loss = rng(1, Math.max(1, Math.floor((state.resource['Money']?.amount ?? 0) / 4)));
-        clampResource(state, 'Money', -loss);
-        return `⚔️ 外敌来袭！守军寡不敌众，损失金钱 ${loss}，${killed > 0 ? `阵亡 ${killed} 人，` : ''}受伤 ${wounded} 人。`;
+        const actualLoss = clampResource(state, 'Money', -loss);
+        const lossText = actualLoss > 0 ? `损失金钱 ${actualLoss}，` : '';
+        return `⚔️ 外敌来袭！守军寡不敌众，${lossText}${killed > 0 ? `阵亡 ${killed} 人，` : ''}受伤 ${wounded} 人。`;
       }
     },
   },
@@ -175,8 +176,7 @@ export const EVENTS: EventDefinition[] = [
       if (pop) pop.amount = Math.max(0, pop.amount - 1);
       const miner = state.civic['miner'] as { workers: number } | undefined;
       if (miner && miner.workers > 0) miner.workers--;
-      const unemployed = state.civic['unemployed'] as { workers: number } | undefined;
-      if (unemployed) unemployed.workers = Math.max(0, unemployed.workers - 1);
+      (state.stats as { died?: number }).died = ((state.stats as { died?: number }).died ?? 0) + 1;
       return `⛏️ 矿井坍塌！一名矿工在事故中遇难。`;
     },
   },

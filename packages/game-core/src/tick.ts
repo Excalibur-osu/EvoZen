@@ -17,6 +17,7 @@ import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
 import { tickEvents } from './events';
+import { applyDerivedStateInPlace } from './derived-state';
 
 /**
  * 原版全局时间缩放因子
@@ -454,13 +455,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
           newState.city[item.id] = { count: 0 };
         }
         (newState.city[item.id] as { count: number }).count++;
-        
+
         messages.push({
           text: `✔️ 建造完成：${item.label}`,
           type: 'success',
           category: 'progress'
         });
-        
+
         newState.queue.queue.shift();
       }
     } else {
@@ -473,12 +474,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 11. 饥荒效果：食物 0 且负产出时人口减少
   // ============================================================
   if (newState.resource['Food']?.amount === 0 && (deltas['Food'] ?? 0) < 0) {
-    const species = newState.race.species;
-    const popRes = newState.resource[species];
-    if (popRes && popRes.amount > 1) {
+    if (getPopulation(newState) > 1) {
       // 每 tick 0.5% 概率死亡
       if (Math.random() < 0.005) {
-        popRes.amount = Math.max(1, popRes.amount - 1);
+        removeOneCitizen(newState);
         messages.push({
           text: '💀 一名市民因饥饿而死亡！',
           type: 'danger',
@@ -533,12 +532,22 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 统计（days 已在日历推进内更新）
 
   // ============================================================
-  // 12a. 存储士气数据 — 供 UI 展示
+  // 12a. 派生状态同步
+  // 让排队建造完成后的上限、岗位、显示状态在当前 tick 就保持一致
+  // ============================================================
+  applyDerivedStateInPlace(newState);
+  const activeBiolabs = powerResult.activeConsumers['biolab'] ?? 0;
+  if (activeBiolabs > 0 && newState.resource['Knowledge']) {
+    newState.resource['Knowledge'].max += activeBiolabs * 3000;
+  }
+
+  // ============================================================
+  // 12b. 存储士气数据 — 供 UI 展示
   // ============================================================
   newState.city.morale = moraleResult.breakdown;
 
   // ============================================================
-  // 12b. 存储电力数据 — 供 UI 展示
+  // 12c. 存储电力数据 — 供 UI 展示
   // ============================================================
   newState.city.power = {
     generated: powerResult.totalGenerated,
@@ -594,6 +603,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     }
   }
 
+  // ============================================================
+  // 15. 工厂产线 tick
+  // 对标 legacy/src/industry.js f_rate表，工厂 powered = on
+  // ============================================================
+  factoryTick(newState, powerResult.activeConsumers['factory'] ?? 0, TIME_MULTIPLIER, deltas);
+
   return {
     state: newState,
     result: {
@@ -610,4 +625,123 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 function getPopulation(state: GameState): number {
   const species = state.race.species;
   return state.resource[species]?.amount ?? 0;
+}
+
+function removeOneCitizen(state: GameState): void {
+  const species = state.race.species;
+  const popRes = state.resource[species];
+  if (!popRes || popRes.amount <= 1) return;
+
+  popRes.amount = Math.max(1, popRes.amount - 1);
+
+  const jobPriority = [
+    'unemployed',
+    'hunter',
+    'farmer',
+    'lumberjack',
+    'quarry_worker',
+    'miner',
+    'coal_miner',
+    'craftsman',
+    'cement_worker',
+    'banker',
+    'entertainer',
+    'professor',
+    'scientist',
+    'priest',
+    'garrison',
+  ];
+
+  for (const jobId of jobPriority) {
+    const job = state.civic[jobId] as { workers?: number } | undefined;
+    if ((job?.workers ?? 0) > 0) {
+      job!.workers = (job!.workers ?? 0) - 1;
+      if (jobId === 'garrison') {
+        const garrison = state.civic.garrison;
+        garrison.wounded = Math.min(garrison.wounded, garrison.workers);
+        const available = Math.max(0, garrison.workers - garrison.crew);
+        garrison.raid = Math.min(garrison.raid, available);
+      }
+      return;
+    }
+  }
+}
+
+// ============================================================
+// 工厂产线 tick
+// 对标 legacy/src/industry.js L117-147 f_rate 表，下标 0 (无 assembly 科技)
+// ============================================================
+
+export function factoryTick(
+  state: GameState,
+  poweredOn: number,
+  timeMul: number,
+  deltas: Record<string, number>
+): void {
+  const factory = state.city['factory'] as { count: number; on: number; Alloy: number; Polymer: number } | undefined;
+  if (!factory || poweredOn <= 0) return;
+
+  // 工厂 powered 市已用于分配，确保分配不超过通电数
+  const allocAlloy = Math.min(factory.Alloy, poweredOn);
+  const remainAfterAlloy = poweredOn - allocAlloy;
+  const allocPolymer = Math.min(factory.Polymer, remainAfterAlloy);
+
+  // ----------------------------------------------------------
+  // 合金 (Alloy) 产线
+  // 对标 f_rate.Alloy: copper[0]=0.75, aluminium[0]=1.0, output[0]=0.075
+  // 每条产线每 tick 消耗铜 0.75 + 铝 1.0，产出合金 0.075
+  // ----------------------------------------------------------
+  if (allocAlloy > 0 && state.resource['Alloy']) {
+    const copperCost = allocAlloy * 0.75 * timeMul;
+    const aluminiumCost = allocAlloy * 1.0 * timeMul;
+    const alloyOutput = allocAlloy * 0.075 * timeMul;
+
+    // 扭读钳造保证资源足够
+    const availCopper = (state.resource['Copper']?.amount ?? 0);
+    const availAluminium = (state.resource['Aluminium']?.amount ?? 0);
+
+    if (availCopper >= copperCost && availAluminium >= aluminiumCost) {
+      if (state.resource['Copper']) state.resource['Copper'].amount -= copperCost;
+      if (state.resource['Aluminium']) state.resource['Aluminium'].amount -= aluminiumCost;
+      deltas['Copper'] = (deltas['Copper'] ?? 0) - copperCost;
+      deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) - aluminiumCost;
+
+      const alloy = state.resource['Alloy'];
+      const maxAlloy = alloy.max >= 0 ? alloy.max : Infinity;
+      const actual = Math.min(alloyOutput, maxAlloy - alloy.amount);
+      if (actual > 0) {
+        alloy.amount += actual;
+        deltas['Alloy'] = (deltas['Alloy'] ?? 0) + actual;
+      }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // 聚合物 (Polymer) 产线
+  // 对标 f_rate.Polymer: oil[0]=0.18, lumber[0]=15, output[0]=0.125
+  // 每条产线每 tick 消耗石油 0.18 + 木材 15，产出聚合物 0.125
+  // ----------------------------------------------------------
+  if (allocPolymer > 0 && state.resource['Polymer']) {
+    const oilCost = allocPolymer * 0.18 * timeMul;
+    const lumberCost = allocPolymer * 15 * timeMul;
+    const polymerOutput = allocPolymer * 0.125 * timeMul;
+
+    const availOil = (state.resource['Oil']?.amount ?? 0);
+    const availLumber = (state.resource['Lumber']?.amount ?? 0);
+
+    if (availOil >= oilCost && availLumber >= lumberCost) {
+      if (state.resource['Oil']) state.resource['Oil'].amount -= oilCost;
+      if (state.resource['Lumber']) state.resource['Lumber'].amount -= lumberCost;
+      deltas['Oil'] = (deltas['Oil'] ?? 0) - oilCost;
+      deltas['Lumber'] = (deltas['Lumber'] ?? 0) - lumberCost;
+
+      const polymer = state.resource['Polymer'];
+      const maxPolymer = polymer.max >= 0 ? polymer.max : Infinity;
+      const actual = Math.min(polymerOutput, maxPolymer - polymer.amount);
+      if (actual > 0) {
+        polymer.amount += actual;
+        deltas['Polymer'] = (deltas['Polymer'] ?? 0) + actual;
+      }
+    }
+  }
 }

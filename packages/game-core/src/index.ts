@@ -5,6 +5,20 @@
 
 export { createNewGame, defaultSettings } from './state';
 export { seededRandom, mathRand } from './random';
+export {
+  getBuildCost,
+  canBuildStructure,
+  buildStructure,
+  enqueueStructure,
+  dequeueStructure,
+  isTechAvailable,
+  getResearchCost,
+  canResearchTech,
+  researchTech,
+  assignWorker,
+  removeWorker,
+  setTaxRate,
+} from './actions';
 export { RESOURCE_VALUES, TRADE_RATIOS, CRAFT_COSTS, type CraftRecipe } from './resources';
 export { BASE_JOBS, type JobDefinition } from './jobs';
 export { BASIC_TECHS, type TechDefinition } from './tech';
@@ -26,7 +40,7 @@ export {
   type SpeciesTraitId,
   type SpeciesTraitDescriptor,
 } from './traits';
-export { gameTick } from './tick';
+export { gameTick, factoryTick } from './tick';
 export { saveGame, loadGame, exportSave, importSave } from './save';
 export {
   manualCraft,
@@ -117,3 +131,17 @@ export {
   EVENTS,
   type EventDefinition,
 } from './events';
+export {
+  applyDerivedState,
+  applyDerivedStateInPlace,
+} from './derived-state';
+export {
+  applySimulationDerivedState,
+  applySimulationDerivedStateInPlace,
+  handlePopulationGrowth,
+  runSimulationTick,
+  simulateTicks,
+  createDeterministicRandom,
+  type SimulationTickOptions,
+  type SimulationRunResult,
+} from './simulation';

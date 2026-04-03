@@ -1,12 +1,13 @@
 {
   "name": "@evozen/game-core",
-  "version": "0.7.0",
+  "version": "0.7.2",
   "description": "EvoZen core game logic — pure TypeScript, no UI dependencies",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
     "test": "vitest run",
+    "test:replay": "vitest run src/replay.audit.test.ts src/progression.audit.test.ts src/systems.audit.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b tsconfig.json"

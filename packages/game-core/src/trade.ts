@@ -236,6 +236,10 @@ export function getMaxTradeRoutes(state: GameState): number {
     totalRoutes += storageYards;
   }
 
+  // 对标 actions.js L3214: wharf 每座 +2 贸易路线（无需通电）
+  const wharves = (state.city['wharf'] as { count: number } | undefined)?.count ?? 0;
+  totalRoutes += wharves * 2;
+
   return totalRoutes;
 }
 

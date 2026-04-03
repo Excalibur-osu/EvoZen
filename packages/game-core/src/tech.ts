@@ -1297,5 +1297,85 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 3400, Iron: 600 },
     effect: '士兵护甲等级提升至 armor:2，战斗死亡率进一步降低。',
   },
+
+  // ===== Missing Buildings Sprint =====
+
+  // legacy tech.js L4618: bioscience → genetics:1 → 解锁 biolab
+  {
+    id: 'bioscience',
+    name: '生物科学',
+    description: '将生物学提升为精确科学，开启基因研究与生物实验室建设。',
+    category: 'science',
+    era: '全球化',
+    reqs: { science: 8 },
+    grant: ['genetics', 1],
+    costs: { Knowledge: 67500 },
+    effect: '解锁生物实验室（Biolab）建筑，提供大量知识容量上限。',
+  },
+
+  // legacy tech.js L4637: genetics → genetics:2（后续 ARPA，暂只建 entry point）
+  {
+    id: 'genetics',
+    name: '基因学',
+    description: '深入研究遗传密码，为 ARPA 基因组项目奠定基础。',
+    category: 'science',
+    era: '全球化',
+    reqs: { genetics: 1, high_tech: 6 },
+    grant: ['genetics', 2],
+    costs: { Knowledge: 108000 },
+    effect: '推进基因学研究，解锁后续 ARPA 项目。',
+  },
+
+  // legacy tech.js L1846: casino → gambling:1 → 解锁 casino 建筑
+  {
+    id: 'casino',
+    name: '赌场',
+    description: '引入有组织的赌博业，建造豪华娱乐场所。',
+    category: 'entertainment',
+    era: '全球化',
+    reqs: { high_tech: 4, currency: 5 },
+    grant: ['gambling', 1],
+    costs: { Knowledge: 95000 },
+    effect: '解锁赌场建筑，提供娱乐收入与娱乐者岗位。',
+  },
+
+  // legacy tech.js L3539: wharf → wharf:1 → 解锁 wharf 建筑
+  {
+    id: 'wharf',
+    name: '码头',
+    description: '建设深水港口设施，大幅提升海上贸易能力。',
+    category: 'trade',
+    era: '工业化',
+    reqs: { trade: 1, high_tech: 3, oil: 1 },
+    grant: ['wharf', 1],
+    costs: { Knowledge: 44000 },
+    effect: '解锁码头建筑，每座提供 2 条额外贸易路线及集装箱容量。',
+  },
+
+  // legacy tech.js L4001: monument → monument:1
+  {
+    id: 'monument',
+    name: '纪念碑',
+    description: '建造宏伟的永恒建筑，彰显文明的荣耀。',
+    category: 'science',
+    era: '全球化',
+    reqs: { high_tech: 6 },
+    grant: ['monument', 1],
+    costs: { Knowledge: 120000 },
+    effect: '解锁 ARPA 纪念碑项目，提升文明声望。',
+  },
+
+  // legacy tech.js L4024: tourism → monument:2 → 解锁 tourist_center
+  {
+    id: 'tourism',
+    name: '旅游业',
+    description: '将纪念碑与名胜古迹开发为旅游目的地，带动经济增长。',
+    category: 'trade',
+    era: '早期太空',
+    reqs: { monument: 1 },
+    grant: ['monument', 2],
+    costs: { Knowledge: 150000 },
+    effect: '解锁旅游中心建筑，放大娱乐/宗教建筑的士气收入效益。',
+  },
 ];
 

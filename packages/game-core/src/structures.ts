@@ -385,19 +385,6 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
   },
 
   // ---- 军事 ----
-  // actions.js L1961-2010: garrison
-  {
-    id: 'garrison',
-    name: '兵营',
-    description: '训练和驻扎士兵。',
-    category: 'military',
-    reqs: { military: 1 },
-    costs: {
-      Money: scaleCost(240, 1.5),
-      Stone: scaleCost(260, 1.46),
-    },
-    effect: '士兵上限 +2。',
-  },
   // actions.js L2021-2055: hospital
   {
     id: 'hospital',
@@ -567,9 +554,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'commerce',
     reqs: { theology: 1 },
     costs: {
-      Money: scaleCost(100, 1.3),
-      Lumber: scaleCost(50, 1.3),
-      Stone: scaleCost(35, 1.3),
+      Money: scaleCost(75, 1.32),
+      Stone: scaleCost(65, 1.32),
+      Furs: scaleCost(10, 1.32),
+      Copper: scaleCost(15, 1.32),
     },
     effect: '信仰上限 +25。',
   },
@@ -651,5 +639,97 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Cement: (state, count) => scaleCementCost(5600, 1.22)(state, count) + 1000,
     },
     effect: '每座 +6MW 电力，消耗 0.65 石油/tick。',
+  },
+  // actions.js L2786-2841: factory (工厂)
+  // 对标原版：reqs { high_tech: 3 }，需电 3MW，开启合金/聚合物产线
+  {
+    id: 'factory',
+    name: '工厂',
+    description: '高科技制造中心，可生产合金和聚合物等高级材料。需要供电。',
+    category: 'resource',
+    reqs: { high_tech: 3 },
+    costs: {
+      Money: scaleCost(25000, 1.32),
+      Cement: scaleCost(1000, 1.32),
+      Steel: scaleCost(7500, 1.32),
+      Titanium: scaleCost(2500, 1.32),
+    },
+    effect: '开启合金/聚合物产线，每条产线每 tick 产出合金 0.075 或聚合物 0.125。',
+    powered: true,
+    powerCost: 3,
+  },
+
+  // ===== Missing Buildings Sprint =====
+
+  // actions.js L3947: biolab (生物实验室)
+  // 对标原版：reqs { genetics: 1 }，需电 2MW，+3000 知识上限
+  {
+    id: 'biolab',
+    name: '生物实验室',
+    description: '研究生命科学的高科技设施，大幅扩展知识储量上限。需要供电。',
+    category: 'science',
+    reqs: { genetics: 1 },
+    costs: {
+      Money: scaleCost(25000, 1.3),
+      Knowledge: scaleCost(5000, 1.3),
+      Copper: scaleCost(1250, 1.3),
+      Alloy: scaleCost(350, 1.3),
+    },
+    effect: '每座通电时提供 +3000 知识容量上限。',
+    powered: true,
+    powerCost: 2,
+  },
+
+  // actions.js L3339: casino (赌场)
+  // 对标原版：reqs { gambling: 1 }，需电 3MW，+1 娱乐者岗位
+  {
+    id: 'casino',
+    name: '赌场',
+    description: '豪华娱乐场所，吸引大量消费，提升城市娱乐水平。需要供电。',
+    category: 'commerce',
+    reqs: { gambling: 1 },
+    costs: {
+      Money: scaleCost(350000, 1.35),
+      Furs: scaleCost(60000, 1.35),
+      Plywood: scaleCost(10000, 1.35),
+      Brick: scaleCost(6000, 1.35),
+    },
+    effect: '每座增加 1 个娱乐者岗位上限，通电后额外提供士气与金币收入。',
+    powered: true,
+    powerCost: 3,
+  },
+
+  // actions.js L3189: wharf (码头)
+  // 对标原版：reqs { wharf: 1 }，无需电，+2 贸易路线，+10 箱子/集装箱上限
+  {
+    id: 'wharf',
+    name: '码头',
+    description: '深水港口设施，大幅扩展贸易与货运能力。',
+    category: 'commerce',
+    reqs: { wharf: 1 },
+    costs: {
+      Money: scaleCost(62000, 1.32),
+      Lumber: scaleCost(44000, 1.32),
+      Cement: scaleCost(3000, 1.32),
+      Oil: scaleCost(750, 1.32),
+    },
+    effect: '每座提供 +2 贸易路线，+10 板条箱及集装箱容量上限。',
+  },
+
+  // actions.js L3235: tourist_center (旅游中心)
+  // 对标原版：reqs { monument: 2 }，无耗电，放大娱乐/宗教建筑的效益
+  {
+    id: 'tourist_center',
+    name: '旅游中心',
+    description: '将城市打造成旅游目的地，放大现有娱乐和宗教建筑的收益。',
+    category: 'commerce',
+    reqs: { monument: 2 },
+    costs: {
+      Money: scaleCost(100000, 1.36),
+      Stone: scaleCost(25000, 1.36),
+      Furs: scaleCost(7500, 1.36),
+      Plywood: scaleCost(5000, 1.36),
+    },
+    effect: '放大露天剧场、赌场等娱乐建筑提供的士气加成。',
   },
 ];

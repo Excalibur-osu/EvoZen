@@ -111,6 +111,37 @@ describe('mine_collapse 事件', () => {
 
     expect((s.civic['miner'] as any).workers).toBe(1);
     expect(s.resource['human'].amount).toBe(4);
+    expect((s.civic['unemployed'] as any).workers).toBe(3);
+    expect(s.stats.died).toBe(1);
+  });
+});
+
+describe('raid 事件', () => {
+  it('金币为 0 时消息不会虚报金钱损失', () => {
+    const s = makeCivState();
+    s.tech['military'] = 1;
+    s.resource['Money'].amount = 0;
+    s.civic.foreign.gov0.hstl = 90;
+    s.civic.garrison.workers = 6;
+    s.civic.garrison.wounded = 2;
+
+    const ev = EVENTS.find(e => e.id === 'raid')!;
+    const original = Math.random;
+    let current = 1501 % 233280;
+    Math.random = () => {
+      current = (current * 9301 + 49297) % 233280;
+      return current / 233280;
+    };
+
+    try {
+      const text = ev.effect(s);
+      expect(text).toContain('阵亡 1 人，受伤 2 人');
+      expect(text).not.toContain('损失金钱');
+      expect(s.resource['Money'].amount).toBe(0);
+      expect(s.stats.died).toBe(1);
+    } finally {
+      Math.random = original;
+    }
   });
 });
 

@@ -13,6 +13,7 @@ import type {
   CityState,
   CalendarState,
   GarrisonState,
+  FactoryState,
 } from '@evozen/shared-types';
 
 /** 默认设置 */
@@ -133,6 +134,9 @@ export function createNewGame(): GameState {
       Brick: { ...makeResource('砖', -1, 0), value: 0 },
       Wrought_Iron: { ...makeResource('锻铁', -1, 0), value: 0 },
       Sheet_Metal: { ...makeResource('金属板', -1, 0), value: 0 },
+      // 工厂资源（前置：factory 建筑）
+      Alloy: { ...makeResource('合金', 500, 0), value: 150 },
+      Polymer: { ...makeResource('聚合物', 500, 0), value: 200 },
       // 容器
       Crates: { ...makeResource('板条箱', 0, 0) },
       Containers: { ...makeResource('集装箱', 0, 0) },
@@ -150,6 +154,8 @@ export function createNewGame(): GameState {
       market: { active: false, qty: 1 },
       // 铸造厂产线分配（工匠 → 合成品）
       foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0 },
+      // 工厂产线分配（需要 high_tech:3 科技）
+      factory: { count: 0, on: 0, Alloy: 0, Polymer: 0, Lux: 0, Furs: 0 } as FactoryState,
       // 自动贸易路线
       trade_routes: [],
     } as CityState,
@@ -236,6 +242,7 @@ function makeGarrison(): GarrisonState {
     disabled: false,
     rate: 0,
     progress: 0,
+    heal_progress: 0,
     tactic: 0,
     workers: 0,
     wounded: 0,

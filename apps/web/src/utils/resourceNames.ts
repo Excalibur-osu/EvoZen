@@ -21,6 +21,8 @@ export const RESOURCE_NAMES: Record<string, string> = {
   Brick: '砖',
   Wrought_Iron: '锻铁',
   Sheet_Metal: '金属板',
+  Alloy: '合金',
+  Polymer: '聚合物',
   Crates: '板条箱',
   Containers: '集装箱',
   RNA: 'RNA',

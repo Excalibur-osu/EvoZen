@@ -46,6 +46,9 @@ const CONSUMERS: ConsumerDef[] = [
   { id: 'coal_mine', powerCost: 1 },
   { id: 'wardenclyffe', powerCost: 2 },
   { id: 'metal_refinery', powerCost: 2 },
+  { id: 'biolab', powerCost: 2 },
+  { id: 'factory', powerCost: 3 },
+  { id: 'casino', powerCost: 3 },
 ];
 
 export interface PowerTickResult {

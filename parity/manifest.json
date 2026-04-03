@@ -1,0 +1,289 @@
+{
+  "version": "0.7.2",
+  "lastVerified": "2026-04-04",
+  "coverageEstimate": "15-20%",
+  "statusLegend": {
+    "exact": "Implemented and intended to match legacy behavior within current scope.",
+    "partial": "Implemented in part, but known gaps remain.",
+    "intentional_diff": "A documented, temporary deviation from legacy behavior.",
+    "not_started": "Not implemented yet."
+  },
+  "systems": [
+    {
+      "id": "core_tick_loop",
+      "title": "Core Tick Loop",
+      "status": "partial",
+      "notes": [
+        "Core production and consumption formulas are parity-audited.",
+        "Full loop behavior still depends on deterministic replay audits for confidence."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/tick.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "structures_phase1",
+      "title": "Phase 1 Structures",
+      "status": "partial",
+      "notes": [
+        "Phase 1 whitelist is parity-audited.",
+        "Later-era and non-whitelisted legacy structures remain unimplemented."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/structures.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "tech_phase1",
+      "title": "Phase 1 Technologies",
+      "status": "partial",
+      "notes": [
+        "Implemented techs are checked for grant, costs, and requirements.",
+        "Most legacy tech tree content is still outside current scope."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/tech.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "jobs_phase1",
+      "title": "Phase 1 Jobs",
+      "status": "partial",
+      "notes": [
+        "Current jobs are parity-audited against legacy impact and stress values."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/jobs.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "trade",
+      "title": "Trade",
+      "status": "exact",
+      "notes": [
+        "Buy and sell ratios, manual limits, route limits, and auto-trade are covered by tests and parity checks."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/trade.ts" },
+        { "path": "packages/game-core/src/trade.test.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "morale",
+      "title": "Morale",
+      "status": "exact",
+      "notes": [
+        "Season, weather, unemployment, stress, entertainment, cap, and multiplier formulas are covered."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/morale.ts" },
+        { "path": "packages/game-core/src/morale.test.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "power_grid",
+      "title": "Power Grid",
+      "status": "partial",
+      "notes": [
+        "Coal and oil power are implemented and tested.",
+        "Fission and later-era power systems are not implemented."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/power.ts" },
+        { "path": "packages/game-core/src/power.test.ts" },
+        { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "military",
+      "title": "Military",
+      "status": "intentional_diff",
+      "notes": [
+        "Training, mercs, hunting output, and basic campaigns exist.",
+        "Legacy spy, annexation, and deeper combat systems are not yet restored."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/military.ts" },
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "religion",
+      "title": "Religion",
+      "status": "partial",
+      "notes": [
+        "Faith, theology, theocracy, temple, shrine, and priest output are in place.",
+        "The broader legacy religion tree is still missing."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/tick.ts" },
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "random_events",
+      "title": "Random Events",
+      "status": "partial",
+      "notes": [
+        "Current event set is implemented and tested.",
+        "Legacy event catalog is much larger than the current subset."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/events.ts" },
+        { "path": "packages/game-core/src/events.test.ts" },
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "species_traits",
+      "title": "Species Traits",
+      "status": "partial",
+      "notes": [
+        "Elven, Goblin, and Dwarf hooks are meaningful.",
+        "Human and Orc trait coverage is still incomplete."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/traits.ts" },
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "evolution_tree",
+      "title": "Evolution Tree",
+      "status": "intentional_diff",
+      "notes": [
+        "Current implementation uses a simplified RNA/DNA flow and 5-species direct pick."
+      ],
+      "refs": [
+        { "path": "apps/web/src/stores/game.ts" },
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "planet_traits",
+      "title": "Planet Traits",
+      "status": "partial",
+      "notes": [
+        "The unstable cost hooks exist in structure data.",
+        "The full legacy trait system is not restored yet."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/structures.ts" },
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "arpa",
+      "title": "ARPA Research",
+      "status": "not_started",
+      "notes": [
+        "Legacy late-game research systems remain outside the current reconstruction scope."
+      ],
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "space",
+      "title": "Space And Colony Systems",
+      "status": "not_started",
+      "notes": [
+        "Moon, Mars, asteroid, gas giant, and related progression are not implemented yet."
+      ],
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "prestige",
+      "title": "Resets And Prestige",
+      "status": "not_started",
+      "notes": [
+        "Bioseed, blackhole, ascend, and other reset paths are not implemented yet."
+      ],
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "achievements",
+      "title": "Achievements",
+      "status": "not_started",
+      "notes": [
+        "Legacy achievement and permanent bonus systems are still missing."
+      ],
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "governor_ai",
+      "title": "Governor AI",
+      "status": "not_started",
+      "notes": [
+        "Legacy governor automation is not implemented yet."
+      ],
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    }
+  ],
+  "intentionalDiffs": [
+    {
+      "id": "simplified_evolution_stage",
+      "status": "intentional_diff",
+      "legacy": "Full evolution tree with 50+ branching techs.",
+      "evozen": "Simplified RNA and DNA collection with direct species choice.",
+      "plan": "Restore the full evolution tree in a later phase.",
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "reduced_species_count",
+      "status": "intentional_diff",
+      "legacy": "30+ playable species.",
+      "evozen": "5 basic species for the current single-player reconstruction scope.",
+      "plan": "Expand species gradually after core parity is stronger.",
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "government_cooldown",
+      "status": "intentional_diff",
+      "legacy": "About 1000 long-loop iterations.",
+      "evozen": "250 ticks until the long-loop cadence is fully aligned.",
+      "plan": "Re-align after the loop timing is finalized.",
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "smelter_fuel",
+      "status": "intentional_diff",
+      "legacy": "Multiple fuel options and deeper metallurgy branching.",
+      "evozen": "Simplified pre-steel and post-steel fuel logic.",
+      "plan": "Expand metallurgy fuel handling later.",
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    },
+    {
+      "id": "military_campaigns",
+      "status": "intentional_diff",
+      "legacy": "Full military, spy, and annexation systems.",
+      "evozen": "Basic campaigns with a narrower tactic and foreign-state model.",
+      "plan": "Restore spy and annexation layers in later sprints.",
+      "refs": [
+        { "path": ".dev_notes.md" }
+      ]
+    }
+  ]
+}

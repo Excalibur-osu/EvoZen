@@ -30,7 +30,9 @@ export type BasicResourceId =
   | 'Aluminium'
   | 'Oil'
   | 'Titanium'
-  | 'Sheet_Metal';
+  | 'Sheet_Metal'
+  | 'Alloy'
+  | 'Polymer';
 
 /** 特殊/进化阶段资源 */
 export type EvoResourceId = 'RNA' | 'DNA';
@@ -197,6 +199,8 @@ export interface GarrisonState {
   rate: number;
   /** 训练进度 0-100 */
   progress: number;
+  /** 医疗恢复累计进度 */
+  heal_progress?: number;
   /** 战术等级 0-4 (ambush/raid/pillage/assault/siege) */
   tactic: number;
   /** 当前士兵数 */
@@ -231,6 +235,25 @@ export interface CivicState {
   d_job: string;
   /** 各岗位的状态 */
   [jobId: string]: JobState | TaxState | GovState | GarrisonState | string | unknown;
+}
+
+// ============================================================
+// 工厂 (Factory)
+// ============================================================
+
+/** 工厂产线分配状态 — 对标 legacy global.city.factory */
+export interface FactoryState {
+  count: number;
+  /** 已通电的工厂数 */
+  on: number;
+  /** 分配给合金产线的工厂数 */
+  Alloy: number;
+  /** 分配给聚合物产线的工厂数 */
+  Polymer: number;
+  /** 分配给奢侈品产线的工厂数 */
+  Lux: number;
+  /** 分配给合成毛皮产线的工厂数（需 synthetic_fur 科技） */
+  Furs: number;
 }
 
 // ============================================================

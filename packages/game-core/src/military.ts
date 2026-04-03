@@ -7,6 +7,7 @@
  */
 
 import type { GameState, GameMessage } from '@evozen/shared-types';
+import { applyDerivedStateInPlace } from './derived-state';
 
 // ============================================================
 // 武器科技倍率
@@ -84,8 +85,13 @@ export function armorCalc(deaths: number, state: GameState): number {
 
 export function tickTraining(state: GameState, timeMul: number): void {
   const garrison = state.civic.garrison;
+  const unemployed = state.civic.unemployed as { workers?: number } | undefined;
   if (!garrison || garrison.workers >= garrison.max) {
     if (garrison) garrison.rate = 0;
+    return;
+  }
+  if ((unemployed?.workers ?? 0) <= 0) {
+    garrison.rate = 0;
     return;
   }
 
@@ -104,8 +110,12 @@ export function tickTraining(state: GameState, timeMul: number): void {
   garrison.progress += garrison.rate;
 
   while (garrison.progress >= 100) {
+    if ((unemployed?.workers ?? 0) <= 0) {
+      break;
+    }
     garrison.progress -= 100;
     garrison.workers++;
+    unemployed!.workers = (unemployed!.workers ?? 0) - 1;
     if (garrison.workers >= garrison.max) {
       garrison.progress = 0;
       break;
@@ -129,14 +139,17 @@ export function tickHealing(state: GameState, timeMul: number): void {
   }
 
   if (hospitalCount > 0) {
-    const healingRate = (state.tech['medic'] ?? 1) * 5; // 5% per hospital level per tick
-    const healChance = hospitalCount * healingRate / 100;
+    const healingRate = Math.max(1, state.tech['medic'] ?? 0) * 5;
+    const healPerTick = hospitalCount * (healingRate / 100) * timeMul;
+    garrison.heal_progress = (garrison.heal_progress ?? 0) + healPerTick;
+
     const healed = Math.min(
-      Math.floor(healChance * timeMul),
+      Math.floor(garrison.heal_progress ?? 0),
       garrison.wounded
     );
     if (healed > 0) {
       garrison.wounded -= healed;
+      garrison.heal_progress = Math.max(0, (garrison.heal_progress ?? 0) - healed);
     }
   }
 
@@ -234,6 +247,7 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
     gov.occ = false;
     garrison.max += 2; // 简化：返还驻军
     garrison.workers += 2;
+    applyDerivedStateInPlace(state);
     messages.push({ text: '驻军已撤回。', type: 'info', category: 'combat' });
     return { ...emptyResult, messages };
   }
@@ -297,9 +311,7 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
     if (deaths > garrison.raid) deaths = garrison.raid;
 
     // 执行死亡
-    garrison.workers -= deaths;
-    garrison.protest += deaths;
-    state.stats.died = (state.stats.died ?? 0) + deaths;
+    applyGarrisonDeaths(state, deaths);
 
     // 新增伤兵
     const newWounded = Math.floor(Math.random() * (garrison.raid - deaths));
@@ -373,9 +385,7 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
     const armor = armorCalc(Math.floor(deaths * 0.3), state);
     deaths = Math.max(0, deaths - armor);
 
-    garrison.workers -= deaths;
-    garrison.protest += deaths;
-    state.stats.died = (state.stats.died ?? 0) + deaths;
+    applyGarrisonDeaths(state, deaths);
 
     const newWounded = Math.floor(Math.random() * (garrison.raid - deaths));
     garrison.wounded = Math.min(
@@ -391,6 +401,21 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
     });
 
     return { victory: false, deaths, wounded: newWounded, loot: {}, messages };
+  }
+}
+
+function applyGarrisonDeaths(state: GameState, deaths: number): void {
+  if (deaths <= 0) return;
+
+  const garrison = state.civic.garrison;
+  garrison.workers = Math.max(0, garrison.workers - deaths);
+  garrison.protest += deaths;
+  state.stats.died = (state.stats.died ?? 0) + deaths;
+
+  const species = state.race.species;
+  const population = state.resource[species];
+  if (population) {
+    population.amount = Math.max(0, population.amount - deaths);
   }
 }
 
