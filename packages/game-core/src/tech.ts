@@ -1222,4 +1222,80 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 44000 },
     effect: '解锁石油发电站建筑。',
   },
+
+  // ===== 采掘工具 (Shovel) =====
+
+  // ===== 垃圾回收 / 挖掘工具 (Reclaimer) =====
+  // 注意：legacy 中 shovel/iron_shovel 属于 reclaimer 系列（垃圾回收科技链）
+  // 作为过渡实现，先用 reclaimer 系统注册，tick 中可另外处理效果
+
+  // legacy tech.js shovel → reclaimer:2（文明时代挖掘效率升级）
+  {
+    id: 'shovel',
+    name: '铁锹',
+    description: '使用铁锹加快挖掘速度。',
+    category: 'mining',
+    era: '文明',
+    reqs: { reclaimer: 1, mining: 2 },
+    grant: ['reclaimer', 2],
+    costs: { Knowledge: 540, Copper: 25 },
+    effect: '挖掘效率提升，石工和矿工基础产量 +5%。',
+  },
+
+  // legacy tech.js iron_shovel → reclaimer:3
+  {
+    id: 'iron_shovel',
+    name: '铁铲',
+    description: '用铁制造坚固的铁铲，比铁锹更高效。',
+    category: 'mining',
+    era: '文明',
+    reqs: { reclaimer: 2, mining: 3 },
+    grant: ['reclaimer', 3],
+    costs: { Knowledge: 2700, Iron: 250 },
+    effect: '挖掘效率提升至 +10%。',
+  },
+
+  // ===== 地质探测 (Dowsing) =====
+
+  // legacy tech.js dowsing_rod → dowsing:1
+  {
+    id: 'dowsing_rod',
+    name: '探矿杖',
+    description: '用特殊的探矿杖寻找地下水脉和矿脉。',
+    category: 'mining',
+    era: '文明',
+    reqs: { foraging: 1, mining: 2 },
+    grant: ['dowsing', 1],
+    costs: { Knowledge: 450, Lumber: 750 },
+    effect: '解锁地质探测，矿工额外随机探测到更多矿脉（效果待接入）。',
+  },
+
+  // legacy tech.js metal_detector → dowsing:2
+  {
+    id: 'metal_detector',
+    name: '金属探测器',
+    description: '利用电磁原理探测地下金属矿藏。',
+    category: 'mining',
+    era: '发现',
+    reqs: { dowsing: 1, high_tech: 4 },
+    grant: ['dowsing', 2],
+    costs: { Knowledge: 65000 },
+    effect: '大幅提升矿脉探测精度，矿工和煤矿工人的产量 +8%。',
+  },
+
+  // ===== 军事护甲 (plate_armor) =====
+
+  // legacy tech.js plate_armor → armor:2
+  {
+    id: 'plate_armor',
+    name: '板甲',
+    description: '全身覆盖的重型金属板甲，大幅提升士兵防御。',
+    category: 'military',
+    era: '文明',
+    reqs: { armor: 1, mining: 3 },
+    grant: ['armor', 2],
+    costs: { Knowledge: 3400, Iron: 600 },
+    effect: '士兵护甲等级提升至 armor:2，战斗死亡率进一步降低。',
+  },
 ];
+

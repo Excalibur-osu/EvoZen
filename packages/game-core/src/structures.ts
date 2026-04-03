@@ -558,6 +558,21 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '牧师上限 +1（后续接入士气/信仰加成）。',
   },
+  // actions.js shrine — theology:1 解锁的基础宗教建筑
+  // 提供信仰上限，为牧师产出铺路
+  {
+    id: 'shrine',
+    name: '神龛',
+    description: '供奉神祇的小型祭坛，是信仰的起点。',
+    category: 'commerce',
+    reqs: { theology: 1 },
+    costs: {
+      Money: scaleCost(100, 1.3),
+      Lumber: scaleCost(50, 1.3),
+      Stone: scaleCost(35, 1.3),
+    },
+    effect: '信仰上限 +25。',
+  },
   // actions.js L2546-2578: sawmill
   {
     id: 'sawmill',

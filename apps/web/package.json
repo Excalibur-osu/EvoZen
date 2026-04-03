@@ -1,7 +1,7 @@
 {
   "name": "@evozen/web",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,16 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.5.30",
-    "pinia": "^3.0.0",
+    "@evozen/game-core": "*",
     "@evozen/shared-types": "*",
-    "@evozen/game-core": "*"
+    "pinia": "^3.0.0",
+    "vue": "^3.5.32"
   },
   "devDependencies": {
-    "@types/node": "^24.12.0",
+    "@types/node": "^25.5.2",
     "@vitejs/plugin-vue": "^6.0.5",
-    "@vue/tsconfig": "^0.9.0",
-    "typescript": "~5.9.3",
+    "@vue/tsconfig": "^0.9.1",
+    "typescript": "^6.0.2",
     "vite": "^8.0.1",
     "vue-tsc": "^3.2.5"
   }

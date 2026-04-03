@@ -20,6 +20,7 @@ export type BasicResourceId =
   | 'Cement'
   | 'Coal'
   | 'Knowledge'
+  | 'Faith'
   | 'Crates'
   | 'Containers'
   | 'Plywood'
@@ -77,6 +78,7 @@ export type BasicStructureId =
   | 'coal_mine'
   | 'bank'
   | 'temple'
+  | 'shrine'
   | 'university'
   | 'wardenclyffe'
   | 'smelter'
@@ -134,6 +136,28 @@ export interface JobState {
   assigned?: number;
   stress?: number;
   name?: string;
+}
+
+// ============================================================
+// 士气 (Morale)
+// ============================================================
+
+/** 士气分项数据 — 对标 morale.ts calculateMorale() breakdown */
+export interface MoraleState {
+  /** 最终有效士气 */
+  current: number;
+  /** 士气上限 */
+  cap: number;
+  /** 压力惩罚（负值） */
+  stress: number;
+  /** 娱乐加成 */
+  entertain: number;
+  /** 季节加成 */
+  season: number;
+  /** 天气加成 */
+  weather: number;
+  /** 失业惩罚（负值） */
+  unemployed: number;
 }
 
 // ============================================================
@@ -248,7 +272,8 @@ export interface StatsState {
 
 export interface EventState {
   t: number;
-  l: boolean;
+  /** 上次触发的事件 ID（false = 尚未触发） */
+  l: string | boolean;
 }
 
 // ============================================================

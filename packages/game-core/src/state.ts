@@ -106,7 +106,7 @@ export function createNewGame(): GameState {
   const state: GameState = {
     seed: 2,
     warseed: 2,
-    version: '0.5.0',
+    version: '0.7.0',
 
     resource: {
       // 进化阶段
@@ -123,6 +123,7 @@ export function createNewGame(): GameState {
       Cement: { ...makeResource('水泥', 100, 1), value: 15 },
       Coal: { ...makeResource('煤', 50, 1), value: 20 },
       Knowledge: { ...makeResource('知识', 100, 1), value: 0 },
+      Faith: { ...makeResource('信仰', 100, 0), value: 0 },
       Steel: { ...makeResource('钢', 50, 1), value: 0 },
       Aluminium: { ...makeResource('铝', 50, 1), value: 0 },
       Oil: { ...makeResource('石油', 0, 1), value: 0 },

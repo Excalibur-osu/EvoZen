@@ -356,6 +356,19 @@ export const useGameStore = defineStore('game', () => {
     const temples = getStructCount('temple')
     setJobMax('priest', temples)
 
+    // --- 信仰上限 — 神龛 +25/座，寺庙 +50/座（theology:2 解锁寺庙）---
+    const shrines = getStructCount('shrine')
+    let faithMax = 100
+    faithMax += shrines * 25
+    faithMax += temples * 50
+    if (s.resource['Faith']) {
+      s.resource['Faith'].max = faithMax
+      // theology:1 解锁后显示信仰资源
+      if ((s.tech['theology'] ?? 0) >= 1) {
+        s.resource['Faith'].display = true
+      }
+    }
+
     // --- 板条箱/集装箱上限由装运站/集装箱港口决定 ---
     const storageYards = getStructCount('storage_yard')
     const warehouses = getStructCount('warehouse')

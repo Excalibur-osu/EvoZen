@@ -16,6 +16,7 @@ import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier } from './traits';
 import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
+import { tickEvents } from './events';
 
 /**
  * 原版全局时间缩放因子
@@ -158,6 +159,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 炸药科技加成 — 原版 main.js: explosives >= 2 时采石场/铝精炼基础产量 + (tech * 25%)
   const quarryExplosiveMult = explosiveLevel >= 2 ? 1 + explosiveLevel * 0.25 : 1;
   stoneBase *= quarryExplosiveMult;
+  // 回收工具升级（reclaimer:2 = shovel +5%, reclaimer:3 = iron_shovel +10%）
+  // 对标 legacy tech.js shovel/iron_shovel 实际属于 reclaimer 系列
+  const reclaimerLevel = techLevel('reclaimer');
+  const shovelMult = reclaimerLevel >= 3 ? 1.10 : (reclaimerLevel >= 2 ? 1.05 : 1);
+  stoneBase *= shovelMult;
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   let stoneMult = 1 + quarries * 0.02;
@@ -174,10 +180,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const pickaxeLevel = techLevel('pickaxe');
   const minerToolMult = 1 + pickaxeLevel * 0.15;
   const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * prodMult;  // ≈0.143
+  // 回收工具加成（shovelMult 已在上方声明）
+  // 探矿仪 dowsing:2 额外 +8% 矿工产量
+  const dowsingLevel = techLevel('dowsing');
+  const dowsingMult = dowsingLevel >= 2 ? 1.08 : 1;
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * prodMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * prodMult;  // 1/4
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * prodMult;  // 1/4
   }
 
   // ============================================================
@@ -186,7 +196,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const coalMineActive = poweredOn['coal_mine'] ?? workers('coal_miner');
   const actualCoalMiners = Math.min(workers('coal_miner'), coalMineActive);
   const coalToolMult = 1 + pickaxeLevel * 0.12;
-  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * prodMult;
+  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * shovelMult * dowsingMult * prodMult;
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -244,6 +254,19 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const libraryMult = 1 + libraries * 0.05;
   knowledgeDelta *= libraryMult;
   deltas['Knowledge'] = knowledgeDelta * prodMult;
+
+  // ============================================================
+  // 8a. 信仰（Faith）— 牧师产出
+  // ============================================================
+  // 对标 legacy/src/main.js: priest impact = 0.5
+  // 神权政体惩罚知识但信仰 +10%
+  const priests = workers('priest');
+  if (priests > 0 && state.resource['Faith']) {
+    // 牧师输出 0.5 信仰/tick（乘 prodMult）
+    let faithRate = priests * 0.5 * prodMult;
+    if (state.civic.govern?.type === 'theocracy') faithRate *= 1.1;
+    deltas['Faith'] = (deltas['Faith'] ?? 0) + faithRate;
+  }
 
   // ============================================================
   // 9. 金币 — 税收 + 银行家
@@ -527,6 +550,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 13. 政体切换冷却推进
   // ============================================================
   tickGovernmentCooldown(newState);
+
+  // ============================================================
+  // 13a. 随机事件系统
+  // ============================================================
+  const eventMessages = tickEvents(newState);
+  for (const msg of eventMessages) {
+    messages.push(msg);
+  }
 
   // ============================================================
   // 14. 军事系统 tick

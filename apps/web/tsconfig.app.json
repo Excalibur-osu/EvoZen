@@ -20,7 +20,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
 
-    "baseUrl": ".",
     "paths": {
       "@evozen/shared-types": ["../../packages/shared-types/src/index.ts"],
       "@evozen/game-core": ["../../packages/game-core/src/index.ts"]

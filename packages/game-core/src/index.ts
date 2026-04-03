@@ -112,3 +112,8 @@ export {
   TACTIC_NAMES,
   type WarResult,
 } from './military';
+export {
+  tickEvents,
+  EVENTS,
+  type EventDefinition,
+} from './events';
