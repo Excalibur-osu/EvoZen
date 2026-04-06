@@ -43,15 +43,15 @@ export const SPECIES_TRAITS: Record<SupportedSpeciesId, SpeciesTraitId[]> = {
 export const SPECIES_TRAIT_DESCRIPTORS: Record<SupportedSpeciesId, SpeciesTraitDescriptor[]> = {
   human: [
     { id: 'creative', label: '创造性', summary: 'ARPA 相关系统待接入。', activeNow: false },
-    { id: 'diverse', label: '多样性', summary: '军事训练相关系统待接入。', activeNow: false },
+    { id: 'diverse', label: '多样性', summary: '训练士兵速度 -20%（训练进度 ÷ 1.25）。', activeNow: true },
   ],
   elven: [
     { id: 'studious', label: '好学', summary: '教授知识 +0.25，图书馆知识上限 +10%。', activeNow: true },
     { id: 'arrogant', label: '傲慢', summary: '市场买入价格 +10%。', activeNow: true },
   ],
   orc: [
-    { id: 'brute', label: '野蛮', summary: '招募与训练加成待军事系统接入。', activeNow: false },
-    { id: 'angry', label: '易怒', summary: '饥饿/士气联动待接入。', activeNow: false },
+    { id: 'brute', label: '野蛮', summary: '训练速度 +100%（每 tick 额外 +2.5 进度），佣兵费用 -50%。', activeNow: true },
+    { id: 'angry', label: '易怒', summary: '食物耗尽时所有工人产出仅为 25%（正常饥饿为 50%）。', activeNow: true },
   ],
   dwarf: [
     { id: 'artisan', label: '工匠大师', summary: '工匠自动合成产量 +50%。', activeNow: true },
@@ -141,4 +141,32 @@ export function getModifiedTechCosts(
     nextCosts['Knowledge'] = Math.ceil(nextCosts['Knowledge'] * getScienceKnowledgeCostMultiplier(state, category));
   }
   return nextCosts;
+}
+
+/** Human（diverse）：训练速度除数。legacy main.js L8013: rate /= 1 + vars()[0]/100, vars()[0]=25 */
+export function getTrainingSpeedDivisor(state: GameState): number {
+  return hasTrait(state, 'diverse') ? 1.25 : 1;
+}
+
+/** Orc（brute）：训练速度加法加成。legacy main.js L8042: rate += vars()[1]/40 * time_mul, vars()[1]=100 */
+export function getBruteTrainingBonus(state: GameState, timeMul: number): number {
+  return hasTrait(state, 'brute') ? (100 / 40) * timeMul : 0;
+}
+
+/** Orc（brute）：佣兵费用乘数。legacy civics.js L1138: cost *= 1 - vars()[0]/100, vars()[0]=50 */
+export function getMercCostMultiplier(state: GameState): number {
+  return hasTrait(state, 'brute') ? 0.5 : 1;
+}
+
+/**
+ * 饥饿产出乘数。legacy main.js L4022-4025:
+ * hunger = fed ? 1 : 0.5
+ * if angry && !fed: hunger = 0.25
+ *
+ * 注：legacy 中 fed 由当 tick 结算逻辑决定，此处以 food.amount > 0 作近似，
+ * 语义上等价（食物库存耗尽即视为未喂饱），但严格来说是简化实现。
+ */
+export function getHungerMultiplier(state: GameState): number {
+  if ((state.resource['Food']?.amount ?? 0) > 0) return 1;
+  return hasTrait(state, 'angry') ? 0.25 : 0.5;
 }

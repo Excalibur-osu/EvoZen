@@ -10,7 +10,8 @@ import {
   enqueueStructure,
 } from './actions';
 import { changeGovernment, getMaxTaxRate, getTaxMultiplier, tickGovernmentCooldown } from './government';
-import { warCampaign } from './military';
+import { warCampaign, mercCost } from './military';
+import { assignSpeciesTraits } from './traits';
 import { powerTick } from './power';
 import { EVENTS, tickEvents } from './events';
 import {
@@ -1363,5 +1364,101 @@ describe('system audit scenarios', () => {
       wounded: 3,
       raid: 3,
     });
+  });
+});
+
+// ============================================================
+// 种族特质行为审计
+// ============================================================
+
+describe('[audit] diverse — human 训练速度比 elven 慢', () => {
+  it('40 tick 内 human 训练出的士兵 ≤ elven', () => {
+    function trainTicks(species: string, ticks: number): number {
+      const s = createNewGame();
+      bootstrapCivilization(s, species, 10, 20);
+      assignSpeciesTraits(s.race, species);
+      s.civic.garrison = {
+        workers: 0, max: 10, wounded: 0, raid: 0,
+        mercs: false, m_use: 0, rate: 0, progress: 0,
+      } as any;
+      (s.civic.unemployed as any).workers = 10;
+      let state = s;
+      for (let i = 0; i < ticks; i++) {
+        state = runSimulationTick(state, { random: createDeterministicRandom(i) }).state;
+      }
+      return state.civic.garrison.workers;
+    }
+    const humanSoldiers = trainTicks('human', 40);
+    const elvenSoldiers = trainTicks('elven', 40);
+    expect(humanSoldiers).toBeLessThanOrEqual(elvenSoldiers);
+  });
+});
+
+describe('[audit] brute — orc 训练速度比 elven 快，佣兵费用更低', () => {
+  it('20 tick 内 orc 训练出的士兵 ≥ elven', () => {
+    function trainTicks(species: string, ticks: number): number {
+      const s = createNewGame();
+      bootstrapCivilization(s, species, 10, 20);
+      assignSpeciesTraits(s.race, species);
+      s.civic.garrison = {
+        workers: 0, max: 10, wounded: 0, raid: 0,
+        mercs: false, m_use: 0, rate: 0, progress: 0,
+      } as any;
+      (s.civic.unemployed as any).workers = 10;
+      let state = s;
+      for (let i = 0; i < ticks; i++) {
+        state = runSimulationTick(state, { random: createDeterministicRandom(i) }).state;
+      }
+      return state.civic.garrison.workers;
+    }
+    const orcSoldiers = trainTicks('orc', 20);
+    const elvenSoldiers = trainTicks('elven', 20);
+    expect(orcSoldiers).toBeGreaterThanOrEqual(elvenSoldiers);
+  });
+
+  it('orc 佣兵费用是 human 的一半（garrison=3）', () => {
+    const orc = createNewGame();
+    bootstrapCivilization(orc, 'orc', 5, 20);
+    assignSpeciesTraits(orc.race, 'orc');
+    orc.civic.garrison = {
+      workers: 3, max: 10, wounded: 0, raid: 0,
+      mercs: false, m_use: 0, rate: 0, progress: 0,
+    } as any;
+
+    const human = createNewGame();
+    bootstrapCivilization(human, 'human', 5, 20);
+    assignSpeciesTraits(human.race, 'human');
+    human.civic.garrison = {
+      workers: 3, max: 10, wounded: 0, raid: 0,
+      mercs: false, m_use: 0, rate: 0, progress: 0,
+    } as any;
+
+    expect(mercCost(orc)).toBeCloseTo(mercCost(human) * 0.5, -1);
+  });
+});
+
+describe('[audit] angry — orc 食物耗尽时产出降至 25%', () => {
+  it('elven 饥饿时产出 50%；orc 饥饿时产出 25%', () => {
+    function lumberAfter1Tick(species: string, foodAmount: number): number {
+      const s = createNewGame();
+      bootstrapCivilization(s, species, 5, 20);
+      assignSpeciesTraits(s.race, species);
+      s.resource['Food'].amount = foodAmount;
+      s.resource['Lumber'] = {
+        name: 'Lumber', display: true, value: 0,
+        amount: 0, max: 9999, rate: 0, crates: 0, diff: 0, delta: 0,
+      };
+      s.civic['lumberjack'] = { workers: 4, max: -1, display: true } as any;
+      (s.civic.unemployed as any).workers = 1;
+      const result = runSimulationTick(s, { random: createDeterministicRandom(0) });
+      return result.state.resource['Lumber'].diff ?? 0;
+    }
+
+    const fedElven = lumberAfter1Tick('elven', 200);
+    const hungryElven = lumberAfter1Tick('elven', 0);
+    const hungryOrc = lumberAfter1Tick('orc', 0);
+
+    expect(hungryElven).toBeCloseTo(fedElven * 0.5, 1);
+    expect(hungryOrc).toBeCloseTo(fedElven * 0.25, 1);
   });
 });

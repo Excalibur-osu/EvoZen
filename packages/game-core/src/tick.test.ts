@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createNewGame } from './state';
 import { gameTick } from './tick';
+import { assignSpeciesTraits } from './traits';
 import type { GameState } from '@evozen/shared-types';
 
 // ============================================================
@@ -246,5 +247,86 @@ describe('Faith 产出 — 牧师', () => {
     const faithTheo = gameTick(theo).state.resource['Faith'].amount;
 
     expect(faithTheo).toBeCloseTo(faithBase * 1.1, 3);
+  });
+});
+
+// ============================================================
+// 饥饿产出惩罚
+// ============================================================
+
+describe('Hunger — 食物 = 0 时非食物产出减半', () => {
+  it('食物充足时伐木工正常产出（约 0.25/tick）', () => {
+    const s = makeCivState();
+    s.civic['lumberjack'] = { workers: 4, max: -1, display: true } as any;
+    s.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    s.resource['Food'].amount = 200;
+    const result = gameTick(s);
+    // 4 × 1.0 × 0.25 TIME_MUL = 1.0
+    expect(result.state.resource['Lumber'].diff).toBeCloseTo(1.0, 1);
+  });
+
+  it('食物 = 0（无 angry）伐木产出降至 50%', () => {
+    const fed = makeCivState();
+    fed.civic['lumberjack'] = { workers: 4, max: -1, display: true } as any;
+    fed.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    fed.resource['Food'].amount = 200;
+
+    const hungry = makeCivState();
+    hungry.civic['lumberjack'] = { workers: 4, max: -1, display: true } as any;
+    hungry.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    hungry.resource['Food'].amount = 0;
+
+    const fedResult = gameTick(fed);
+    const hungryResult = gameTick(hungry);
+    const fedDelta = fedResult.state.resource['Lumber'].diff ?? 0;
+    const hungryDelta = hungryResult.state.resource['Lumber'].diff ?? 0;
+    expect(hungryDelta).toBeCloseTo(fedDelta * 0.5, 1);
+  });
+
+  it('食物 = 0 + angry（orc）伐木产出降至 25%', () => {
+    const fed = makeCivState();
+    fed.civic['lumberjack'] = { workers: 4, max: -1, display: true } as any;
+    fed.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    fed.resource['Food'].amount = 200;
+
+    const hungryOrc = makeCivState();
+    hungryOrc.race.species = 'orc';
+    assignSpeciesTraits(hungryOrc.race, 'orc');
+    hungryOrc.civic['lumberjack'] = { workers: 4, max: -1, display: true } as any;
+    hungryOrc.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    hungryOrc.resource['Food'].amount = 0;
+    // orc 拥有 angry trait（SPECIES_TRAITS['orc'] = ['brute','angry']，见 traits.ts）
+    // 食物=0 + angry → hungerMult = 0.25，而非无 angry 的 0.5
+
+    const fedResult = gameTick(fed);
+    const orcResult = gameTick(hungryOrc);
+    const fedDelta = fedResult.state.resource['Lumber'].diff ?? 0;
+    const orcDelta = orcResult.state.resource['Lumber'].diff ?? 0;
+    expect(orcDelta).toBeCloseTo(fedDelta * 0.25, 1);
+  });
+
+  it('食物产出不受饥饿影响（农民产量不降）', () => {
+    const fed = makeCivState();
+    fed.tech['agriculture'] = 1;
+    fed.civic['farmer'] = { workers: 4, max: 4, display: true } as any;
+    fed.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    fed.civic['hunter'] = { workers: 0, max: -1, display: true } as any;
+    fed.resource['Food'].amount = 200;
+
+    const hungry = makeCivState();
+    hungry.tech['agriculture'] = 1;
+    hungry.civic['farmer'] = { workers: 4, max: 4, display: true } as any;
+    hungry.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    hungry.civic['hunter'] = { workers: 0, max: -1, display: true } as any;
+    hungry.resource['Food'].amount = 0;
+
+    const fedResult = gameTick(fed);
+    const hungryResult = gameTick(hungry);
+    // Food.diff = farmerOutput * prodMult - foodConsumption
+    // 两个状态的 foodConsumption 相同（人口相同），farmerOutput 不受 hungerMult 影响（legacy 行为）
+    // 因此净 diff 相等，证明食物产出路径未被 effectiveProdMult 污染
+    expect(hungryResult.state.resource['Food'].diff).toBeCloseTo(
+      fedResult.state.resource['Food'].diff ?? 0, 1
+    );
   });
 });

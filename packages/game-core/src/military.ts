@@ -8,6 +8,7 @@
 
 import type { GameState, GameMessage } from '@evozen/shared-types';
 import { applyDerivedStateInPlace } from './derived-state';
+import { getTrainingSpeedDivisor, getBruteTrainingBonus, getMercCostMultiplier } from './traits';
 
 // ============================================================
 // 武器科技倍率
@@ -97,6 +98,10 @@ export function tickTraining(state: GameState, timeMul: number): void {
 
   let rate = 2.5;
 
+  // diverse（人类）：训练速度下降。legacy main.js L8013: rate /= 1 + 25/100
+  // 在 boot_camp 乘法之前应用（对标 legacy 顺序）
+  rate /= getTrainingSpeedDivisor(state);
+
   // boot_camp 加成
   if (state.city['boot_camp'] && typeof state.city['boot_camp'] === 'object') {
     const bootCamp = state.city['boot_camp'] as { count: number };
@@ -107,6 +112,11 @@ export function tickTraining(state: GameState, timeMul: number): void {
   }
 
   garrison.rate = rate * timeMul;
+
+  // brute（兽人）：加法叠加训练加成。legacy main.js L8042: rate += vars()[1]/40 * time_mul
+  // 在 rate*timeMul 之后加（对标 legacy 顺序）
+  garrison.rate += getBruteTrainingBonus(state, timeMul);
+
   garrison.progress += garrison.rate;
 
   while (garrison.progress >= 100) {
@@ -172,6 +182,9 @@ export function mercCost(state: GameState): number {
   if (garrison.m_use > 0) {
     cost *= Math.pow(1.1, garrison.m_use);
   }
+
+  // brute（兽人）：佣兵费用 ×0.5。legacy civics.js L1138: cost *= 1 - vars()[0]/100, vars()[0]=50
+  cost *= getMercCostMultiplier(state);
 
   return Math.round(cost);
 }

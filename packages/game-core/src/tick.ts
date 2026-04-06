@@ -12,7 +12,7 @@ import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
 import { getTaxMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from './government';
 import { BASIC_STRUCTURES } from './structures';
-import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier } from './traits';
+import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier, getHungerMultiplier } from './traits';
 import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
@@ -60,6 +60,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // morale 决定 global_multiplier，影响所有工人产出
   const moraleResult = calculateMorale(state);
   const prodMult = moraleResult.globalMultiplier;
+
+  // ============================================================
+  // 0b. 饥饿乘数（hunger multiplier）
+  // ============================================================
+  // 对标 legacy main.js L4022-4025:
+  // hunger = fed ? 1 : 0.5
+  // if angry && !fed: hunger = 0.25
+  // 应用于所有非食物的工人产出（不含税收）。
+  const hungerMult = getHungerMultiplier(state);
+  const effectiveProdMult = prodMult * hungerMult;
 
   // ============================================================
   // 0a. 电力网格
@@ -144,7 +154,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const sawmills = structCount('sawmill');
   const sawmillBonus = techLevel('saw') >= 2 ? 0.08 : 0.05;
   let lumberMult = 1 + lumberYards * 0.02 + sawmills * sawmillBonus;
-  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * prodMult;
+  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * effectiveProdMult;
 
   // ============================================================
   // 4. 石头 — 石工
@@ -168,7 +178,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   let stoneMult = 1 + quarries * 0.02;
-  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * prodMult;
+  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * effectiveProdMult;
 
   // ============================================================
   // 5. 铜 / 铁 — 矿工
@@ -185,10 +195,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 探矿仪 dowsing:2 额外 +8% 矿工产量
   const dowsingLevel = techLevel('dowsing');
   const dowsingMult = dowsingLevel >= 2 ? 1.08 : 1;
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * prodMult;  // ≈0.143
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * prodMult;  // 1/4
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;  // 1/4
   }
 
   // ============================================================
@@ -197,7 +207,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const coalMineActive = poweredOn['coal_mine'] ?? workers('coal_miner');
   const actualCoalMiners = Math.min(workers('coal_miner'), coalMineActive);
   const coalToolMult = 1 + pickaxeLevel * 0.12;
-  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * shovelMult * dowsingMult * prodMult;
+  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -211,7 +221,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const effectiveCement = Math.min(cementWorkers, maxByStone);
     const cementLevel = techLevel('cement');
     const cementTechMult = cementLevel >= 7 ? 1.45 : (cementLevel >= 4 ? 1.2 : 1);
-    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * prodMult;
+    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * effectiveProdMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
   }
 
@@ -247,14 +257,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
   const sciGovMult = getKnowledgeMultiplier(state, 'scientist');
   const scientistBase = scientists * sciImpact * sciGovMult;
-  // 教授+科学家受饥饿影响，日晷不受（原版 L4228-4229）
-  let knowledgeDelta = (professorsBase + scientistBase) + sundialBase;
-  // 图书馆全局加成 — 原版 main.js L4259:
-  // library_mult = 1 + (library_count * 0.05)
-  // 注意：原版 L4261 是 delta *= library_mult，即日晷也受此加成
+  // 图书馆全局加成 — 原版 main.js L4259
   const libraryMult = 1 + libraries * 0.05;
-  knowledgeDelta *= libraryMult;
-  deltas['Knowledge'] = knowledgeDelta * prodMult;
+  // 教授+科学家受饥饿影响；日晷不受（原版 L4228-4229）
+  const workerKnowledge = (professorsBase + scientistBase) * libraryMult;
+  const sundialKnowledge = sundialBase * libraryMult;
+  deltas['Knowledge'] = workerKnowledge * effectiveProdMult + sundialKnowledge * prodMult;
 
   // ============================================================
   // 8a. 信仰（Faith）— 牧师产出
@@ -264,7 +272,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const priests = workers('priest');
   if (priests > 0 && state.resource['Faith']) {
     // 牧师输出 0.5 信仰/tick（乘 prodMult）
-    let faithRate = priests * 0.5 * prodMult;
+    let faithRate = priests * 0.5 * effectiveProdMult;
     if (state.civic.govern?.type === 'theocracy') faithRate *= 1.1;
     deltas['Faith'] = (deltas['Faith'] ?? 0) + faithRate;
   }
