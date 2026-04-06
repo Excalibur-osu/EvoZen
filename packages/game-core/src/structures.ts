@@ -261,7 +261,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Lumber: scaleCost(65, 1.36),
       Stone: scaleCost(50, 1.36),
     },
-    effect: '食物上限 +100，降低腐坏（待接入）。',
+    effect: '食物上限 +100。（原版腐坏减免仅对肉食种族有效，当前物种无此效果）',
   },
   // actions.js L2104-2200: shed
   // 原版 shed 建造成本随 storage 科技等级变化：
@@ -731,5 +731,23 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Plywood: scaleCost(5000, 1.36),
     },
     effect: '放大露天剧场、赌场等娱乐建筑提供的士气加成。',
+  },
+
+  // ---- 核电设施 ----
+  // actions.js L4120-4180: fission_power (核电站)
+  // 对标原版：reqs { high_tech: 5 }，每座 +14MW，消耗 0.1 Uranium/tick
+  {
+    id: 'fission_power',
+    name: '核电站',
+    description: '利用核裂变反应驱动蒸汽轮机，产生大量稳定电力。',
+    category: 'power',
+    reqs: { high_tech: 5 },
+    costs: {
+      Money: scaleCost(250000, 1.36),
+      Copper: scaleCost(13500, 1.36),
+      Cement: scaleCementCost(10800, 1.36),
+      Titanium: scaleCost(7500, 1.36),
+    },
+    effect: '每座 +14MW 电力，消耗 0.1 铀/tick。',
   },
 ];

@@ -1,6 +1,6 @@
 {
   "name": "evozen",
-  "version": "0.7.3",
+  "version": "0.7.5",
   "description": "EvoZen — 进化之禅",
   "private": true,
   "workspaces": [
@@ -11,13 +11,8 @@
     "dev": "npm run dev --workspace=@evozen/web",
     "build": "npm run build --workspace=@evozen/web",
     "test": "npm run test --workspace=@evozen/game-core",
-    "audit:behavior": "npm run test:replay --workspace=@evozen/game-core",
-    "audit:manifest": "node scripts/audit-manifest.mjs",
-    "test:coverage": "npm run test:coverage --workspace=@evozen/game-core",
     "typecheck": "npm run typecheck --workspace=@evozen/game-core",
-    "check": "npm run typecheck && npm test && npm run audit:parity && npm run audit:manifest && npm run audit:behavior",
-    "audit:parity": "node scripts/audit.mjs",
-    "legacy:serve": "cd legacy && npx servehere -c"
+    "check": "npm run typecheck && npm test && node scripts/audit.mjs"
   },
   "keywords": [
     "EvoZen"

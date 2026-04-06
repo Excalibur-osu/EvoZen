@@ -3,6 +3,7 @@ import { BASE_JOBS } from './jobs';
 import { getStorageBonus, getStorageMultiplier, SHED_BASE_VALUES } from './storage';
 import { getLibraryKnowledgeCapMultiplier } from './traits';
 import { getMaxTradeRoutes } from './trade';
+import { hasPlanetTrait, magneticVars, permafrostVars } from './planet-traits';
 
 export function applyDerivedStateInPlace(state: GameState): void {
   if (state.race.species === 'protoplasm') return;
@@ -114,6 +115,9 @@ export function applyDerivedStateInPlace(state: GameState): void {
   if ((s.tech['high_tech'] ?? 0) >= 3) {
     s.resource['Titanium'].display = true;
   }
+  if ((s.tech['uranium'] ?? 0) >= 1) {
+    s.resource['Uranium'].display = true;
+  }
 
   const hunterWorkers = (s.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0;
   if (hunterWorkers > 0 || getStructCount('garrison') > 0) {
@@ -129,8 +133,14 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const universityMult = (s.tech['science'] ?? 0) >= 4 ? 1 + libraries * 0.02 : 1;
   const journalMult = (s.tech['science'] ?? 0) >= 5 ? 1 + scientists * 0.12 : 1;
   knowledgeMax += libraries * 125 * getLibraryKnowledgeCapMultiplier(s) * journalMult;
-  knowledgeMax += universities * universityBase * universityMult;
-  knowledgeMax += wardenclyffes * 1000;
+  // permafrost 行星特性：大学知识基础 +100
+  // 对标 legacy actions.js L3668: base += permafrost.vars()[1]
+  const universityPlanetBonus = hasPlanetTrait(s, 'permafrost') ? permafrostVars()[1] : 0;
+  knowledgeMax += universities * (universityBase + universityPlanetBonus) * universityMult;
+  // magnetic 行星特性：沃登克里夫知识上限 +100/座
+  // 对标 legacy actions.js L3867: gain += magnetic.vars()[1]
+  const wardenclyffePlanetBonus = hasPlanetTrait(s, 'magnetic') ? magneticVars()[1] : 0;
+  knowledgeMax += wardenclyffes * (1000 + wardenclyffePlanetBonus);
   s.resource['Knowledge'].max = knowledgeMax;
 
   let moneyMax = 1000;
@@ -186,6 +196,27 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
   const temples = getStructCount('temple');
   setJobMax('priest', temples);
+
+  // ── 岗位 worker clamp ──────────────────────────────
+  // 当建筑被拆除 → job.max 下降 → 可能 workers > max
+  // 多余的工人必须退回到 unemployed，否则出现幽灵工人（无建筑却产出资源）
+  const clampableJobs = [
+    'farmer', 'miner', 'coal_miner', 'cement_worker',
+    'banker', 'professor', 'scientist', 'craftsman',
+    'entertainer', 'priest',
+  ];
+  const unemployed = s.civic['unemployed'] as { workers: number } | undefined;
+  for (const jobId of clampableJobs) {
+    const job = s.civic[jobId] as { workers: number; max: number } | undefined;
+    if (!job || job.max < 0) continue; // max=-1 means unlimited
+    if (job.workers > job.max) {
+      const excess = job.workers - job.max;
+      job.workers = job.max;
+      if (unemployed) {
+        unemployed.workers += excess;
+      }
+    }
+  }
 
   const shrines = getStructCount('shrine');
   let faithMax = 100;

@@ -127,7 +127,7 @@ export function isTechAvailable(state: GameState, techId: string): boolean {
 export function getResearchCost(state: GameState, techId: string): Record<string, number> {
   const def = BASIC_TECHS.find((tech) => tech.id === techId);
   if (!def) return {};
-  return getModifiedTechCosts(state, def.costs, def.category);
+  return getModifiedTechCosts(state, def.costs, def.category, techId);
 }
 
 export function canResearchTech(state: GameState, techId: string): boolean {

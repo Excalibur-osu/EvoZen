@@ -1264,7 +1264,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     description: '用特殊的探矿杖寻找地下水脉和矿脉。',
     category: 'mining',
     era: '文明',
-    reqs: { foraging: 1, mining: 2 },
+    reqs: { mining: 2 },
     grant: ['dowsing', 1],
     costs: { Knowledge: 450, Lumber: 750 },
     effect: '解锁地质探测，矿工额外随机探测到更多矿脉（效果待接入）。',
@@ -1376,6 +1376,136 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['monument', 2],
     costs: { Knowledge: 150000 },
     effect: '解锁旅游中心建筑，放大娱乐/宗教建筑的士气收入效益。',
+  },
+
+  // ===== Mid-Tech Gap Fill =====
+  // 以下科技填补 high_tech 3→6、science 5→8、currency 4→5、storage 3→4 的断层
+  // 使之前定义但不可达的科技（casino/monument/bioscience/genetics 等）成为可达
+
+  // legacy tech.js L4911: electronics → high_tech:4
+  // reqs: { high_tech: 3, titanium: 1 }, cost: Knowledge 50000
+  {
+    id: 'electronics',
+    name: '电子学',
+    description: '电子器件与线路的设计与制造。',
+    category: 'science',
+    era: '工业化',
+    reqs: { high_tech: 3, titanium: 1 },
+    grant: ['high_tech', 4],
+    costs: { Knowledge: 50000 },
+    effect: '开启电子时代，为赌场、高级采矿和核能科技提供前置。',
+  },
+
+  // legacy tech.js L5935: fission → high_tech:5
+  // reqs: { high_tech: 4, uranium: 1 }, cost: Knowledge 77400, Uranium 10
+  {
+    id: 'fission',
+    name: '核裂变',
+    description: '通过可控的核裂变反应释放能量。',
+    category: 'power_generation',
+    era: '全球化',
+    reqs: { high_tech: 4, uranium: 1 },
+    grant: ['high_tech', 5],
+    costs: { Knowledge: 77400, Uranium: 10 },
+    effect: '解锁核电站建筑，提供大量稳定电力。',
+  },
+
+  // legacy tech.js L4957: arpa → high_tech:6
+  // reqs: { high_tech: 5 }, cost: Knowledge 90000
+  {
+    id: 'arpa',
+    name: 'ARPA',
+    description: '高级研究计划局——推进尖端长线研究项目。',
+    category: 'science',
+    era: '全球化',
+    reqs: { high_tech: 5 },
+    grant: ['high_tech', 6],
+    costs: { Knowledge: 90000 },
+    effect: '开启 ARPA 长线研究系统，为纪念碑和遗传学提供前置。',
+  },
+
+  // legacy tech.js L4162: adjunct_professor → science:6
+  // reqs: { science: 5 }, cost: Knowledge 36000
+  {
+    id: 'adjunct_professor',
+    name: '副教授',
+    description: '为研究机构增配副教授，提高教学科研水平。',
+    category: 'science',
+    era: '工业化',
+    reqs: { science: 5 },
+    grant: ['science', 6],
+    costs: { Knowledge: 36000 },
+    effect: '沃登克里弗塔为每位教授提供 +1% 知识上限。',
+  },
+
+  // legacy tech.js L4181: tesla_coil → science:7
+  // reqs: { science: 6, high_tech: 3 }, cost: Knowledge 51750
+  {
+    id: 'tesla_coil',
+    name: '特斯拉线圈',
+    description: '利用高频共振为实验室供能。',
+    category: 'science',
+    era: '工业化',
+    reqs: { science: 6, high_tech: 3 },
+    grant: ['science', 7],
+    costs: { Knowledge: 51750 },
+    effect: '每座沃登克里弗塔知识上限 +1000 → +1500。',
+  },
+
+  // legacy tech.js L4200: internet → science:8
+  // reqs: { science: 7, high_tech: 4 }, cost: Knowledge 61200
+  {
+    id: 'internet',
+    name: '互联网',
+    description: '全球计算机网络连接。',
+    category: 'science',
+    era: '全球化',
+    reqs: { science: 7, high_tech: 4 },
+    grant: ['science', 8],
+    costs: { Knowledge: 61200 },
+    effect: '大幅提升研究效率，大学知识上限由 500 提升到 700。',
+  },
+
+  // legacy tech.js L3429: corruption → currency:5
+  // reqs: { currency: 4, high_tech: 3 }, cost: Knowledge 36000
+  {
+    id: 'corruption',
+    name: '腐败',
+    description: '见识到金钱的黑暗面，但也能从黑市获利。',
+    category: 'banking',
+    era: '工业化',
+    reqs: { currency: 4, high_tech: 3 },
+    grant: ['currency', 5],
+    costs: { Knowledge: 36000 },
+    effect: '解锁更高级的金融科技。',
+  },
+
+  // legacy tech.js L2408: warehouse_tech → storage:4
+  // reqs: { storage: 3, high_tech: 3, smelting: 2 }, cost: Knowledge 40500, Titanium 3000
+  {
+    id: 'warehouse_tech',
+    name: '仓储技术',
+    description: '用先进材料和管理系统升级仓储设施。',
+    category: 'storage',
+    era: '工业化',
+    reqs: { storage: 3, high_tech: 3, smelting: 2 },
+    grant: ['storage', 4],
+    costs: { Knowledge: 40500, Titanium: 3000 },
+    effect: '仓库建材从木材升级为铁，资源储量上限进一步提升。',
+  },
+
+  // legacy tech.js L5982: uranium → uranium:1
+  // reqs: { high_tech: 4 }, cost: Knowledge 72000
+  {
+    id: 'uranium_tech',
+    name: '铀矿',
+    description: '发现并开采放射性矿物——铀。',
+    category: 'power_generation',
+    era: '全球化',
+    reqs: { high_tech: 4 },
+    grant: ['uranium', 1],
+    costs: { Knowledge: 72000 },
+    effect: '解锁铀资源，为核裂变发电提供燃料。',
   },
 ];
 

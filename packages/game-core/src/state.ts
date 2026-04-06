@@ -129,6 +129,7 @@ export function createNewGame(): GameState {
       Aluminium: { ...makeResource('铝', 50, 1), value: 0 },
       Oil: { ...makeResource('石油', 0, 1), value: 0 },
       Titanium: { ...makeResource('钛', 50, 1), value: 0 },
+      Uranium: { ...makeResource('铀', 250, 0), value: 0 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },
       Brick: { ...makeResource('砖', -1, 0), value: 0 },

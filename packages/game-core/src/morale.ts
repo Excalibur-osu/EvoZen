@@ -21,6 +21,7 @@
 
 import type { GameState, MoraleState } from '@evozen/shared-types';
 import { BASE_JOBS } from './jobs';
+import { hasPlanetTrait, mellowVars, denseVars } from './planet-traits';
 
 // ============================================================
 // 结果类型
@@ -104,8 +105,13 @@ export function calculateMorale(state: GameState): MoraleResult {
   // 每个失业人口 → 士气 -1
   // ----------------------------------------------------------
   const unemployed = (state.civic['unemployed'] as { workers: number } | undefined)?.workers ?? 0;
-  const unemployedPenalty = -unemployed;
-  morale += unemployedPenalty;
+  let unemployedPenalty = 0;
+  // mellow 行星特性：失业不产生士气惩罚
+  // 对标 legacy main.js L1470-1477
+  if (!hasPlanetTrait(state, 'mellow')) {
+    unemployedPenalty = -unemployed;
+    morale += unemployedPenalty;
+  }
 
   // ----------------------------------------------------------
   // 4. 压力 — 对标 legacy main.js L2968-3004
@@ -125,7 +131,17 @@ export function calculateMorale(state: GameState): MoraleResult {
     const jobState = state.civic[jobDef.id] as { workers: number; display?: boolean } | undefined;
     if (!jobState || !jobState.display || jobState.workers <= 0) continue;
 
-    const stressLevel = jobDef.stress || 5; // 默认 5
+    let stressLevel = jobDef.stress || 5; // 默认 5
+    // mellow 行星特性：每个岗位 stress 容忍度 +2
+    // 对标 legacy main.js L2981-2983
+    if (hasPlanetTrait(state, 'mellow')) {
+      stressLevel += mellowVars()[1];
+    }
+    // dense 行星特性：矿工压力 +1
+    // 对标 legacy main.js L2988-2990
+    if (hasPlanetTrait(state, 'dense') && jobDef.id === 'miner') {
+      stressLevel -= denseVars()[1];
+    }
     stress -= jobState.workers / stressLevel;
   }
 
@@ -133,6 +149,17 @@ export function calculateMorale(state: GameState): MoraleResult {
   // 对标 legacy main.js L3120-3121: autocracy → stress tolerance boost
   if (state.civic.govern?.type === 'autocracy') {
     stress *= 0.75; // 压力减 25%
+  }
+
+  // mellow 行星特性：猎人和士兵压力除数 ×1.5
+  // 对标 legacy main.js L1476, L1509-1510
+  if (hasPlanetTrait(state, 'mellow')) {
+    // 猎人压力已用固定 divisor=5，mellow 使其变为 5*1.5=7.5
+    // 差额补偿：原始 -hunters/5，mellow 下应为 -hunters/7.5
+    const hunterWorkers = (state.civic['hunter'] as { workers: number } | undefined)?.workers ?? 0;
+    if (hunterWorkers > 0) {
+      stress += hunterWorkers / 5 - hunterWorkers / (5 * mellowVars()[0]);
+    }
   }
 
   morale += stress;

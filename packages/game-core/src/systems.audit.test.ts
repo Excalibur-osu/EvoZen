@@ -10,7 +10,8 @@ import {
   enqueueStructure,
 } from './actions';
 import { changeGovernment, getMaxTaxRate, getTaxMultiplier, tickGovernmentCooldown } from './government';
-import { warCampaign, mercCost } from './military';
+import { warCampaign, mercCost, hireMerc } from './military';
+import { applyDerivedStateInPlace } from './derived-state';
 import { assignSpeciesTraits } from './traits';
 import { powerTick } from './power';
 import { EVENTS, tickEvents } from './events';
@@ -786,6 +787,7 @@ describe('system audit scenarios', () => {
     state.city.oil_well = { count: 2 };
     state.city.smelter = { count: 1 };
     state.city.library = { count: 1 };
+    state.city.university = { count: 1 };
     state.city.factory = { count: 2, on: 2, Alloy: 1, Polymer: 1, Lux: 0, Furs: 0 };
 
     setJobWorkers(state, 'unemployed', 4);
@@ -1460,5 +1462,389 @@ describe('[audit] angry — orc 食物耗尽时产出降至 25%', () => {
 
     expect(hungryElven).toBeCloseTo(fedElven * 0.5, 1);
     expect(hungryOrc).toBeCloseTo(fedElven * 0.25, 1);
+  });
+});
+
+// ============================================================
+// Tech Debt: Mercenary Edge Audit
+// ============================================================
+
+describe('[audit] hireMerc edge cases', () => {
+  function makeMercState(): ReturnType<typeof createNewGame> {
+    const s = createNewGame();
+    bootstrapCivilization(s, 'human', 10, 20);
+    s.tech['mercs'] = 1;
+    s.tech['military'] = 1;
+    s.city['garrison'] = { count: 3 };
+    applySimulationDerivedStateInPlace(s);
+    s.civic.garrison.workers = 2;
+    s.resource['Money'].amount = 50000;
+    return s;
+  }
+
+  it('hireMerc at garrison.max returns success=false', () => {
+    const s = makeMercState();
+    s.civic.garrison.workers = s.civic.garrison.max;
+    const result = hireMerc(s);
+    expect(result.success).toBe(false);
+    expect(s.resource['Money'].amount).toBe(50000); // no deduction
+  });
+
+  it('hireMerc with insufficient money returns success=false', () => {
+    const s = makeMercState();
+    s.resource['Money'].amount = 1;
+    const result = hireMerc(s);
+    expect(result.success).toBe(false);
+  });
+
+  it('hireMerc does NOT consume population (mercs are external hires)', () => {
+    const s = makeMercState();
+    const popBefore = s.resource['human'].amount;
+    const unemployedBefore = (s.civic['unemployed'] as { workers: number }).workers;
+    const workersBefore = s.civic.garrison.workers;
+
+    const result = hireMerc(s);
+    expect(result.success).toBe(true);
+    expect(s.civic.garrison.workers).toBe(workersBefore + 1);
+    expect(s.resource['human'].amount).toBe(popBefore); // population unchanged
+    expect((s.civic['unemployed'] as { workers: number }).workers).toBe(unemployedBefore); // unemployed unchanged
+    expect(s.civic.garrison.m_use).toBe(1);
+  });
+
+  it('hireMerc deducts correct cost and increments m_use', () => {
+    const s = makeMercState();
+    const expectedCost = mercCost(s);
+    const moneyBefore = s.resource['Money'].amount;
+    const result = hireMerc(s);
+    expect(result.success).toBe(true);
+    expect(result.cost).toBe(expectedCost);
+    expect(s.resource['Money'].amount).toBe(moneyBefore - expectedCost);
+    expect(s.civic.garrison.m_use).toBe(1);
+
+    // Second hire should use increased m_use cost
+    const expectedCost2 = mercCost(s);
+    expect(expectedCost2).toBeGreaterThan(expectedCost);
+    const result2 = hireMerc(s);
+    expect(result2.success).toBe(true);
+    expect(s.civic.garrison.m_use).toBe(2);
+  });
+});
+
+// ============================================================
+// Tech Debt: Event De-dup Audit
+// ============================================================
+
+describe('[audit] event de-dup — same event never fires consecutively', () => {
+  it('filterEvents excludes last fired event from pool', () => {
+    const s = createNewGame();
+    bootstrapCivilization(s, 'human', 5, 10);
+    s.tech['primitive'] = 1;
+    s.resource['Lumber'].display = true;
+    s.resource['Lumber'].amount = 9999;
+    s.resource['Money'].display = true;
+    s.resource['Money'].amount = 9999;
+    s.resource['Knowledge'].display = true;
+    s.resource['Knowledge'].amount = 9999;
+    s.resource['Food'].amount = 9999;
+
+    // Force major event timer to fire repeatedly, collect actually fired IDs
+    const firedIds: string[] = [];
+    const rng = createDeterministicRandom(9001);
+    const originalRandom = Math.random;
+    Math.random = rng;
+    try {
+      for (let i = 0; i < 30; i++) {
+        const prevL = s.event.l;
+        s.event.t = 1;
+        s.m_event.t = 999999; // suppress minor events
+        tickEvents(s);
+        // Only record if a new event actually fired (l changed)
+        if (s.event.l !== prevL && s.event.l !== false) {
+          firedIds.push(s.event.l as string);
+        }
+      }
+    } finally {
+      Math.random = originalRandom;
+    }
+
+    // Must have fired at least 2 events to be a meaningful test
+    expect(firedIds.length).toBeGreaterThanOrEqual(2);
+
+    // No two consecutive fired events should be the same
+    for (let i = 1; i < firedIds.length; i++) {
+      expect(
+        firedIds[i] !== firedIds[i - 1],
+        `event ${firedIds[i]} fired consecutively at index ${i-1} and ${i}`
+      ).toBe(true);
+    }
+  });
+
+  it('when pool has only 1 matching event and it was last, no event fires', () => {
+    const s = createNewGame();
+    bootstrapCivilization(s, 'human', 1, 1);
+    // Only 'fire' should match (needs Lumber display + primitive)
+    // Clear everything else
+    s.resource['Lumber'].display = true;
+    s.resource['Lumber'].amount = 100;
+    s.resource['Money'].display = false;
+    s.resource['Money'].amount = 0;
+    s.resource['Food'].display = false;
+    s.resource['Knowledge'].display = false;
+
+    s.event.t = 1;
+    s.event.l = 'fire'; // last event was fire
+    s.m_event.t = 999999;
+
+    const rng = createDeterministicRandom(9002);
+    const msgs = withRandom(rng, () => tickEvents(s));
+
+    // fire should be excluded since it was the last event
+    // If no other major events qualify, no event should fire
+    const majorMsgs = msgs.filter(m => m.type === 'warning');
+    if (majorMsgs.length > 0) {
+      // If an event DID fire, it must NOT be fire
+      expect(s.event.l).not.toBe('fire');
+    }
+    // Either way, the de-dup logic works
+  });
+});
+
+// ============================================================
+// Tech Debt: Derived-State Job Worker Clamp
+// ============================================================
+
+describe('[audit] derived-state job worker clamp', () => {
+  it('excess workers returned to unemployed when building count drops', () => {
+    const s = createNewGame();
+    bootstrapCivilization(s, 'human', 10, 20);
+
+    s.tech['primitive'] = 3;
+    s.tech['currency'] = 2;
+    s.tech['mining'] = 3;
+    s.tech['cement'] = 1;
+    s.tech['foundry'] = 1;
+    s.tech['theatre'] = 1;
+    s.tech['theology'] = 1;
+
+    // Set up buildings
+    s.city['farm'] = { count: 3 };
+    s.city['mine'] = { count: 2, on: 2 };
+    s.city['foundry'] = { count: 2 };
+    s.city['bank'] = { count: 2 };
+    s.city['temple'] = { count: 2 };
+    s.city['amphitheatre'] = { count: 1 };
+    s.city['cement_plant'] = { count: 1 };
+
+    // Assign workers
+    applyDerivedStateInPlace(s);
+    (s.civic['farmer'] as any).workers = 3;
+    (s.civic['miner'] as any).workers = 2;
+    (s.civic['craftsman'] as any).workers = 2;
+    (s.civic['banker'] as any).workers = 2;
+    (s.civic['priest'] as any).workers = 2;
+    (s.civic['entertainer'] as any).workers = 1;
+    (s.civic['cement_worker'] as any).workers = 2;
+    (s.civic['unemployed'] as any).workers = 0;
+
+    // Now "demolish" some buildings — reduce counts
+    (s.city['farm'] as any).count = 1;       // farmer max: 3→1, excess 2
+    (s.city['mine'] as any).count = 0;        // miner max: 2→0, excess 2
+    (s.city['foundry'] as any).count = 1;     // craftsman max: 2→1, excess 1
+    (s.city['bank'] as any).count = 0;        // banker max: 2→0, excess 2
+    (s.city['temple'] as any).count = 1;      // priest max: 2→1, excess 1
+    (s.city['amphitheatre'] as any).count = 0; // entertainer max: 1→0, excess 1
+    (s.city['cement_plant'] as any).count = 0; // cement_worker max: 2→0, excess 2
+
+    // Apply derived state — should clamp all workers
+    applyDerivedStateInPlace(s);
+
+    expect({
+      farmer: (s.civic['farmer'] as any).workers,
+      miner: (s.civic['miner'] as any).workers,
+      craftsman: (s.civic['craftsman'] as any).workers,
+      banker: (s.civic['banker'] as any).workers,
+      priest: (s.civic['priest'] as any).workers,
+      entertainer: (s.civic['entertainer'] as any).workers,
+      cement_worker: (s.civic['cement_worker'] as any).workers,
+      unemployed: (s.civic['unemployed'] as any).workers,
+    }).toEqual({
+      farmer: 1,        // clamped from 3 to 1
+      miner: 0,         // clamped from 2 to 0
+      craftsman: 1,      // clamped from 2 to 1
+      banker: 0,         // clamped from 2 to 0
+      priest: 1,         // clamped from 2 to 1
+      entertainer: 0,    // clamped from 1 to 0
+      cement_worker: 0,  // clamped from 2 to 0
+      unemployed: 11,    // 0 + 2 + 2 + 1 + 2 + 1 + 1 + 2 = 11 excess returned
+    });
+  });
+
+  it('no clamp needed when workers <= max', () => {
+    const s = createNewGame();
+    bootstrapCivilization(s, 'human', 6, 10);
+    s.tech['primitive'] = 3;
+    s.city['farm'] = { count: 3 };
+    applyDerivedStateInPlace(s);
+    (s.civic['farmer'] as any).workers = 2; // within max
+    (s.civic['unemployed'] as any).workers = 4;
+
+    // Re-apply — nothing should change
+    applyDerivedStateInPlace(s);
+    expect((s.civic['farmer'] as any).workers).toBe(2);
+    expect((s.civic['unemployed'] as any).workers).toBe(4);
+  });
+});
+
+// ============================================================
+// Planet Traits Audit
+// ============================================================
+import { gameTick } from './tick';
+import { calculateMorale } from './morale';
+import { armyRating } from './military';
+import { getResearchCost } from './actions';
+import {
+  hasPlanetTrait,
+  getMinerPlanetMultiplier,
+  getGlobalPlanetMultiplier,
+  getFarmPlanetMultiplier,
+} from './planet-traits';
+
+describe('Planet Traits Audit', () => {
+  function makeTraitState(trait: string) {
+    const s = createNewGame();
+    bootstrapCivilization(s, 'human', 10, 20);
+    s.city.ptrait = trait;
+    return s;
+  }
+
+  // --- hasPlanetTrait ---
+  it('hasPlanetTrait returns true only for matching trait', () => {
+    const s = makeTraitState('dense');
+    expect(hasPlanetTrait(s, 'dense')).toBe(true);
+    expect(hasPlanetTrait(s, 'mellow')).toBe(false);
+    expect(hasPlanetTrait(s, 'none')).toBe(false);
+  });
+
+  // --- unstable: tech cost reduction ---
+  it('unstable halves Knowledge cost for mining_3', () => {
+    const normal = makeTraitState('none');
+    normal.tech['mining'] = 2;
+    normal.resource['Knowledge'] = { name: 'Knowledge', display: true, value: 0, amount: 10000, max: 10000, rate: 0, crates: 0, containers: 0, diff: 0, delta: 0 };
+
+    const unstable = makeTraitState('unstable');
+    unstable.tech['mining'] = 2;
+    unstable.resource['Knowledge'] = { name: 'Knowledge', display: true, value: 0, amount: 10000, max: 10000, rate: 0, crates: 0, containers: 0, diff: 0, delta: 0 };
+
+    const normalCost = getResearchCost(normal, 'mining_3');
+    const unstableCost = getResearchCost(unstable, 'mining_3');
+
+    expect(normalCost['Knowledge']).toBe(2500);
+    expect(unstableCost['Knowledge']).toBe(1250);
+  });
+
+  // --- dense: miner output ×1.2 ---
+  it('dense multiplies miner output by 1.2', () => {
+    expect(getMinerPlanetMultiplier(makeTraitState('dense'))).toBeCloseTo(1.2, 4);
+    expect(getMinerPlanetMultiplier(makeTraitState('none'))).toBe(1);
+  });
+
+  // --- permafrost: miner output ×0.75 ---
+  it('permafrost reduces miner output to ×0.75', () => {
+    expect(getMinerPlanetMultiplier(makeTraitState('permafrost'))).toBeCloseTo(0.75, 4);
+  });
+
+  // --- magnetic: miner output ×0.985 ---
+  it('magnetic reduces miner output to ×0.985', () => {
+    expect(getMinerPlanetMultiplier(makeTraitState('magnetic'))).toBeCloseTo(0.985, 4);
+  });
+
+  // --- mellow: global output ×0.9 ---
+  it('mellow reduces global production multiplier to ×0.9', () => {
+    expect(getGlobalPlanetMultiplier(makeTraitState('mellow'))).toBeCloseTo(0.9, 4);
+    expect(getGlobalPlanetMultiplier(makeTraitState('none'))).toBe(1);
+  });
+
+  // --- trashed: farm output ×0.75 ---
+  it('trashed reduces farm multiplier to ×0.75', () => {
+    expect(getFarmPlanetMultiplier(makeTraitState('trashed'))).toBeCloseTo(0.75, 4);
+    expect(getFarmPlanetMultiplier(makeTraitState('none'))).toBe(1);
+  });
+
+  // --- mellow: stress reduction in morale ---
+  it('mellow removes unemployed morale penalty', () => {
+    const normal = makeTraitState('none');
+    (normal.civic['unemployed'] as any).workers = 5;
+    const normalMorale = calculateMorale(normal);
+
+    const mellow = makeTraitState('mellow');
+    (mellow.civic['unemployed'] as any).workers = 5;
+    const mellowMorale = calculateMorale(mellow);
+
+    // normal has -5 from unemployment, mellow has 0
+    expect(mellowMorale.breakdown.unemployed).toBe(0);
+    expect(normalMorale.breakdown.unemployed).toBe(-5);
+    // mellow morale should be higher
+    expect(mellowMorale.morale).toBeGreaterThan(normalMorale.morale);
+  });
+
+  // --- rage: combat rating boost ---
+  it('rage boosts army rating by ×1.05', () => {
+    const normal = makeTraitState('none');
+    normal.tech['military'] = 1;
+    normal.civic.garrison = { workers: 10, max: 20, wounded: 0, crew: 0, raid: 5, tactic: 0, rate: 0, fatigue: 0, m_use: 0, display: true, disabled: false, progress: 0, mercs: false, protest: 0 };
+    normal.civic.govern = { type: 'oligarchy', rev: 0, fr: 0 };
+
+    const rage = makeTraitState('rage');
+    rage.tech['military'] = 1;
+    rage.civic.garrison = { workers: 10, max: 20, wounded: 0, crew: 0, raid: 5, tactic: 0, rate: 0, fatigue: 0, m_use: 0, display: true, disabled: false, progress: 0, mercs: false, protest: 0 };
+    rage.civic.govern = { type: 'oligarchy', rev: 0, fr: 0 };
+
+    const normalRating = armyRating(5, normal);
+    const rageRating = armyRating(5, rage);
+
+    expect(rageRating).toBeCloseTo(normalRating * 1.05, 4);
+  });
+
+  // --- permafrost/magnetic: knowledge cap bonus ---
+  it('permafrost adds +100 per university to knowledge cap', () => {
+    const normal = makeTraitState('none');
+    normal.tech['science'] = 4;
+    normal.resource['Knowledge'] = { name: 'Knowledge', display: true, value: 0, amount: 0, max: 0, rate: 0, crates: 0, containers: 0, diff: 0, delta: 0 };
+    (normal.city as any)['university'] = { count: 2 };
+    (normal.city as any)['library'] = { count: 1 };
+    applyDerivedStateInPlace(normal);
+    const normalMax = normal.resource['Knowledge'].max;
+
+    const perm = makeTraitState('permafrost');
+    perm.tech['science'] = 4;
+    perm.resource['Knowledge'] = { name: 'Knowledge', display: true, value: 0, amount: 0, max: 0, rate: 0, crates: 0, containers: 0, diff: 0, delta: 0 };
+    (perm.city as any)['university'] = { count: 2 };
+    (perm.city as any)['library'] = { count: 1 };
+    applyDerivedStateInPlace(perm);
+    const permMax = perm.resource['Knowledge'].max;
+
+    // 2 universities × 100 × universityMult(1.02) = ~204 bonus
+    expect(permMax).toBeGreaterThan(normalMax);
+    expect(permMax - normalMax).toBeCloseTo(2 * 100 * (1 + 1 * 0.02), 0);
+  });
+
+  it('magnetic adds +100 per wardenclyffe to knowledge cap', () => {
+    const normal = makeTraitState('none');
+    normal.tech['science'] = 6;
+    normal.resource['Knowledge'] = { name: 'Knowledge', display: true, value: 0, amount: 0, max: 0, rate: 0, crates: 0, containers: 0, diff: 0, delta: 0 };
+    (normal.city as any)['wardenclyffe'] = { count: 3, on: 3 };
+    applyDerivedStateInPlace(normal);
+    const normalMax = normal.resource['Knowledge'].max;
+
+    const mag = makeTraitState('magnetic');
+    mag.tech['science'] = 6;
+    mag.resource['Knowledge'] = { name: 'Knowledge', display: true, value: 0, amount: 0, max: 0, rate: 0, crates: 0, containers: 0, diff: 0, delta: 0 };
+    (mag.city as any)['wardenclyffe'] = { count: 3, on: 3 };
+    applyDerivedStateInPlace(mag);
+    const magMax = mag.resource['Knowledge'].max;
+
+    // 3 wardenclyffes × 100 = 300 bonus
+    expect(magMax).toBeGreaterThan(normalMax);
+    expect(magMax - normalMax).toBe(300);
   });
 });

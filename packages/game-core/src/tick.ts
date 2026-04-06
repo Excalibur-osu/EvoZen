@@ -18,6 +18,14 @@ import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
 import { tickEvents } from './events';
 import { applyDerivedStateInPlace } from './derived-state';
+import {
+  hasPlanetTrait,
+  getGlobalPlanetMultiplier,
+  getMinerPlanetMultiplier,
+  getFarmPlanetMultiplier,
+  magneticVars,
+  rageVars,
+} from './planet-traits';
 
 /**
  * 原版全局时间缩放因子
@@ -69,7 +77,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // if angry && !fed: hunger = 0.25
   // 应用于所有非食物的工人产出（不含税收）。
   const hungerMult = getHungerMultiplier(state);
-  const effectiveProdMult = prodMult * hungerMult;
+  // mellow 行星特性：全局产出 ×0.9
+  const planetGlobalMult = getGlobalPlanetMultiplier(state);
+  const effectiveProdMult = prodMult * hungerMult * planetGlobalMult;
 
   // ============================================================
   // 0a. 电力网格
@@ -97,6 +107,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // weaponTechModifer() = military tech level，初始=1
   const militaryTech = techLevel('military') >= 1 ? techLevel('military') : 1;
   const hunterFurs = hunters * militaryTech / 20;
+  // rage 行星特性：狩猎产出 ×1.02
+  const rageHuntMult = hasPlanetTrait(state, 'rage') ? rageVars()[1] : 1;
 
   // 农民产出 — 对标 legacy/src/jobs.js L797-822 farmerValue()
   // farmerValue(farm=true) = impact + (agriculture >= 2 ? 1.15 : 0.65)
@@ -120,6 +132,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (techLevel('agriculture') >= 7) {
     foodMult *= 1.1;
   }
+  // trashed 行星特性：农业产出 ×0.75
+  foodMult *= getFarmPlanetMultiplier(state);
   const farmerFood = farmers * farmerBase * foodMult;
 
   // 食物消耗 — 原版 main.js L3711:
@@ -128,12 +142,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const unemployed = workers('unemployed');
   const foodConsumption = pop - (unemployed + hunters) * 0.5;
 
-  deltas['Food'] = (hunterFood + farmerFood) * prodMult - foodConsumption;
+  deltas['Food'] = (hunterFood * rageHuntMult + farmerFood) * prodMult * planetGlobalMult - foodConsumption;
 
   // ============================================================
   // 2. 毛皮（猎人副产品）
   // ============================================================
-  deltas['Furs'] = hunterFurs;
+  deltas['Furs'] = hunterFurs * rageHuntMult;
 
   // ============================================================
   // 3. 木材 — 伐木工
@@ -195,10 +209,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 探矿仪 dowsing:2 额外 +8% 矿工产量
   const dowsingLevel = techLevel('dowsing');
   const dowsingMult = dowsingLevel >= 2 ? 1.08 : 1;
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;  // ≈0.143
+  // dense/permafrost/magnetic 行星特性：影响矿工产出
+  const minerPlanetMult = getMinerPlanetMultiplier(state);
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * minerPlanetMult * effectiveProdMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;  // 1/4
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * minerPlanetMult * effectiveProdMult;  // 1/4
   }
 
   // ============================================================
@@ -208,6 +224,17 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const actualCoalMiners = Math.min(workers('coal_miner'), coalMineActive);
   const coalToolMult = 1 + pickaxeLevel * 0.12;
   deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;
+
+  // 铀 — 煤矿副产物
+  // 对标 legacy main.js L6595: uranium = coal_delta / 115
+  if (techLevel('uranium') >= 1 && deltas['Coal'] > 0) {
+    let uraniumDelta = deltas['Coal'] / 115;
+    const geologyBonus = state.city.geology?.['Uranium'] ?? 0;
+    if (geologyBonus) {
+      uraniumDelta *= geologyBonus + 1;
+    }
+    deltas['Uranium'] = uraniumDelta;
+  }
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -233,6 +260,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // delta += sundial_base * global_multiplier;
   // 日晷产出独立于饥饿因子，研究日晷后即自动提供知识
   const sundialBase = techLevel('primitive') >= 3 ? 1 : 0;
+  // magnetic 行星特性：日晷知识 +1
+  const sundialPlanet = hasPlanetTrait(state, 'magnetic') ? magneticVars()[0] : 0;
 
   const professors = workers('professor');
   const scientists = workers('scientist');
@@ -261,8 +290,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const libraryMult = 1 + libraries * 0.05;
   // 教授+科学家受饥饿影响；日晷不受（原版 L4228-4229）
   const workerKnowledge = (professorsBase + scientistBase) * libraryMult;
-  const sundialKnowledge = sundialBase * libraryMult;
-  deltas['Knowledge'] = workerKnowledge * effectiveProdMult + sundialKnowledge * prodMult;
+  const sundialKnowledge = (sundialBase + sundialPlanet) * libraryMult;
+  deltas['Knowledge'] = workerKnowledge * effectiveProdMult + sundialKnowledge * prodMult * planetGlobalMult;
 
   // ============================================================
   // 8a. 信仰（Faith）— 牧师产出

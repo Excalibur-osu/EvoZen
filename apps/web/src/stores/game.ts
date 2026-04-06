@@ -291,12 +291,13 @@ export const useGameStore = defineStore('game', () => {
   }
 
   /** 开始文明（离开进化阶段） */
-  function startCivilization(speciesId: string) {
+  function startCivilization(speciesId: string, ptrait: string = 'none') {
     const speciesLabels: Record<string, string> = {
       human: '人类', elven: '精灵', orc: '兽人', dwarf: '矮人', goblin: '地精',
     }
 
     state.value.race.species = speciesId
+    state.value.city.ptrait = ptrait
     syncRaceTraits()
 
     // 初始化种族人口资源（1个初始人口，上限1）

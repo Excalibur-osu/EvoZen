@@ -17,6 +17,7 @@ export const RESOURCE_NAMES: Record<string, string> = {
   Aluminium: '铝',
   Oil: '石油',
   Titanium: '钛',
+  Uranium: '铀',
   Plywood: '胶合板',
   Brick: '砖',
   Wrought_Iron: '锻铁',

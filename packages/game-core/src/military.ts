@@ -9,6 +9,7 @@
 import type { GameState, GameMessage } from '@evozen/shared-types';
 import { applyDerivedStateInPlace } from './derived-state';
 import { getTrainingSpeedDivisor, getBruteTrainingBonus, getMercCostMultiplier } from './traits';
+import { hasPlanetTrait, rageVars } from './planet-traits';
 
 // ============================================================
 // 武器科技倍率
@@ -57,6 +58,12 @@ export function armyRating(
   // 政体加成：独裁 +35% 军力
   if (state.civic.govern.type === 'autocracy') {
     army *= 1.35;
+  }
+
+  // rage 行星特性：战斗力 ×1.05
+  // 对标 legacy civics.js L2288: armyRating *= rage.vars()[0]
+  if (hasPlanetTrait(state, 'rage')) {
+    army *= rageVars()[0];
   }
 
   return Math.max(army, 0);
@@ -317,6 +324,11 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
     let deathCap = Math.floor(garrison.raid / (5 - garrison.tactic));
     if (deathCap < 1) deathCap = 1;
     if (deathCap > garrison.raid) deathCap = garrison.raid;
+    // rage 行星特性：额外死亡上限 +1
+    // 对标 legacy civics.js L1635: deathCap += rage.vars()[2]
+    if (hasPlanetTrait(state, 'rage')) {
+      deathCap += rageVars()[2];
+    }
 
     let deaths = Math.floor(Math.random() * deathCap);
     const armor = armorCalc(deaths, state);

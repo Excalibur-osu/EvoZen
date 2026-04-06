@@ -30,6 +30,7 @@ export type BasicResourceId =
   | 'Aluminium'
   | 'Oil'
   | 'Titanium'
+  | 'Uranium'
   | 'Sheet_Metal'
   | 'Alloy'
   | 'Polymer';
@@ -91,7 +92,8 @@ export type BasicStructureId =
   | 'oil_well'
   | 'oil_depot'
   | 'coal_power'
-  | 'oil_power';
+  | 'oil_power'
+  | 'fission_power';
 
 /** 单个建筑的状态 */
 export interface StructureState {

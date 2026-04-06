@@ -10,6 +10,7 @@
  */
 
 import type { GameState, RaceState } from '@evozen/shared-types';
+import { hasPlanetTrait } from './planet-traits';
 
 export type SupportedSpeciesId = 'human' | 'elven' | 'orc' | 'dwarf' | 'goblin';
 
@@ -130,18 +131,32 @@ export function getScienceKnowledgeCostMultiplier(state: GameState, category: st
   return hasTrait(state, 'stubborn') && category === 'science' ? 1.1 : 1;
 }
 
-/** 根据种族 trait 调整科技费用 */
+/** 根据种族 trait + 行星特性调整科技费用 */
 export function getModifiedTechCosts(
   state: GameState,
   costs: Record<string, number>,
-  category: string
+  category: string,
+  techId?: string
 ): Record<string, number> {
   const nextCosts = { ...costs };
   if (nextCosts['Knowledge'] !== undefined) {
     nextCosts['Knowledge'] = Math.ceil(nextCosts['Knowledge'] * getScienceKnowledgeCostMultiplier(state, category));
+    // unstable 行星特性：特定科技 Knowledge 成本减半
+    // 对标 legacy tech.js L2300: iron_mining Knowledge 2500→500 (实际是 /5，但我们按 legacy 精确值)
+    // Phase 1A 仅影响 mining_3 (iron_mining)
+    if (hasPlanetTrait(state, 'unstable') && techId && UNSTABLE_HALF_COST_TECHS.has(techId)) {
+      nextCosts['Knowledge'] = Math.ceil(nextCosts['Knowledge'] * 0.5);
+    }
   }
   return nextCosts;
 }
+
+// unstable 行星特性影响的科技列表（Phase 1A 范围）
+// 对标 legacy tech.js: iron_mining 2500→500 实际是 /5 但更多科技是 /2
+// 统一使用 /2 与大部分 legacy 科技一致
+const UNSTABLE_HALF_COST_TECHS = new Set([
+  'mining_3', // iron_mining: Knowledge 2500 → 1250
+]);
 
 /** Human（diverse）：训练速度除数。legacy main.js L8013: rate /= 1 + vars()[0]/100, vars()[0]=25 */
 export function getTrainingSpeedDivisor(state: GameState): number {

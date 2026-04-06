@@ -8,7 +8,7 @@
  *
  * 用法: node scripts/audit.mjs
  */
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -1067,6 +1067,101 @@ function auditShedValues(evozenSrc) {
   }
 }
 
+// ─── 18. Manifest 结构审计 ────────────────────────
+// 原 scripts/audit-manifest.mjs 合并至此
+// ──────────────────────────────────────────────────
+function auditManifest() {
+  section('Parity Manifest 结构校验');
+
+  const MANIFEST_PATH = resolve(ROOT, 'parity/manifest.json');
+  const VALID_STATUSES = new Set(['exact', 'partial', 'intentional_diff', 'not_started']);
+
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+  } catch (e) {
+    fail(`无法读取 manifest.json: ${e.message}`);
+    return;
+  }
+
+  if (!manifest.version) {
+    fail('manifest.version 缺失');
+  } else {
+    ok(`manifest.version: ${manifest.version}`);
+  }
+
+  if (!Array.isArray(manifest.systems) || manifest.systems.length === 0) {
+    fail('manifest.systems 必须是非空数组');
+  } else {
+    const seenIds = new Set();
+    for (const system of manifest.systems) {
+      if (!system.id || typeof system.id !== 'string') {
+        fail('system 条目缺少有效 id');
+        continue;
+      }
+      if (seenIds.has(system.id)) {
+        fail(`system id 重复: ${system.id}`);
+      }
+      seenIds.add(system.id);
+
+      if (!VALID_STATUSES.has(system.status)) {
+        fail(`system ${system.id} 状态无效: ${system.status}`);
+      } else {
+        ok(`system ${system.id}: status=${system.status}`);
+      }
+
+      // 检查引用路径是否存在
+      for (const ref of system.refs ?? []) {
+        if (!ref.path || typeof ref.path !== 'string') {
+          fail(`system ${system.id} 有无效的 ref.path`);
+          continue;
+        }
+        const fullPath = resolve(ROOT, ref.path);
+        if (!existsSync(fullPath)) {
+          fail(`system ${system.id} 引用了不存在的路径: ${ref.path}`);
+        } else {
+          ok(`system ${system.id} ref: ${ref.path}`);
+        }
+      }
+    }
+  }
+
+  if (!Array.isArray(manifest.intentionalDiffs)) {
+    fail('manifest.intentionalDiffs 必须是数组');
+  } else {
+    const seenIds = new Set();
+    for (const diff of manifest.intentionalDiffs) {
+      if (!diff.id || typeof diff.id !== 'string') {
+        fail('intentionalDiff 条目缺少有效 id');
+        continue;
+      }
+      if (seenIds.has(diff.id)) {
+        fail(`intentionalDiff id 重复: ${diff.id}`);
+      }
+      seenIds.add(diff.id);
+
+      if (diff.status !== 'intentional_diff') {
+        fail(`intentionalDiff ${diff.id} 状态必须为 "intentional_diff"`);
+      } else {
+        ok(`intentionalDiff ${diff.id}: status valid`);
+      }
+
+      for (const ref of diff.refs ?? []) {
+        if (!ref.path || typeof ref.path !== 'string') {
+          fail(`intentionalDiff ${diff.id} 有无效的 ref.path`);
+          continue;
+        }
+        const fullPath = resolve(ROOT, ref.path);
+        if (!existsSync(fullPath)) {
+          fail(`intentionalDiff ${diff.id} 引用了不存在的路径: ${ref.path}`);
+        } else {
+          ok(`intentionalDiff ${diff.id} ref: ${ref.path}`);
+        }
+      }
+    }
+  }
+}
+
 // ─── 主流程 ────────────────────────────────────────
 console.log(`${C}╔══════════════════════════════════════════╗${W}`);
 console.log(`${C}║   EvoZen ↔ Legacy Evolve 审计报告        ║${W}`);
@@ -1136,6 +1231,9 @@ try {
   };
   auditFormulaConstants(formulaSources);
   auditShedValues(evozenStorageSrc);
+
+  // Manifest 结构审计（原 audit-manifest.mjs）
+  auditManifest();
 
   // 汇总
   section('审计汇总');

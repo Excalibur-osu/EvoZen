@@ -149,3 +149,12 @@ export {
   type SimulationTickOptions,
   type SimulationRunResult,
 } from './simulation';
+export {
+  PLANET_TRAITS,
+  hasPlanetTrait,
+  getPlanetTrait,
+  getMinerPlanetMultiplier,
+  getGlobalPlanetMultiplier,
+  getFarmPlanetMultiplier,
+  type PlanetTraitDef,
+} from './planet-traits';

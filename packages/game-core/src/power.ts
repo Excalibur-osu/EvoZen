@@ -28,6 +28,7 @@ interface GeneratorDef {
 const GENERATORS: GeneratorDef[] = [
   { id: 'coal_power', power: 5, fuelResource: 'Coal', fuelPerTick: 0.35 },
   { id: 'oil_power', power: 6, fuelResource: 'Oil', fuelPerTick: 0.65 },
+  { id: 'fission_power', power: 14, fuelResource: 'Uranium', fuelPerTick: 0.1 },
 ];
 
 /**

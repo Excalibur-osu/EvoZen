@@ -7,6 +7,14 @@
 import { useGameStore } from '../stores/game'
 import { ref } from 'vue'
 import { getSpeciesTraitDescriptors } from '@evozen/game-core'
+import { PLANET_TRAITS } from '@evozen/game-core'
+
+const TRAIT_EMOJIS: Record<string, string> = {
+  none: '🌍', unstable: '🌋', dense: '⛰️', mellow: '🌿',
+  rage: '🔥', magnetic: '🧲', trashed: '🗑️', permafrost: '🧊',
+  toxic: '☠️', ozone: '☀️', stormy: '⛈️', flare: '💥',
+  elliptical: '🪐', retrograde: '🔄', kamikaze: '☄️',
+}
 
 const game = useGameStore()
 
@@ -44,10 +52,13 @@ const speciesOptions = [
 ]
 
 const selectedSpecies = ref('human')
+const selectedPtrait = ref('none')
+
+const activeTraits = Object.values(PLANET_TRAITS).filter(t => t.activePhase1 || t.id === 'none')
 
 function startEvolution() {
   const species = speciesOptions.find(s => s.id === selectedSpecies.value)
-  game.startCivilization(species?.id ?? 'human')
+  game.startCivilization(species?.id ?? 'human', selectedPtrait.value)
 }
 </script>
 
@@ -145,6 +156,25 @@ function startEvolution() {
           </span>
         </button>
       </div>
+
+      <!-- 行星特性选择 -->
+      <div class="ptrait-section">
+        <h4>🪐 行星特性</h4>
+        <div class="ptrait-grid">
+          <button
+            v-for="pt in activeTraits"
+            :key="pt.id"
+            class="ptrait-card"
+            :class="{ active: selectedPtrait === pt.id }"
+            @click="selectedPtrait = pt.id"
+          >
+            <span class="ptrait-emoji">{{ TRAIT_EMOJIS[pt.id] ?? '🌍' }}</span>
+            <span class="ptrait-name">{{ pt.label }}</span>
+            <span class="ptrait-desc">{{ pt.desc }}</span>
+          </button>
+        </div>
+      </div>
+
       <button
         class="btn primary"
         style="margin-top: 16px; width: 100%; padding: 12px"
@@ -335,5 +365,57 @@ function startEvolution() {
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* 行星特性 */
+.ptrait-section {
+  margin-top: 16px;
+}
+.ptrait-section h4 {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--text-accent);
+}
+.ptrait-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.ptrait-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  background: var(--bg-input);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+.ptrait-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+}
+.ptrait-card.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.ptrait-emoji {
+  font-size: 22px;
+}
+.ptrait-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+.ptrait-desc {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  text-align: center;
 }
 </style>

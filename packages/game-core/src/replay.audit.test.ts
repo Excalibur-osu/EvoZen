@@ -230,6 +230,7 @@ describe('deterministic replay audit', () => {
     state.city['oil_well'] = { count: 2 };
     state.city['smelter'] = { count: 1 };
     state.city['library'] = { count: 1 };
+    state.city['university'] = { count: 1 };
     state.city['factory'] = { count: 2, on: 2, Alloy: 1, Polymer: 1, Lux: 0, Furs: 0 };
 
     (state.civic['unemployed'] as { workers: number }).workers = 4;
