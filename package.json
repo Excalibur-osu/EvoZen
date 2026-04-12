@@ -1,7 +1,7 @@
 {
   "name": "evozen",
-  "version": "0.7.5",
-  "description": "EvoZen — 进化之禅",
+  "version": "0.7.7",
+  "description": "EvoZen - A modern reconstruction of the Evolve incremental game",
   "private": true,
   "workspaces": [
     "apps/*",

@@ -19,10 +19,11 @@ import GovernmentPanel from './components/GovernmentPanel.vue'
 import StoragePanel from './components/StoragePanel.vue'
 import PowerPanel from './components/PowerPanel.vue'
 import MilitaryPanel from './components/MilitaryPanel.vue'
+import ArpaPanel from './components/ArpaPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 
 const game = useGameStore()
-const activeTab = ref<'city' | 'civic' | 'research' | 'resources' | 'industry' | 'market' | 'storage' | 'military'>('city')
+const activeTab = ref<'city' | 'civic' | 'research' | 'arpa' | 'resources' | 'industry' | 'market' | 'storage' | 'military'>('city')
 /** 市政 Tab 下的子 Tab */
 const civicSubTab = ref<'jobs' | 'government' | 'military'>('jobs')
 
@@ -36,6 +37,7 @@ const tabs = computed(() => {
     { id: 'city', label: cityTabLabel.value, visible: true },
     { id: 'civic', label: '市政', visible: game.state.settings.showCivic },
     { id: 'research', label: '研究', visible: true },
+    { id: 'arpa', label: 'ARPA', visible: (game.state.tech['monument'] ?? 0) >= 1 },
     { id: 'resources', label: '资源', visible: game.state.settings.showResources },
     { id: 'industry', label: '工坊', visible: (game.state.tech['foundry'] ?? 0) >= 1 },
     { id: 'market', label: '贸易', visible: game.state.settings.showMarket },
@@ -123,6 +125,7 @@ const cityTabLabel = computed(() => {
               <MilitaryPanel v-if="civicSubTab === 'military'" />
             </template>
             <TechPanel v-if="activeTab === 'research'" />
+            <ArpaPanel v-if="activeTab === 'arpa'" />
             <ResourceDetailPanel v-if="activeTab === 'resources'" />
             <CraftPanel v-if="activeTab === 'industry'" />
             <TradePanel v-if="activeTab === 'market'" />

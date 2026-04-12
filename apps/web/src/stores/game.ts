@@ -66,6 +66,28 @@ import {
   armyRating as coreArmyRating,
   garrisonSize as coreGarrisonSize,
   TACTIC_NAMES,
+  // 进化系统
+  purchaseEvoUpgrade as corePurchaseEvoUpgrade,
+  advanceEvoStep as coreAdvanceEvoStep,
+  evolveSentience as coreEvolveSentience,
+  getAvailableUpgrades,
+  getAvailableSteps,
+  getAvailableRaces,
+  getUpgradeCount,
+  getUpgradeCost,
+  PLANET_TRAITS,
+  // ARPA 系统
+  startArpaProject as coreStartArpa,
+  stopArpaProject as coreStopArpa,
+  setMonumentType as coreSetMonumentType,
+  arpaCost,
+  getArpaProjectState,
+  getMonumentType,
+  getAvailableArpaProjects,
+  isArpaAvailable,
+  ARPA_PROJECTS,
+  MONUMENT_NAMES,
+  type MonumentType,
 } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
@@ -274,13 +296,15 @@ export const useGameStore = defineStore('game', () => {
 
   // ---- 进化阶段操作 ----
 
+  /** 手动收集 RNA（legacy: evolution-rna action，+1/tick，RNA 未满时可点击） */
   function gatherRNA() {
     const rna = state.value.resource['RNA']
     if (rna && rna.amount < rna.max) {
-      rna.amount += 1
+      rna.amount = Math.min(rna.max, rna.amount + 1)
     }
   }
 
+  /** 手动合成 DNA（legacy: evolution-dna action，消耗 2 RNA → 1 DNA） */
   function formDNA() {
     const rna = state.value.resource['RNA']
     const dna = state.value.resource['DNA']
@@ -290,8 +314,50 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  /** 开始文明（离开进化阶段） */
+  /** 购买进化升级（membrane/organelles/nucleus/eukaryotic_cell/mitochondria） */
+  function purchaseUpgrade(upgradeId: string) {
+    const result = corePurchaseEvoUpgrade(state.value, upgradeId)
+    if (result) {
+      state.value = result
+    } else {
+      addMessage('RNA 或 DNA 不足，无法购买该升级。', 'warning', 'progress')
+    }
+  }
+
+  /** 推进进化步骤（有性生殖/吞噬/多细胞等），消耗 DNA */
+  function advanceStep(stepId: string) {
+    const result = coreAdvanceEvoStep(state.value, stepId)
+    if (result) {
+      state.value = result
+      const step = getAvailableSteps(state.value).find(s => s.id === stepId)
+      const stepName = step?.name ?? stepId
+      addMessage(`🧬 进化突破：${stepName}！`, 'special', 'progress')
+    } else {
+      addMessage('DNA 不足或条件不满足，无法推进进化。', 'warning', 'progress')
+    }
+  }
+
+  /** 快速开始（跳过进化阶段，直接以人类身份开始文明） */
   function startCivilization(speciesId: string, ptrait: string = 'none') {
+    _applyStartCivilization(speciesId, ptrait)
+  }
+
+  /**
+   * 最终进化：选择种族 → sentience → 进入文明
+   * 对标 legacy L5195-5212 action() + sentience()
+   */
+  function chooseRace(speciesId: string, ptrait: string = 'none') {
+    const sentienceResult = coreEvolveSentience(state.value, speciesId, ptrait)
+    if (!sentienceResult) {
+      addMessage('进化条件不满足或资源不足，请确认 RNA/DNA 充足且已完成人形化进化。', 'warning', 'progress')
+      return
+    }
+    state.value = sentienceResult
+    _applyStartCivilization(speciesId, ptrait)
+  }
+
+  /** 内部：初始化文明阶段状态 */
+  function _applyStartCivilization(speciesId: string, ptrait: string = 'none') {
     const speciesLabels: Record<string, string> = {
       human: '人类', elven: '精灵', orc: '兽人', dwarf: '矮人', goblin: '地精',
     }
@@ -325,7 +391,9 @@ export const useGameStore = defineStore('game', () => {
 
     // 隐藏进化资源
     state.value.resource['RNA'].display = false
-    state.value.resource['DNA'].display = false
+    if (state.value.resource['DNA']) {
+      state.value.resource['DNA'].display = false
+    }
 
     // 设置初始猎人（1个人口全是猎人）
     const hunter = state.value.civic['hunter'] as { workers: number; display: boolean }
@@ -570,6 +638,26 @@ export const useGameStore = defineStore('game', () => {
     return coreGarrisonSize(state.value);
   }
 
+  /** 启动 ARPA 项目 */
+  function startArpa(projectId: string) {
+    const result = coreStartArpa(state.value, projectId)
+    if (result) {
+      state.value = result
+      const def = ARPA_PROJECTS.find(p => p.id === projectId)
+      addMessage(`🏗️ 开始建造：${def?.name ?? projectId}，资源将毥次收取。`, 'info', 'progress')
+    }
+  }
+
+  /** 停止 ARPA 项目 */
+  function stopArpa(projectId: string) {
+    state.value = coreStopArpa(state.value, projectId)
+  }
+
+  /** 设置纪念碑类型 */
+  function changeMonumentType(mType: MonumentType) {
+    state.value = coreSetMonumentType(state.value, mType)
+  }
+
   return {
     state,
     messages,
@@ -600,8 +688,18 @@ export const useGameStore = defineStore('game', () => {
     removeWorker,
     gatherRNA,
     formDNA,
+    purchaseUpgrade,
+    advanceStep,
+    chooseRace,
     startCivilization,
     gather,
+    // 进化查询（供 EvolutionPanel 使用）
+    getAvailableUpgrades: () => getAvailableUpgrades(state.value),
+    getAvailableSteps: () => getAvailableSteps(state.value),
+    getAvailableRaces: () => getAvailableRaces(state.value),
+    getUpgradeCount: (id: string) => getUpgradeCount(state.value, id),
+    getUpgradeCost: (id: string) => getUpgradeCost(state.value, id),
+    PLANET_TRAITS,
     // 合成系统
     doCraft,
     assignCraftLine,
@@ -650,5 +748,16 @@ export const useGameStore = defineStore('game', () => {
     getArmyRating,
     getGarrisonSize,
     TACTIC_NAMES,
+    // ARPA 系统
+    startArpa,
+    stopArpa,
+    changeMonumentType,
+    getArpaProjectState: (id: string) => getArpaProjectState(state.value, id),
+    getAvailableArpaProjects: () => getAvailableArpaProjects(state.value),
+    getMonumentType: () => getMonumentType(state.value),
+    arpaCost: (id: string) => arpaCost(state.value, id),
+    isArpaAvailable: (id: string) => isArpaAvailable(state.value, id),
+    ARPA_PROJECTS,
+    MONUMENT_NAMES,
   }
 })

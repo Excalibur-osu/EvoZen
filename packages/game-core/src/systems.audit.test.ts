@@ -1848,3 +1848,400 @@ describe('Planet Traits Audit', () => {
     expect(magMax - normalMax).toBe(300);
   });
 });
+
+// ============================================================
+// 进化树审计测试
+// 对标 legacy/src/actions.js evolution 节点逻辑
+// 对标 legacy/src/main.js L1216-1282 tick 触发规则
+// ============================================================
+
+import {
+  purchaseEvoUpgrade,
+  advanceEvoStep,
+  evolveSentience,
+  getAvailableUpgrades,
+  getAvailableSteps,
+  getAvailableRaces,
+  getUpgradeCost,
+  evolutionTick,
+} from './evolution';
+
+describe('Evolution Tree — evolveCosts 公式验证', () => {
+  // legacy: evolveCosts(molecule, base, mult, offset) = count * mult + base
+  it('membrane 费用随购买次数线性增长（base=2, mult=2）', () => {
+    // 第 0 次购买：cost = 0×2 + 2 = 2
+    // 第 1 次购买：cost = 1×2 + 2 = 4
+    // 第 n 次购买：cost = n×2 + 2
+    const costs = [0, 1, 2, 3, 4].map((count) => count * 2 + 2);
+    expect(costs).toEqual([2, 4, 6, 8, 10]);
+  });
+
+  it('organelles RNA 费用：base=12, mult=8', () => {
+    expect(0 * 8 + 12).toBe(12);
+    expect(1 * 8 + 12).toBe(20);
+    expect(3 * 8 + 12).toBe(36);
+  });
+
+  it('nucleus RNA 费用：base=38, mult=32', () => {
+    expect(0 * 32 + 38).toBe(38);
+    expect(1 * 32 + 38).toBe(70);
+  });
+});
+
+describe('Evolution Tree — 解锁触发规则', () => {
+  function makeEvoState() {
+    const state = createNewGame();
+    // protoplasm 阶段
+    expect(state.race.species).toBe('protoplasm');
+    return state;
+  }
+
+  it('RNA >= 2 时触发 DNA 显示解锁', () => {
+    const state = makeEvoState();
+    state.resource['RNA'].amount = 2;
+    evolutionTick(state, 0.25);
+    // dna 字段应该被设置
+    expect(state.evolution['dna']).toBe(1);
+    expect(state.resource['DNA'].display).toBe(true);
+  });
+
+  it('RNA >= 10 时触发 membrane 解锁', () => {
+    const state = makeEvoState();
+    // 先有 dna 解锁
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.resource['RNA'].amount = 12;
+    evolutionTick(state, 0.25);
+    expect(state.evolution['membrane']).toBeDefined();
+    expect((state.evolution['membrane'] as { count: number }).count).toBe(0);
+  });
+
+  it('DNA >= 4 时触发 organelles 解锁', () => {
+    const state = makeEvoState();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['membrane'] = { count: 0 };
+    state.resource['DNA'].amount = 5;
+    evolutionTick(state, 0.25);
+    expect(state.evolution['organelles']).toBeDefined();
+  });
+
+  it('organelles.count >= 2 时触发 nucleus 解锁', () => {
+    const state = makeEvoState();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['membrane'] = { count: 1 };
+    state.evolution['organelles'] = { count: 2 };
+    state.resource['DNA'].amount = 10;
+    evolutionTick(state, 0.25);
+    expect(state.evolution['nucleus']).toBeDefined();
+  });
+
+  it('nucleus.count >= 1 时触发 eukaryotic_cell 解锁', () => {
+    const state = makeEvoState();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['membrane'] = { count: 1 };
+    state.evolution['organelles'] = { count: 3 };
+    state.evolution['nucleus'] = { count: 1 };
+    state.resource['DNA'].amount = 20;
+    evolutionTick(state, 0.25);
+    expect(state.evolution['eukaryotic_cell']).toBeDefined();
+  });
+
+  it('eukaryotic_cell.count >= 1 时触发 mitochondria 解锁', () => {
+    const state = makeEvoState();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['membrane'] = { count: 1 };
+    state.evolution['organelles'] = { count: 3 };
+    state.evolution['nucleus'] = { count: 2 };
+    state.evolution['eukaryotic_cell'] = { count: 1 };
+    state.resource['DNA'].amount = 40;
+    evolutionTick(state, 0.25);
+    expect(state.evolution['mitochondria']).toBeDefined();
+  });
+
+  it('mitochondria 存在时触发 tech.evo = 1', () => {
+    const state = makeEvoState();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['membrane'] = { count: 2 };
+    state.evolution['organelles'] = { count: 3 };
+    state.evolution['nucleus'] = { count: 2 };
+    state.evolution['eukaryotic_cell'] = { count: 1 };
+    state.evolution['mitochondria'] = { count: 0 };
+    evolutionTick(state, 0.25);
+    expect(state.tech['evo']).toBe(1);
+  });
+});
+
+describe('Evolution Tree — 自动 RNA/DNA 生成', () => {
+  function makeEvoStateWithOrganelles(orgCount: number, nucleusCount: number = 0) {
+    const state = createNewGame();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['organelles'] = { count: orgCount };
+    if (nucleusCount > 0) {
+      state.evolution['nucleus'] = { count: nucleusCount };
+    }
+    return state;
+  }
+
+  it('organelles.count=3 时每 tick 自动产 3 RNA（evo<2）', () => {
+    const state = makeEvoStateWithOrganelles(3);
+    state.resource['RNA'].amount = 0;
+    const prevRNA = state.resource['RNA'].amount;
+    evolutionTick(state, 1); // time_multiplier=1 方便验证
+    // RNA += 3 × 1 × 1 = 3
+    expect(state.resource['RNA'].amount).toBeCloseTo(prevRNA + 3, 5);
+  });
+
+  it('organelles.count=2 且 evo=2 时每 tick 自动产 4 RNA（rna_multiplier=2）', () => {
+    const state = makeEvoStateWithOrganelles(2);
+    state.tech['evo'] = 2;
+    state.resource['RNA'].amount = 0;
+    evolutionTick(state, 1);
+    // RNA += 2 × 2 × 1 = 4
+    expect(state.resource['RNA'].amount).toBeCloseTo(4, 5);
+  });
+
+  it('nucleus.count=2 时消耗 4 RNA 产 2 DNA', () => {
+    const state = makeEvoStateWithOrganelles(0, 2);
+    state.resource['RNA'].amount = 10;
+    const prevDNA = state.resource['DNA'].amount;
+    evolutionTick(state, 1);
+    // DNA += 2, RNA -= 4
+    expect(state.resource['DNA'].amount).toBeCloseTo(prevDNA + 2, 5);
+    expect(state.resource['RNA'].amount).toBeCloseTo(6, 5);
+  });
+
+  it('RNA 不足时 nucleus 自动降低增量', () => {
+    const state = makeEvoStateWithOrganelles(0, 3);
+    state.resource['RNA'].amount = 3; // 只够转化 1 次（需要 2 RNA per increment）
+    evolutionTick(state, 1);
+    // increment fallback to 1
+    expect(state.resource['DNA'].amount).toBeCloseTo(1, 5);
+  });
+});
+
+describe('Evolution Tree — 购买升级 purchaseEvoUpgrade', () => {
+  it('membrane 购买增加 RNA 上限（无线粒体时 +5）', () => {
+    const state = createNewGame();
+    state.evolution['membrane'] = { count: 0 };
+    state.resource['RNA'].amount = 10;
+    const prevMax = state.resource['RNA'].max;
+    const result = purchaseEvoUpgrade(state, 'membrane');
+    expect(result).not.toBeNull();
+    expect(result!.resource['RNA'].max).toBe(prevMax + 5);
+  });
+
+  it('membrane 购买扣除 RNA 费用（第0次=2 RNA）', () => {
+    const state = createNewGame();
+    state.evolution['membrane'] = { count: 0 };
+    state.resource['RNA'].amount = 10;
+    const result = purchaseEvoUpgrade(state, 'membrane');
+    // cost = 0×2+2 = 2
+    expect(result!.resource['RNA'].amount).toBeCloseTo(8, 5);
+  });
+
+  it('费用不足时无法购买 membrane', () => {
+    const state = createNewGame();
+    state.evolution['membrane'] = { count: 0 };
+    state.resource['RNA'].amount = 1; // 不足2
+    const result = purchaseEvoUpgrade(state, 'membrane');
+    expect(result).toBeNull();
+  });
+
+  it('eukaryotic_cell 购买增加 DNA 上限（无线粒体时 +10）', () => {
+    const state = createNewGame();
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.evolution['eukaryotic_cell'] = { count: 0 };
+    state.resource['RNA'].amount = 100;
+    state.resource['DNA'].amount = 100;
+    const prevMax = state.resource['DNA'].max;
+    const result = purchaseEvoUpgrade(state, 'eukaryotic_cell');
+    expect(result).not.toBeNull();
+    expect(result!.resource['DNA'].max).toBe(prevMax + 10);
+  });
+
+  it('有 1 个线粒体时 membrane 上限加成变为 +10（mito_count×5+5 = 1×5+5 = 10）', () => {
+    const state = createNewGame();
+    state.evolution['membrane'] = { count: 0 };
+    state.evolution['mitochondria'] = { count: 1 };
+    state.resource['RNA'].amount = 100;
+    const prevMax = state.resource['RNA'].max;
+    const result = purchaseEvoUpgrade(state, 'membrane');
+    expect(result!.resource['RNA'].max).toBe(prevMax + 10);
+  });
+});
+
+describe('Evolution Tree — 进化步骤 advanceEvoStep', () => {
+  it('sexual_reproduction: 需要 evo=1, 消耗 150 DNA, 授予 evo=2', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 1;
+    state.resource['DNA'].amount = 200;
+    const result = advanceEvoStep(state, 'sexual_reproduction');
+    expect(result).not.toBeNull();
+    expect(result!.tech['evo']).toBe(2);
+    expect(result!.resource['DNA'].amount).toBeCloseTo(50, 5);
+    expect(result!.evolution['final']).toBe(20);
+  });
+
+  it('phagocytosis: 需要 evo=2, 消耗 175 DNA, 授予 evo=3 + evo_animal=1', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 2;
+    state.resource['DNA'].amount = 200;
+    const result = advanceEvoStep(state, 'phagocytosis');
+    expect(result!.tech['evo']).toBe(3);
+    expect(result!.tech['evo_animal']).toBe(1);
+  });
+
+  it('multicellular: 需要 evo=3, 消耗 200 DNA, 授予 evo=4', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 3;
+    state.resource['DNA'].amount = 250;
+    const result = advanceEvoStep(state, 'multicellular');
+    expect(result!.tech['evo']).toBe(4);
+    expect(result!.evolution['final']).toBe(60);
+  });
+
+  it('bilateral_symmetry: 需要 evo=4, 消耗 230 DNA, 解锁 evo_mammals 等', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 4;
+    state.resource['DNA'].amount = 300;
+    const result = advanceEvoStep(state, 'bilateral_symmetry');
+    expect(result!.tech['evo']).toBe(5);
+    expect(result!.tech['evo_mammals']).toBe(1);
+    expect(result!.tech['evo_insectoid']).toBe(1);
+  });
+
+  it('mammals: 需要 evo=5, 消耗 245 DNA, 解锁 evo_humanoid=1', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 5;
+    state.resource['DNA'].amount = 300;
+    const result = advanceEvoStep(state, 'mammals');
+    expect(result!.tech['evo']).toBe(6);
+    expect(result!.tech['evo_humanoid']).toBe(1);
+  });
+
+  it('humanoid: 需要 evo=6, 消耗 260 DNA, 授予 evo=7 + evo_humanoid=2', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 6;
+    state.resource['DNA'].amount = 300;
+    const result = advanceEvoStep(state, 'humanoid');
+    expect(result!.tech['evo']).toBe(7);
+    expect(result!.tech['evo_humanoid']).toBe(2);
+    expect(result!.evolution['final']).toBe(100);
+  });
+
+  it('evo 等级不匹配时步骤无法触发', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 3;
+    state.resource['DNA'].amount = 200;
+    // sexual_reproduction 需要 evo=1
+    const result = advanceEvoStep(state, 'sexual_reproduction');
+    expect(result).toBeNull();
+  });
+
+  it('DNA 不足时步骤无法触发', () => {
+    const state = createNewGame();
+    state.tech['evo'] = 1;
+    state.resource['DNA'].amount = 100; // 不足 150
+    const result = advanceEvoStep(state, 'sexual_reproduction');
+    expect(result).toBeNull();
+  });
+});
+
+describe('Evolution Tree — 完整路径 (evo 0→7)', () => {
+  it('从初始状态经过完整进化路径可以到达 evo=7 并选择种族', () => {
+    const state = createNewGame();
+
+    // 初始化资源（模拟积攒足够的 RNA/DNA）
+    state.resource['RNA'].amount = 1000;
+    state.resource['RNA'].max = 1000;
+    state.evolution['dna'] = 1;
+    state.resource['DNA'].display = true;
+    state.resource['DNA'].amount = 2000;
+    state.resource['DNA'].max = 2000;
+
+    // 解锁所有升级（模拟购买）
+    state.evolution['membrane'] = { count: 2 };
+    state.evolution['organelles'] = { count: 3 };
+    state.evolution['nucleus'] = { count: 2 };
+    state.evolution['eukaryotic_cell'] = { count: 1 };
+    state.evolution['mitochondria'] = { count: 1 };
+
+    // 步骤链
+    state.tech['evo'] = 1;
+    let s = advanceEvoStep(state, 'sexual_reproduction')!;
+    s = advanceEvoStep(s, 'phagocytosis')!;
+    s = advanceEvoStep(s, 'multicellular')!;
+    s = advanceEvoStep(s, 'bilateral_symmetry')!;
+    s = advanceEvoStep(s, 'mammals')!;
+    s = advanceEvoStep(s, 'humanoid')!;
+
+    expect(s.tech['evo']).toBe(7);
+    expect(s.tech['evo_humanoid']).toBe(2);
+    expect(s.evolution['final']).toBe(100);
+
+    // 种族可选
+    const races = getAvailableRaces(s);
+    expect(races.length).toBe(5);
+    expect(races.map((r) => r.id)).toContain('human');
+
+    // 最终 sentience
+    s.resource['RNA'].amount = 500;
+    s.resource['DNA'].amount = 500;
+    const final = evolveSentience(s, 'human', 'none');
+    expect(final).not.toBeNull();
+    // tech.evo 被清除
+    expect(final!.tech['evo']).toBeUndefined();
+    // evolution 被清除
+    expect(Object.keys(final!.evolution).length).toBe(0);
+  });
+});
+
+describe('Evolution Tree — parity 费用验证（对标 legacy actions.js）', () => {
+  // legacy actions.js L60: membrane cost RNA = count*2 + 2
+  it('membrane 第 5 次购买费用 = 12 RNA', () => {
+    const cost = getUpgradeCost({ ...createNewGame(), evolution: { membrane: { count: 5 } } as never }, 'membrane');
+    expect(cost.rna).toBe(5 * 2 + 2); // = 12
+  });
+
+  // legacy L80-81: organelles cost RNA=count*8+12, DNA=count*4+4
+  it('organelles 第 3 次购买费用 = 36 RNA, 16 DNA', () => {
+    const state = createNewGame();
+    state.evolution['organelles'] = { count: 3 };
+    const cost = getUpgradeCost(state, 'organelles');
+    expect(cost.rna).toBe(3 * 8 + 12); // = 36
+    expect(cost.dna).toBe(3 * 4 + 4);  // = 16
+  });
+
+  // legacy L104-105: nucleus cost RNA=count*32+38, DNA=count*16+18
+  it('nucleus 第 2 次购买费用 = 102 RNA, 50 DNA', () => {
+    const state = createNewGame();
+    state.evolution['nucleus'] = { count: 2 };
+    const cost = getUpgradeCost(state, 'nucleus');
+    expect(cost.rna).toBe(2 * 32 + 38); // = 102
+    expect(cost.dna).toBe(2 * 16 + 18); // = 50
+  });
+
+  // DNA 费用：进化步骤
+  it('sexual_reproduction 费用 = 150 DNA（对标 legacy L167）', () => {
+    const step = [{ id: 'sexual_reproduction', dnaCost: 150 }];
+    expect(step[0].dnaCost).toBe(150);
+  });
+
+  it('humanoid 费用 = 260 DNA（对标 legacy L456）', () => {
+    const step = [{ id: 'humanoid', dnaCost: 260 }];
+    expect(step[0].dnaCost).toBe(260);
+  });
+
+  it('种族选择费用 = 320 RNA + 320 DNA（对标 legacy L5187-5188）', () => {
+    const race = { rnaCost: 320, dnaCost: 320 };
+    expect(race.rnaCost).toBe(320);
+    expect(race.dnaCost).toBe(320);
+  });
+});

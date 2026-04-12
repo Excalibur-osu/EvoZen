@@ -22,6 +22,7 @@
 import type { GameState, MoraleState } from '@evozen/shared-types';
 import { BASE_JOBS } from './jobs';
 import { hasPlanetTrait, mellowVars, denseVars } from './planet-traits';
+import { getMonumentMoraleBonus } from './arpa';
 
 // ============================================================
 // 结果类型
@@ -191,6 +192,9 @@ export function calculateMorale(state: GameState): MoraleResult {
   // 圆形剧场提高上限 — 对标 legacy main.js L3172-3174
   const amphitheatres = (state.city['amphitheatre'] as { count: number } | undefined)?.count ?? 0;
   moraleCap += amphitheatres;
+
+  // 纪念碑士气上限加成 — 对标 legacy arpa.js L172-175: +2 per monument
+  moraleCap += getMonumentMoraleBonus(state);
 
   // 低税率奖励 — 对标 legacy main.js L3210-3211
   // 税率 < 20 时：moraleCap += 10 - floor(tax_rate / 2)

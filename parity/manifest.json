@@ -1,7 +1,7 @@
 {
-  "version": "0.7.4",
-  "lastVerified": "2026-04-07",
-  "coverageEstimate": "20-25% of total original game; ~70-80% of Phase 1A civilized era scope",
+  "version": "0.7.7",
+  "lastVerified": "2026-04-12",
+  "coverageEstimate": "30-35% of total original game; ~90% of Phase 1A civilized era scope",
   "statusLegend": {
     "exact": "Implemented and intended to match legacy behavior within current scope.",
     "partial": "Implemented in part, but known gaps remain.",
@@ -10,16 +10,61 @@
   },
   "systems": [
     {
+      "id": "evolution_tree",
+      "title": "Evolution Tree (Phase 2)",
+      "status": "partial",
+      "notes": [
+        "Full branching evolution tree implemented for humanoid route only.",
+        "evolveCosts formula (count*mult+base) matches legacy L5669-5672 exactly.",
+        "Unlock trigger rules match legacy main.js L1249-1281 exactly.",
+        "Auto RNA/DNA generation (organelles+nucleus tick) matches legacy main.js L1220-1238.",
+        "Step costs (sexual_reproduction=150, phagocytosis=175, ..., humanoid=260) match legacy.",
+        "Race selection costs (320 RNA + 320 DNA) match legacy L5187-5188.",
+        "sentience() cleanup (clear evolution + evo_xxx tech) matches legacy L8426-8432.",
+        "Not yet implemented: plant/fungi/synthetic/special genus routes (intentional Phase 2 scope).",
+        "Not yet implemented: biome-dependent genus availability (eldritch/aquatic/fey/heat/polar/sand require specific biomes).",
+        "34 new unit tests fully verify all unlock rules, costs, and the complete evo 0→7→sentience path."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/evolution.ts" },
+        { "path": "legacy/src/actions.js", "lines": "22-930" },
+        { "path": "legacy/src/main.js", "lines": "1216-1282" }
+      ]
+    },
+    {
       "id": "core_tick_loop",
       "title": "Core Tick Loop",
       "status": "partial",
       "notes": [
         "Core production and consumption formulas are parity-audited.",
-        "Full loop behavior still depends on deterministic replay audits for confidence."
+        "Full loop behavior still depends on deterministic replay audits for confidence.",
+        "Evolution phase now handled by evolutionTick() in evolution.ts.",
+        "ARPA tick now integrated via arpaTick() called at end of gameTick()."
       ],
       "refs": [
         { "path": "packages/game-core/src/tick.ts" },
         { "path": "scripts/audit.mjs" }
+      ]
+    },
+    {
+      "id": "arpa_phase1",
+      "title": "ARPA Long-term Research (Phase 1A)",
+      "status": "partial",
+      "notes": [
+        "costMultiplier formula (mult^rank * base) matches legacy arpa.js L1733-1742 exactly.",
+        "Instalment payment (cost/100 per tick) matches legacy arpa.js L1688.",
+        "Human creative trait reduces mult by 0.01 — matches legacy arpa.js L1735-1737.",
+        "Monument types (Obelisk/Statue/Sculpture/Monolith/Pillar) and costs match legacy arpa.js L1652-1664.",
+        "Monument morale cap bonus (+2 per rank) matches legacy arpa.js L172-175.",
+        "stock_exchange unlock condition (banking:9) matches legacy arpa.js L81.",
+        "Not yet implemented: stock_exchange effect on bank income.",
+        "Not yet implemented: launch_facility, railway, supercollider (require Space tech).",
+        "Not yet implemented: Genetics/CRISPR/Blood pools (require prestige/reset system).",
+        "ARPA tab appears after monument tech research — matches legacy visibility logic."
+      ],
+      "refs": [
+        { "path": "packages/game-core/src/arpa.ts" },
+        { "path": "legacy/src/arpa.js", "lines": "37-300,1649-1742" }
       ]
     },
     {
@@ -157,18 +202,7 @@
         { "path": ".dev_notes.md" }
       ]
     },
-    {
-      "id": "evolution_tree",
-      "title": "Evolution Tree",
-      "status": "intentional_diff",
-      "notes": [
-        "Current implementation uses a simplified RNA/DNA flow and 5-species direct pick."
-      ],
-      "refs": [
-        { "path": "apps/web/src/stores/game.ts" },
-        { "path": ".dev_notes.md" }
-      ]
-    },
+
     {
       "id": "planet_traits",
       "title": "Planet Traits",

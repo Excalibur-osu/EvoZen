@@ -306,10 +306,10 @@ export interface EventState {
 // ============================================================
 
 export interface EvolutionState {
-  [structureId: string]: {
+  [key: string]: {
     count: number;
     [key: string]: unknown;
-  };
+  } | number | boolean | undefined;
 }
 
 // ============================================================
@@ -438,6 +438,7 @@ export interface GameState {
   evolution: EvolutionState;
   tech: TechState;
   city: CityState;
+  arpa?: Record<string, unknown>;
   space: Record<string, StructureState>;
   interstellar: Record<string, StructureState>;
   portal: Record<string, StructureState>;

@@ -26,6 +26,8 @@ import {
   magneticVars,
   rageVars,
 } from './planet-traits';
+import { evolutionTick } from './evolution';
+import { arpaTick } from './arpa';
 
 /**
  * 原版全局时间缩放因子
@@ -42,10 +44,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const messages: GameMessage[] = [];
   const deltas: Record<string, number> = {};
 
-  // 如果还在进化阶段，不做常规 tick
+  // 进化阶段：执行 evo tick（RNA/DNA 自动产出 + 解锁触发）
   if (state.race.species === 'protoplasm') {
+    const newEvoState: GameState = JSON.parse(JSON.stringify(state));
+    const newUnlock = evolutionTick(newEvoState, TIME_MULTIPLIER);
+    if (newUnlock) {
+      // 可以在此推送解锁消息（如需要）
+    }
     return {
-      state,
+      state: newEvoState,
       result: { resourceDeltas: deltas, messages },
     };
   }
@@ -645,6 +652,19 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 对标 legacy/src/industry.js f_rate表，工厂 powered = on
   // ============================================================
   factoryTick(newState, powerResult.activeConsumers['factory'] ?? 0, TIME_MULTIPLIER, deltas);
+
+  // ============================================================
+  // 16. ARPA 长线研究 tick
+  // ============================================================
+  const arpaDone = arpaTick(newState, TIME_MULTIPLIER);
+  for (const projId of arpaDone) {
+    const names: Record<string, string> = { monument: '纪念碑', stock_exchange: '证券交易所' };
+    messages.push({
+      text: `🏛️ ARPA 完成：${names[projId] ?? projId}！`,
+      type: 'special',
+      category: 'progress',
+    });
+  }
 
   return {
     state: newState,
