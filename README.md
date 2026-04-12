@@ -1,4 +1,4 @@
-# EvoZen — 进化之禅
+# EvoZen
 
 基于开源增量进化游戏 [Evolve](https://github.com/pmotschmann/Evolve) 进行**现代化重构**的项目。
 

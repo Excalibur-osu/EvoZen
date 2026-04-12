@@ -156,7 +156,7 @@
       ],
       "refs": [
         { "path": "packages/game-core/src/military.ts" },
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -169,7 +169,7 @@
       ],
       "refs": [
         { "path": "packages/game-core/src/tick.ts" },
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -183,7 +183,7 @@
       "refs": [
         { "path": "packages/game-core/src/events.ts" },
         { "path": "packages/game-core/src/events.test.ts" },
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -199,7 +199,7 @@
       ],
       "refs": [
         { "path": "packages/game-core/src/traits.ts" },
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
 
@@ -213,7 +213,7 @@
       ],
       "refs": [
         { "path": "packages/game-core/src/structures.ts" },
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -224,7 +224,7 @@
         "Legacy late-game research systems remain outside the current reconstruction scope."
       ],
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -235,7 +235,7 @@
         "Moon, Mars, asteroid, gas giant, and related progression are not implemented yet."
       ],
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -246,7 +246,7 @@
         "Bioseed, blackhole, ascend, and other reset paths are not implemented yet."
       ],
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -257,7 +257,7 @@
         "Legacy achievement and permanent bonus systems are still missing."
       ],
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -268,7 +268,7 @@
         "Legacy governor automation is not implemented yet."
       ],
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     }
   ],
@@ -280,7 +280,7 @@
       "evozen": "Simplified RNA and DNA collection with direct species choice.",
       "plan": "Restore the full evolution tree in a later phase.",
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -290,7 +290,7 @@
       "evozen": "5 basic species for the current single-player reconstruction scope.",
       "plan": "Expand species gradually after core parity is stronger.",
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -300,7 +300,7 @@
       "evozen": "250 ticks until the long-loop cadence is fully aligned.",
       "plan": "Re-align after the loop timing is finalized.",
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -310,7 +310,7 @@
       "evozen": "Simplified pre-steel and post-steel fuel logic.",
       "plan": "Expand metallurgy fuel handling later.",
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
       ]
     },
     {
@@ -320,7 +320,17 @@
       "evozen": "Basic campaigns with a narrower tactic and foreign-state model.",
       "plan": "Restore spy and annexation layers in later sprints.",
       "refs": [
-        { "path": ".dev_notes.md" }
+        { "path": "dev_notes.md" }
+      ]
+    },
+    {
+      "id": "skip_evolution_qol",
+      "status": "intentional_diff",
+      "legacy": "Bypassing cell stage is naturally fast using Prestige Plasmids or Challenge modes (joyless) where you still pick species manually.",
+      "evozen": "A hardcoded QoL Quick Start button relying on a simple localStorage flag that skips the entire phase and instantly forces a Human start to save testing time.",
+      "plan": "Remove or refactor into a proper Prestige/Challenge progression system during Phase 2 development.",
+      "refs": [
+        { "path": "dev_notes.md" }
       ]
     }
   ]

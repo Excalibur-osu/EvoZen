@@ -120,12 +120,14 @@ function getCraftAmount(craftId: string): number {
               class="btn btn-sm"
               :disabled="getAssigned(craftId) <= 0"
               @click="game.removeCraftLine(craftId as CraftableId)"
+              data-tooltip="减少此产线工匠"
             >−</button>
             <span class="assign-count">{{ getAssigned(craftId) }}</span>
             <button
               class="btn btn-sm"
               :disabled="unassigned <= 0"
               @click="game.assignCraftLine(craftId as CraftableId)"
+              data-tooltip="增加此产线工匠"
             >+</button>
           </div>
         </div>

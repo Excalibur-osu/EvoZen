@@ -39,4 +39,5 @@ Desktop.ini
 *.map
 
 # Dev Notes
-.dev_notes.md
+dev_notes.md
+note.md

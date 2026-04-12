@@ -54,17 +54,16 @@ export function exportSave(state: GameState): string {
     timestamp: Date.now(),
     version: state.version,
   };
-  const json = JSON.stringify(data);
-  return btoa(encodeURIComponent(json));
+  const json = JSON.stringify(data, null, 2);
+  return json;
 }
 
 /**
  * 从字符串导入存档
  */
-export function importSave(encoded: string): GameState | null {
+export function importSave(rawJson: string): GameState | null {
   try {
-    const json = decodeURIComponent(atob(encoded));
-    const data: SaveData = JSON.parse(json);
+    const data: SaveData = JSON.parse(rawJson);
 
     if (!data.gameState || !data.version) {
       console.error('无效的存档数据');

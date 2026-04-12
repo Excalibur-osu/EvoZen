@@ -51,7 +51,7 @@ export const SPECIES_TRAIT_DESCRIPTORS: Record<SupportedSpeciesId, SpeciesTraitD
     { id: 'arrogant', label: '傲慢', summary: '市场买入价格 +10%。', activeNow: true },
   ],
   orc: [
-    { id: 'brute', label: '野蛮', summary: '训练速度 +100%（每 tick 额外 +2.5 进度），佣兵费用 -50%。', activeNow: true },
+    { id: 'brute', label: '野蛮', summary: '训练速度 +100%（每秒额外 +2.5 进度），佣兵费用 -50%。', activeNow: true },
     { id: 'angry', label: '易怒', summary: '食物耗尽时所有工人产出仅为 25%（正常饥饿为 50%）。', activeNow: true },
   ],
   dwarf: [

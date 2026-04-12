@@ -100,8 +100,8 @@ function adjustGeneratorOn(id: string, delta: number) {
           </span>
         </div>
         <div class="power-row-controls">
-          <button class="ctrl-btn" @click="adjustGeneratorOn(gen.id, -1)" :disabled="(gen.on ?? 0) <= 0">−</button>
-          <button class="ctrl-btn" @click="adjustGeneratorOn(gen.id, 1)" :disabled="gen.on >= gen.count">+</button>
+          <button class="ctrl-btn" @click="adjustGeneratorOn(gen.id, -1)" :disabled="(gen.on ?? 0) <= 0" data-tooltip="关闭一台">−</button>
+          <button class="ctrl-btn" @click="adjustGeneratorOn(gen.id, 1)" :disabled="gen.on >= gen.count" data-tooltip="开启一台">+</button>
         </div>
       </div>
     </div>

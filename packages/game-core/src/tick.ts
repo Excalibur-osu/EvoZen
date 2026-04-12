@@ -47,10 +47,23 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 进化阶段：执行 evo tick（RNA/DNA 自动产出 + 解锁触发）
   if (state.race.species === 'protoplasm') {
     const newEvoState: GameState = JSON.parse(JSON.stringify(state));
+    const initialRNA = state.resource['RNA']?.amount ?? 0;
+    const initialDNA = state.resource['DNA']?.amount ?? 0;
+
     const newUnlock = evolutionTick(newEvoState, TIME_MULTIPLIER);
-    if (newUnlock) {
-      // 可以在此推送解锁消息（如需要）
+
+    const finalRNA = newEvoState.resource['RNA']?.amount ?? 0;
+    const finalDNA = newEvoState.resource['DNA']?.amount ?? 0;
+
+    if (newEvoState.resource['RNA']) {
+      deltas['RNA'] = finalRNA - initialRNA;
+      newEvoState.resource['RNA'].diff = finalRNA - initialRNA;
     }
+    if (newEvoState.resource['DNA']) {
+      deltas['DNA'] = finalDNA - initialDNA;
+      newEvoState.resource['DNA'].diff = finalDNA - initialDNA;
+    }
+
     return {
       state: newEvoState,
       result: { resourceDeltas: deltas, messages },

@@ -479,6 +479,7 @@ export interface GameMessage {
   text: string;
   type: 'info' | 'warning' | 'success' | 'danger' | 'special';
   category: string;
+  timestamp?: string;
 }
 
 // ============================================================

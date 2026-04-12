@@ -588,7 +588,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Cement: scaleCementCost(5250, 1.5),
       Steel: scaleCost(6000, 1.5),
     },
-    effect: '每座油井产出 0.4 石油/tick，石油上限 +500。',
+    effect: '每座油井每秒产出 0.4 石油，石油上限 +500。',
   },
   // actions.js L3097-3140: oil_depot
   {
@@ -621,7 +621,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Cement: scaleCementCost(600, 1.22),
       Steel: scaleCostMinus(2000, 1.22, 1000),
     },
-    effect: '每座 +5MW 电力，消耗 0.35 煤/tick。',
+    effect: '每座 +5MW 电力，每天或每秒消耗 0.35 煤。',
   },
   // actions.js L4058-4119: oil_power (石油发电站)
   // 对标原版：reqs { oil: 3 }，每座 +6MW，消耗 0.65 Oil/tick
@@ -638,7 +638,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Aluminium: scaleCost(12000, 1.22),
       Cement: (state, count) => scaleCementCost(5600, 1.22)(state, count) + 1000,
     },
-    effect: '每座 +6MW 电力，消耗 0.65 石油/tick。',
+    effect: '每座 +6MW 电力，每秒消耗 0.65 石油。',
   },
   // actions.js L2786-2841: factory (工厂)
   // 对标原版：reqs { high_tech: 3 }，需电 3MW，开启合金/聚合物产线
@@ -654,7 +654,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Steel: scaleCost(7500, 1.32),
       Titanium: scaleCost(2500, 1.32),
     },
-    effect: '开启合金/聚合物产线，每条产线每 tick 产出合金 0.075 或聚合物 0.125。',
+    effect: '开启合金/聚合物产线，每条产线每秒产出合金 0.075 或聚合物 0.125。',
     powered: true,
     powerCost: 3,
   },
@@ -748,6 +748,6 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Cement: scaleCementCost(10800, 1.36),
       Titanium: scaleCost(7500, 1.36),
     },
-    effect: '每座 +14MW 电力，消耗 0.1 铀/tick。',
+    effect: '每座 +14MW 电力，每秒消耗 0.1 铀。',
   },
 ];

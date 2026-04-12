@@ -29,7 +29,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
     popCap += farms;
   }
   if (s.resource[species]) {
-    s.resource[species].max = Math.max(1, popCap);
+    s.resource[species].max = popCap;
   }
 
   let foodMax = 250;
@@ -162,6 +162,12 @@ export function applyDerivedStateInPlace(state: GameState): void {
   setJobMax('professor', universities);
   setJobMax('scientist', wardenclyffes);
 
+  if ((s.tech['primitive'] ?? 0) >= 1) {
+    s.resource['Food'].display = true;
+  }
+  if ((s.tech['primitive'] ?? 0) >= 2) {
+    s.resource['Stone'].display = true;
+  }
   if ((s.tech['mining'] ?? 0) >= 3) {
     s.resource['Iron'].display = true;
   }
@@ -196,6 +202,21 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
   const temples = getStructCount('temple');
   setJobMax('priest', temples);
+
+  // ── 岗位展示解锁 (early game UI sync) ──────────────────────────────
+  if (s.resource[species] && s.resource[species].amount > 0) {
+    if (s.civic['unemployed']) (s.civic['unemployed'] as { display: boolean }).display = true;
+  }
+  if ((s.tech['primitive'] ?? 0) >= 1) {
+    if (s.civic['hunter']) (s.civic['hunter'] as { display: boolean }).display = true;
+    if (s.civic['lumberjack']) (s.civic['lumberjack'] as { display: boolean }).display = true;
+  }
+  if ((s.tech['primitive'] ?? 0) >= 2) {
+    if (s.civic['quarry_worker']) (s.civic['quarry_worker'] as { display: boolean }).display = true;
+  }
+  if ((s.tech['agriculture'] ?? 0) >= 1) {
+    if (s.civic['farmer']) (s.civic['farmer'] as { display: boolean }).display = true;
+  }
 
   // ── 岗位 worker clamp ──────────────────────────────
   // 当建筑被拆除 → job.max 下降 → 可能 workers > max

@@ -36,6 +36,7 @@ function msgClass(type: string): string {
   <div class="message-log-section">
     <div class="log-header">
       <span class="log-title">📜 消息日志</span>
+      <button class="clear-btn" @click="game.clearMessages()" title="清空日志">🗑️</button>
     </div>
     <div class="log-list" ref="logContainer">
       <p
@@ -44,7 +45,8 @@ function msgClass(type: string): string {
         class="log-item"
         :class="msgClass(msg.type)"
       >
-        {{ msg.text }}
+        <span class="log-time" v-if="msg.timestamp">[{{ msg.timestamp }}]</span>
+        <span class="log-text">{{ msg.text }}</span>
       </p>
     </div>
   </div>
@@ -52,17 +54,33 @@ function msgClass(type: string): string {
 
 <style scoped>
 .message-log-section {
-  flex-shrink: 0;
-  max-height: 180px;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--border-color);
 }
 .log-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 6px 12px;
   background: rgba(255,255,255,0.02);
+}
+.clear-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.5;
+  transition: all 0.2s;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.clear-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 .log-title {
   font-size: 12px;
@@ -87,4 +105,11 @@ function msgClass(type: string): string {
 .msg-warning { color: var(--warning); }
 .msg-special { color: #a78bfa; font-weight: 600; }
 .msg-info { color: var(--text-secondary); }
+.log-time {
+  color: var(--text-muted);
+  opacity: 0.8;
+  margin-right: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
 </style>

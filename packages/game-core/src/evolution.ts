@@ -34,8 +34,11 @@ export interface EvoUpgrade {
   rnaCost?: (count: number) => number;
   /** DNA 费用函数：接收当前 count，返回费用 */
   dnaCost?: (count: number) => number;
-  /** effect 文本（函数以便动态计算） */
-  effectText: (count: number) => string;
+  /** effect 文本（函数以便动态计算）
+   * @param count 该升级当前已购次数
+   * @param ctx   相关升级的 count 映射（如 mitochondria），供需要上下文的升级使用
+   */
+  effectText: (count: number, ctx?: Record<string, number>) => string;
   /** 显示条件 */
   isAvailable: (evo: Record<string, { count: number } | number>) => boolean;
 }
@@ -80,7 +83,12 @@ export const EVO_UPGRADES: EvoUpgrade[] = [
     name: '细胞膜',
     desc: '建造更多细胞膜，扩展 RNA 储量。',
     rnaCost: (count) => count * 2 + 2,   // evolveCosts('membrane', 2, 2, offset)
-    effectText: (count) => `RNA 储量上限 +${count * 5 + 5}（购买后生效）。`,
+    // legacy L61-63: effect = mito ? mito.count*5+5 : 5  ← 每次购买的固定增量
+    effectText: (_count, ctx) => {
+      const mitoCount = ctx?.['mitochondria'] ?? 0;
+      const gain = mitoCount > 0 ? mitoCount * 5 + 5 : 5;
+      return `RNA 储量上限 +${gain}（购买后生效）。`;
+    },
     isAvailable: (evo) => 'membrane' in evo,
   },
 
@@ -91,8 +99,8 @@ export const EVO_UPGRADES: EvoUpgrade[] = [
     desc: '进化出更多细胞器，自动产生 RNA。',
     rnaCost: (count) => count * 8 + 12,
     dnaCost: (count) => count * 4 + 4,
-    effectText: (count) =>
-      `每 tick 自动产生 ${count + 1} RNA（购买后生效）。`,
+    // legacy L84-88: 每个细胞器每秒产生 1 RNA（固定值，与已购数无关）
+    effectText: (_count) => '每秒自动产生 1 RNA（购买后生效）。',
     isAvailable: (evo) => 'organelles' in evo,
   },
 
@@ -104,8 +112,8 @@ export const EVO_UPGRADES: EvoUpgrade[] = [
     desc: '强化细胞核，自动将 RNA 转化为 DNA。',
     rnaCost: (count) => count * 32 + 38,
     dnaCost: (count) => count * 16 + 18,
-    effectText: (count) =>
-      `每 tick 自动消耗 ${(count + 1) * 2} RNA，产生 ${count + 1} DNA。`,
+    // legacy L108-109: 每个细胞核每秒消耗 2 RNA，产生 1 DNA（固定值）
+    effectText: (_count) => '每秒自动消耗 2 RNA，产生 1 DNA（购买后生效）。',
     isAvailable: (evo) => 'nucleus' in evo,
   },
 
@@ -116,7 +124,12 @@ export const EVO_UPGRADES: EvoUpgrade[] = [
     desc: '进化出完整的真核细胞，扩展 DNA 储量。',
     rnaCost: (count) => count * 20 + 20,
     dnaCost: (count) => count * 12 + 40,
-    effectText: (count) => `DNA 储量上限 +${count * 10 + 10}（购买后生效）。`,
+    // legacy L129-130: effect = mito ? mito.count*10+10 : 10  ← 每次购买的固定增量
+    effectText: (_count, ctx) => {
+      const mitoCount = ctx?.['mitochondria'] ?? 0;
+      const gain = mitoCount > 0 ? mitoCount * 10 + 10 : 10;
+      return `DNA 储量上限 +${gain}（购买后生效）。`;
+    },
     isAvailable: (evo) => 'eukaryotic_cell' in evo,
   },
 

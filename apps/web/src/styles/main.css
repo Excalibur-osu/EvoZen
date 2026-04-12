@@ -1,67 +1,69 @@
 /* ============================================================
    EvoZen — 全局样式
-   现代暗色主题游戏 UI
+   现代暗色主题游戏 UI (OLED Dark Sci-Fi, High Density)
    ============================================================ */
 
 :root {
-  /* 色彩系统 */
-  --bg-primary: #0a0e17;
-  --bg-secondary: #111827;
-  --bg-card: #1a2236;
-  --bg-card-hover: #1f2a42;
-  --bg-input: #0d1322;
+  /* 高对比度深色色彩系统 (OLED Dark) */
+  --bg-primary: #020617; /* Deepest black/blue */
+  --bg-secondary: #0f172a; /* Slate 900 */
+  --bg-card: #1e293b; /* Slate 800 */
+  --bg-card-hover: #334155; /* Slate 700 */
+  --bg-input: #000000;
 
-  --border-color: #2a3654;
-  --border-hover: #3d5278;
-  --border-accent: #4f7cda;
+  --border-color: #334155;
+  --border-hover: #475569;
+  --border-accent: #22c55e;
 
-  --text-primary: #e8ecf4;
-  --text-secondary: #9ba4b8;
-  --text-muted: #5e6a82;
-  --text-accent: #7eb3ff;
+  --text-primary: #ffffff;
+  --text-secondary: #cbd5e1; /* Brighter Slate 300 to show clearly on deep dark */
+  --text-muted: #94a3b8; /* Brighter Slate 400 (was 600) so divider text is readable */
+  --text-accent: #22c55e; /* Cyber Green */
 
-  --accent: #4f7cda;
-  --accent-glow: rgba(79, 124, 218, 0.25);
-  --accent-hover: #6390e4;
+  --accent: #22c55e; /* Primary Sci-Fi Green */
+  --accent-glow: rgba(34, 197, 94, 0.25);
+  --accent-hover: #4ade80;
+  
+  --secondary: #3b82f6; /* Blue for alternatives */
 
-  --success: #34d399;
-  --success-glow: rgba(52, 211, 153, 0.2);
-  --warning: #fbbf24;
-  --warning-glow: rgba(251, 191, 36, 0.2);
-  --danger: #f87171;
-  --danger-glow: rgba(248, 113, 113, 0.2);
-  --info: #60a5fa;
+  --success: #22c55e;
+  --success-glow: rgba(34, 197, 94, 0.2);
+  --warning: #eab308;
+  --warning-glow: rgba(234, 179, 8, 0.2);
+  --danger: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.2);
+  --info: #3b82f6;
 
-  /* 资源颜色 */
-  --res-money: #fbbf24;
-  --res-food: #34d399;
-  --res-lumber: #a78b5a;
-  --res-stone: #9ca3af;
-  --res-copper: #f59e42;
-  --res-iron: #94a3b8;
-  --res-coal: #6b7280;
-  --res-knowledge: #60a5fa;
-  --res-cement: #d1d5db;
-  --res-furs: #c2956b;
+  /* 资源颜色 (Vivid variants) */
+  --res-money: #eab308;
+  --res-food: #22c55e;
+  --res-lumber: #b45309;
+  --res-stone: #94a3b8;
+  --res-copper: #f59e0b;
+  --res-iron: #cbd5e1;
+  --res-coal: #64748b;
+  --res-knowledge: #3b82f6;
+  --res-cement: #e2e8f0;
+  --res-furs: #d97706;
   --res-steel: #818cf8;
-  --res-rna: #a78bfa;
-  --res-dna: #f472b6;
+  --res-rna: #a855f7;
+  --res-dna: #ec4899;
 
-  /* 间距 */
-  --gap-xs: 4px;
-  --gap-sm: 8px;
-  --gap-md: 12px;
-  --gap-lg: 16px;
-  --gap-xl: 24px;
+  /* 紧凑间距系统 */
+  --gap-xs: 2px;
+  --gap-sm: 4px;
+  --gap-md: 8px;
+  --gap-lg: 12px;
+  --gap-xl: 16px;
 
-  /* 圆角 */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* 微小圆角系统 (更加干练的科幻感) */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
 
-  /* 字体 */
-  --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  /* 字体系统 */
+  --font-sans: 'Inter', '-apple-system', 'BlinkMacSystemFont', sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
 }
 
 * {
@@ -75,8 +77,8 @@ html, body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px; /* 基本字体调小，提高密度 */
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
@@ -86,35 +88,35 @@ html, body {
   height: 100%;
 }
 
-/* ---- 滚动条 ---- */
+/* ---- 极简滚动条 ---- */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover);
 }
 
-/* ---- 按钮 ---- */
+/* ---- 紧凑按钮 (Glowing Hover Effects) ---- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 4px;
+  padding: 4px 10px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -124,20 +126,19 @@ html, body {
 .btn:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 .btn:active {
-  transform: translateY(0);
+  transform: translateY(1px);
 }
 .btn.primary {
-  background: var(--accent);
+  background: rgba(34, 197, 94, 0.1);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent);
 }
 .btn.primary:hover {
-  background: var(--accent-hover);
-  box-shadow: 0 2px 12px var(--accent-glow);
+  background: rgba(34, 197, 94, 0.2);
+  box-shadow: 0 0 8px var(--accent-glow);
+  text-shadow: 0 0 5px var(--accent-glow);
 }
 .btn.success {
   border-color: var(--success);
@@ -147,18 +148,23 @@ html, body {
   border-color: var(--danger);
   color: var(--danger);
 }
+.btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 8px var(--danger-glow);
+}
 .btn.sm {
-  padding: 3px 8px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 11px;
 }
 .btn:disabled {
-  opacity: 0.35;
+  opacity: 0.6;
   cursor: not-allowed;
-  transform: none !important;
-  box-shadow: none !important;
+  filter: grayscale(100%);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 
-/* ---- 卡片 ---- */
+/* ---- 紧凑卡片 (Glass Effect / Sci-Fi Panels) ---- */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -173,61 +179,62 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(255,255,255,0.02);
+  background: rgba(255,255,255,0.015);
 }
 .card-header h3 {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 .card-body {
-  padding: 12px 14px;
+  padding: 8px 10px;
 }
 
-/* ---- 进度条 ---- */
+/* ---- 超纤细进度条 ---- */
 .progress-bar {
   position: relative;
-  height: 6px;
+  height: 3px; /* Thin sci-fi loader */
   background: var(--bg-input);
-  border-radius: 3px;
+  border-radius: 1px;
   overflow: hidden;
 }
 .progress-bar .fill {
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  border-radius: 1px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(90deg, #166534, var(--accent));
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 .progress-bar.success .fill {
-  background: linear-gradient(90deg, #059669, var(--success));
+  background: linear-gradient(90deg, #166534, var(--success));
 }
 .progress-bar.warning .fill {
-  background: linear-gradient(90deg, #d97706, var(--warning));
+  background: linear-gradient(90deg, #854d0e, var(--warning));
 }
 .progress-bar.danger .fill {
-  background: linear-gradient(90deg, #dc2626, var(--danger));
+  background: linear-gradient(90deg, #991b1b, var(--danger));
 }
 
-/* ---- 带 +/- 号的速率 ---- */
-.rate-positive { color: var(--success); }
-.rate-negative { color: var(--danger); }
-.rate-zero { color: var(--text-muted); }
+/* ---- 带 +/- 号的速率 (调整为科幻终端感) ---- */
+.rate-positive { color: var(--success); font-family: var(--font-mono); }
+.rate-negative { color: var(--danger); font-family: var(--font-mono); }
+.rate-zero { color: var(--text-muted); font-family: var(--font-mono); }
 
 /* ---- 简单动画 ---- */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
-  50% { box-shadow: 0 0 12px 4px var(--accent-glow); }
+  50% { box-shadow: 0 0 8px 2px var(--accent-glow); }
 }
 .animate-in {
-  animation: fadeIn 0.3s ease both;
+  animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* ---- 布局工具类 ---- */
@@ -240,7 +247,108 @@ html, body {
 .gap-md { gap: var(--gap-md); }
 .gap-lg { gap: var(--gap-lg); }
 .flex-1 { flex: 1; min-width: 0; }
-.text-sm { font-size: 12px; }
-.text-xs { font-size: 11px; }
-.font-mono { font-family: var(--font-mono); }
+
+.text-sm { font-size: 11px; }
+.text-xs { font-size: 10px; }
+.font-mono { font-family: var(--font-mono); font-size: 0.95em; letter-spacing: -0.2px; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============================================================
+   全局 Tooltip 系统
+   用法: <span data-tooltip="提示文字">...</span>
+   可选方向: data-tooltip-pos="bottom" (默认 top)
+   ============================================================ */
+[data-tooltip] {
+  position: relative;
+}
+/* 仅对非交互元素（span/div/label）显示问号光标 */
+span[data-tooltip],
+div[data-tooltip],
+abbr[data-tooltip],
+label[data-tooltip] {
+  cursor: help;
+}
+/* 上方气泡（默认） */
+[data-tooltip]:not([data-tooltip-pos="bottom"])::after,
+[data-tooltip][data-tooltip-pos="top"]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #0f172a;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(71, 85, 105, 0.3);
+  letter-spacing: normal;
+  text-transform: none;
+}
+/* 下方气泡 */
+[data-tooltip][data-tooltip-pos="bottom"]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: #0f172a;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  letter-spacing: normal;
+  text-transform: none;
+}
+/* 小箭头（上方） */
+[data-tooltip]:not([data-tooltip-pos="bottom"])::before,
+[data-tooltip][data-tooltip-pos="top"]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  border: 5px solid transparent;
+  border-top-color: #475569;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 9999;
+}
+/* 小箭头（下方） */
+[data-tooltip][data-tooltip-pos="bottom"]::before {
+  content: '';
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  border: 5px solid transparent;
+  border-bottom-color: #475569;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 9999;
+}
+[data-tooltip]:hover::after,
+[data-tooltip]:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+

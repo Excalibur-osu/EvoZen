@@ -3,6 +3,7 @@
  * 从旧 src/vars.js 提取核心新游戏数据结构
  */
 
+import { SAVE_VERSION } from './version';
 import type {
   GameState,
   ResourceState,
@@ -107,7 +108,7 @@ export function createNewGame(): GameState {
   const state: GameState = {
     seed: 2,
     warseed: 2,
-    version: '0.7.0',
+    version: SAVE_VERSION,
 
     resource: {
       // 进化阶段

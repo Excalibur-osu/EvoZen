@@ -113,11 +113,13 @@ const canBuildContainer = computed(() => {
               class="btn-assign btn-minus"
               :disabled="res.crates <= 0"
               @click="game.doUnassignCrate(res.id)"
+              data-tooltip="取消分配一个板条筐"
             >−</button>
             <button
               class="btn-assign btn-plus"
               :disabled="freeCrates <= 0"
               @click="game.doAssignCrate(res.id)"
+              data-tooltip="分配一个板条筐"
             >+</button>
           </div>
         </div>
@@ -160,11 +162,13 @@ const canBuildContainer = computed(() => {
               class="btn-assign btn-minus"
               :disabled="res.containers <= 0"
               @click="game.doUnassignContainer(res.id)"
+              data-tooltip="取消分配一个集装筱"
             >−</button>
             <button
               class="btn-assign btn-plus"
               :disabled="freeContainers <= 0"
               @click="game.doAssignContainer(res.id)"
+              data-tooltip="分配一个集装筱"
             >+</button>
           </div>
         </div>

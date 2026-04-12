@@ -54,6 +54,18 @@ function rng(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min)) + min;
 }
 
+/**
+ * 将 tick 数转换为可读时间字符串（基于 250ms/tick）
+ * 300 tick → "约 1 分 15 秒"
+ */
+function ticksToTime(ticks: number): string {
+  const seconds = Math.round(ticks * 0.25);
+  if (seconds < 60) return `约 ${seconds} 秒`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `约 ${mins} 分 ${secs} 秒` : `约 ${mins} 分钟`;
+}
+
 function clampResource(state: GameState, id: string, delta: number): number {
   const res = state.resource[id];
   if (!res) return 0;
@@ -79,7 +91,7 @@ export const EVENTS: EventDefinition[] = [
     effect(state) {
       const ticks = rng(300, 600);
       (state.race as any)['inspired'] = ticks;
-      return `💡 灵感迸发！一位市民灵光一闪，未来 ${ticks} tick 的知识产出提升 50%。`;
+      return `💡 灵感迸发！一位市民灵光一闪，未来 ${ticksToTime(ticks)} 的知识产出提升 50%。`;
     },
   },
 
@@ -88,10 +100,14 @@ export const EVENTS: EventDefinition[] = [
     id: 'motivation',
     type: 'major',
     reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return (state.resource[species]?.amount ?? 0) > 0;
+    },
     effect(state) {
       const ticks = rng(300, 600);
       (state.race as any)['motivated'] = ticks;
-      return `💪 士气高涨！市民们干劲十足，未来 ${ticks} tick 所有产出 +5%。`;
+      return `💪 士气高涨！市民们干劲十足，未来 ${ticksToTime(ticks)} 所有产出 +5%。`;
     },
   },
 
@@ -292,6 +308,10 @@ export const EVENTS: EventDefinition[] = [
     id: 'shooting_star',
     type: 'minor',
     reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return (state.resource[species]?.amount ?? 0) > 0;
+    },
     effect(_state) {
       const quotes = [
         '🌠 夜空中划过一颗流星，让人不禁许下心愿。',
@@ -307,6 +327,10 @@ export const EVENTS: EventDefinition[] = [
     id: 'meteor_shower',
     type: 'minor',
     reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return (state.resource[species]?.amount ?? 0) > 0;
+    },
     effect(_state) {
       return `☄️ 壮观的流星雨划过星空，市民们驻足仰望，士气略有提升。`;
     },
@@ -371,6 +395,10 @@ export const EVENTS: EventDefinition[] = [
     id: 'bird',
     type: 'minor',
     reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return (state.resource[species]?.amount ?? 0) > 0;
+    },
     effect(_state) {
       const msgs = [
         '🐦 一只鸟在城门上停留片刻，好像在审视着我们。',
@@ -386,6 +414,10 @@ export const EVENTS: EventDefinition[] = [
     id: 'omen',
     type: 'minor',
     reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return (state.resource[species]?.amount ?? 0) > 0;
+    },
     effect(_state) {
       const omens = [
         '🔮 夜晚星象异常，占星师预言即将有大事发生。',

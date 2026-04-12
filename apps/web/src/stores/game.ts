@@ -97,6 +97,9 @@ export const useGameStore = defineStore('game', () => {
   const tickInterval = ref<ReturnType<typeof setInterval> | null>(null)
   const tickSpeed = ref(250) // ms per tick
   const isPaused = ref(false)
+  const ticksSinceLastSave = ref(0)
+  const lastSaveTime = ref(0)
+  const isSettingsOpen = ref(false)
 
   // ---- 计算属性 ----
   const isEvolving = computed(() => state.value.race.species === 'protoplasm')
@@ -135,6 +138,12 @@ export const useGameStore = defineStore('game', () => {
     if (saved) {
       state.value = saved
       syncRaceTraits()
+      try {
+        const savedMsgs = localStorage.getItem('evozen_recent_messages')
+        if (savedMsgs) messages.value = JSON.parse(savedMsgs)
+      } catch (e) {
+        /* ignore parser error */
+      }
       addMessage('读取存档成功。', 'success', 'progress')
     } else {
       state.value = createNewGame()
@@ -157,12 +166,23 @@ export const useGameStore = defineStore('game', () => {
   function doTick() {
     const tickOutput = runSimulationTick(state.value)
     state.value = tickOutput.state
+    const ts = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    let hasNew = false
     for (const msg of tickOutput.result.messages) {
+      if (!msg.timestamp) msg.timestamp = ts
       messages.value.push(msg)
+      hasNew = true
     }
-    // 自动存档（每 100 tick）
-    if ((state.value.stats.days ?? 0) % 100 === 0 && state.value.stats.days > 0) {
-      saveGame(state.value)
+    if (hasNew && messages.value.length > 200) {
+      messages.value = messages.value.slice(-100)
+    }
+    if (hasNew) persistMessages()
+
+    // 自动存档（真实世界的 tick，大约每 2000 tick = 500秒 = 8分钟，与原版一致保证稳健性）
+    ticksSinceLastSave.value++
+    if (ticksSinceLastSave.value >= 2000) {
+      save()
+      ticksSinceLastSave.value = 0
     }
   }
 
@@ -179,10 +199,27 @@ export const useGameStore = defineStore('game', () => {
     isPaused.value = !isPaused.value
   }
 
-  /** 手动存档 */
+  /** 打开/关闭设置页 */
+  function toggleSettings() {
+    isSettingsOpen.value = !isSettingsOpen.value
+  }
+
+  /** 手动/自动存档 */
   function save() {
     const ok = saveGame(state.value)
-    addMessage(ok ? '存档成功！' : '存档失败。', ok ? 'success' : 'danger', 'progress')
+    if (ok) {
+      lastSaveTime.value = Date.now()
+    } else {
+      addMessage('存档遇到问题，进度未保存。', 'danger', 'progress')
+    }
+  }
+
+  /** 硬重置游戏 */
+  function hardReset() {
+    state.value = createNewGame()
+    saveGame(state.value)
+    messages.value = []
+    addMessage('游戏已硬重置，所有进度被清空。', 'warning', 'progress')
   }
 
   /** 导出存档 */
@@ -204,10 +241,27 @@ export const useGameStore = defineStore('game', () => {
 
   /** 添加消息 */
   function addMessage(text: string, type: GameMessage['type'] = 'info', category = 'progress') {
-    messages.value.push({ text, type, category })
+    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    messages.value.push({ text, type, category, timestamp })
     if (messages.value.length > 200) {
       messages.value = messages.value.slice(-100)
     }
+    persistMessages()
+  }
+
+  /** 同步消息到 localStorage */
+  function persistMessages() {
+    try {
+      localStorage.setItem('evozen_recent_messages', JSON.stringify(messages.value))
+    } catch (e) {
+      /* ignore storage quota space out errors */
+    }
+  }
+
+  /** 清空消息 */
+  function clearMessages() {
+    messages.value = []
+    persistMessages()
   }
 
   // ---- 建筑操作 ----
@@ -326,11 +380,11 @@ export const useGameStore = defineStore('game', () => {
 
   /** 推进进化步骤（有性生殖/吞噬/多细胞等），消耗 DNA */
   function advanceStep(stepId: string) {
+    // ⚠️ 必须在 state 更新前查名称：完成后该步骤不再出现在 getAvailableSteps 里
+    const stepName = getAvailableSteps(state.value).find(s => s.id === stepId)?.name ?? stepId
     const result = coreAdvanceEvoStep(state.value, stepId)
     if (result) {
       state.value = result
-      const step = getAvailableSteps(state.value).find(s => s.id === stepId)
-      const stepName = step?.name ?? stepId
       addMessage(`🧬 进化突破：${stepName}！`, 'special', 'progress')
     } else {
       addMessage('DNA 不足或条件不满足，无法推进进化。', 'warning', 'progress')
@@ -362,31 +416,37 @@ export const useGameStore = defineStore('game', () => {
       human: '人类', elven: '精灵', orc: '兽人', dwarf: '矮人', goblin: '地精',
     }
 
+    try {
+      localStorage.setItem('evozen_has_evolved_once', 'true')
+    } catch (e) {
+      console.warn('Failed to save evolution status to localStorage', e)
+    }
+
     state.value.race.species = speciesId
     state.value.city.ptrait = ptrait
     syncRaceTraits()
 
-    // 初始化种族人口资源（1个初始人口，上限1）
+    // 初始化种族人口资源（0个初始人口，上限0，需靠盖房）
     state.value.resource[speciesId] = {
       name: speciesLabels[speciesId] ?? speciesId,
       display: true,
       value: 0,
-      amount: 1,
-      max: 1,
+      amount: 0,
+      max: 0,
       rate: 0,
       crates: 0,
       diff: 0,
       delta: 0,
     }
 
-    // 给予初始资源
-    state.value.resource['Food'].display = true
-    state.value.resource['Food'].amount = 20
+    // 给予初始资源（除了木材，其他资源初始隐藏，且均为0）
+    state.value.resource['Food'].display = false // 由棍棒解锁
+    state.value.resource['Food'].amount = 0
     state.value.resource['Lumber'].display = true
-    state.value.resource['Lumber'].amount = 15
-    state.value.resource['Stone'].display = true
+    state.value.resource['Lumber'].amount = 0
+    state.value.resource['Stone'].display = false // 由骨制工具解锁
     state.value.resource['Stone'].amount = 0
-    state.value.resource['Furs'].display = true
+    state.value.resource['Furs'].display = false // 由猎场/驻军解锁
     state.value.resource['Furs'].amount = 0
 
     // 隐藏进化资源
@@ -395,11 +455,9 @@ export const useGameStore = defineStore('game', () => {
       state.value.resource['DNA'].display = false
     }
 
-    // 设置初始猎人（1个人口全是猎人）
     const hunter = state.value.civic['hunter'] as { workers: number; display: boolean }
     if (hunter) {
-      hunter.workers = 1
-      hunter.display = true
+      hunter.workers = 0
     }
 
     // 设置 UI
@@ -414,8 +472,7 @@ export const useGameStore = defineStore('game', () => {
     if (traitSummary) {
       addMessage(`🧬 当前种族特质：${traitSummary}`, 'info', 'progress')
     }
-    addMessage(`💡 提示：先研究"棍棒"来解锁更多科技。点击"研究"标签页查看。`, 'info', 'progress')
-    addMessage(`💡 提示：在"洞穴"标签页可以手动搜集食物和木材。`, 'info', 'progress')
+    addMessage(`💡 提示：万幸的是你已经懂得如何在荒野中收集木材。先从周围捡拾一些木头，看能发掘出什么吧。`, 'info', 'progress')
   }
 
   /** 手动搜集资源（早期采集） */
@@ -674,9 +731,14 @@ export const useGameStore = defineStore('game', () => {
     init,
     togglePause,
     save,
+    hardReset,
     getExportString,
     doImport,
     addMessage,
+    clearMessages,
+    lastSaveTime,
+    isSettingsOpen,
+    toggleSettings,
     canAfford,
     getBuildCost,
     build,
