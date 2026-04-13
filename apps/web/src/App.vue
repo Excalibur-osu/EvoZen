@@ -4,7 +4,7 @@
   涵盖了由未开化(protoplasm)到开启文明全选项卡的流转控制。
 -->
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch, onUnmounted } from 'vue'
 import { useGameStore } from './stores/game'
 import GameHeader from './components/GameHeader.vue'
 import EvolutionPanel from './components/EvolutionPanel.vue'
@@ -21,6 +21,8 @@ import MilitaryPanel from './components/MilitaryPanel.vue'
 import ArpaPanel from './components/ArpaPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import MessageLog from './components/MessageLog.vue'
+import MobileNotSupported from './components/MobileNotSupported.vue'
+
 
 const game = useGameStore()
 const activeTab = ref<'evolution' | 'city' | 'civic' | 'arpa' | 'resources' | 'industry' | 'market' | 'storage'>('evolution')
@@ -42,8 +44,19 @@ const popMax = computed(() => {
   return game.state.resource[species]?.max ?? 0
 })
 
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   game.init()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 
 watch(() => game.isEvolving, (isEvolving) => {
@@ -86,7 +99,8 @@ const cityTabLabel = computed(() => {
 </script>
 
 <template>
-  <div class="app-container">
+  <MobileNotSupported v-if="isMobile" />
+  <div v-else class="app-container">
     <GameHeader />
     <div class="app-body">
       <!-- 统一布局：3栏结构 (左：资源，中：主玩法，右：历史日志) -->
