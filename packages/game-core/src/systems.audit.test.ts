@@ -2194,7 +2194,7 @@ describe('Evolution Tree — 完整路径 (evo 0→7)', () => {
     // 最终 sentience
     s.resource['RNA'].amount = 500;
     s.resource['DNA'].amount = 500;
-    const final = evolveSentience(s, 'human', 'none');
+    const final = evolveSentience(s, 'human');
     expect(final).not.toBeNull();
     // tech.evo 被清除
     expect(final!.tech['evo']).toBeUndefined();

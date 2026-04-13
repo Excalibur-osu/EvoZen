@@ -401,7 +401,7 @@ export const useGameStore = defineStore('game', () => {
    * 对标 legacy L5195-5212 action() + sentience()
    */
   function chooseRace(speciesId: string, ptrait: string = 'none') {
-    const sentienceResult = coreEvolveSentience(state.value, speciesId, ptrait)
+    const sentienceResult = coreEvolveSentience(state.value, speciesId)
     if (!sentienceResult) {
       addMessage('进化条件不满足或资源不足，请确认 RNA/DNA 充足且已完成人形化进化。', 'warning', 'progress')
       return

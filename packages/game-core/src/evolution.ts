@@ -569,8 +569,7 @@ export function advanceEvoStep(
  */
 export function evolveSentience(
   state: GameState,
-  speciesId: string,
-  ptrait: string = 'none'
+  speciesId: string
 ): GameState | null {
   const raceDef = EVO_RACES.find((r) => r.id === speciesId);
   if (!raceDef) return null;

@@ -50,7 +50,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const initialRNA = state.resource['RNA']?.amount ?? 0;
     const initialDNA = state.resource['DNA']?.amount ?? 0;
 
-    const newUnlock = evolutionTick(newEvoState, TIME_MULTIPLIER);
+    evolutionTick(newEvoState, TIME_MULTIPLIER);
 
     const finalRNA = newEvoState.resource['RNA']?.amount ?? 0;
     const finalDNA = newEvoState.resource['DNA']?.amount ?? 0;
