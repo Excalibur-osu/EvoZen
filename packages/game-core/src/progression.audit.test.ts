@@ -92,7 +92,7 @@ describe('progression audit scenarios', () => {
       professor: 1,
       popAmount: 6,
       popMax: 6,
-      food: 280.6902,
+      food: 280.3535,
       knowledge: 600,
       money: 1000,
       morale: 95.6,
@@ -167,8 +167,34 @@ describe('progression audit scenarios', () => {
       containersMax: 0,
       tradeRoutes: 5,
       money: 381,
-      lumber: 250.4,
-      stone: 170.2,
+      lumber: 250.105,
+      stone: 170.315,
+    });
+  });
+
+  it('queue completions keep on-counts in sync with finished buildings', () => {
+    let state = createNewGame();
+    bootstrapCivilization(state, 'human', 4, 4);
+
+    state.resource['Food'].amount = 100;
+    state.resource['Lumber'].amount = 100;
+    state.resource['Knowledge'].amount = 100;
+    state.tech['housing'] = 1;
+    state.tech['queue'] = 1;
+
+    state = must(enqueueStructure(state, 'basic_housing'));
+
+    const result = simulateTicks(state, 2, { random: createDeterministicRandom(3030) });
+
+    expect({
+      queueLength: result.state.queue.queue.length,
+      housing: result.state.city['basic_housing'],
+    }).toEqual({
+      queueLength: 0,
+      housing: {
+        count: 1,
+        on: 1,
+      },
     });
   });
 });

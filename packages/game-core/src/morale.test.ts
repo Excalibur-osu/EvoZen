@@ -52,7 +52,7 @@ describe('季节加成', () => {
     const s = makeState();
     setCalendar(s, 0, 1, 1); // 春, year=1, 多云
     const { morale } = calculateMorale(s);
-    expect(morale).toBe(105);
+    expect(morale).toBe(100);  // cap at 100, so 105 → clamped to 100
   });
 
   it('冬季 (season=3) → -5', () => {
@@ -86,13 +86,13 @@ describe('天气效果', () => {
   it('晴天(weather=2)+ 无风(wind=0)+ 非热(temp<2) → +2', () => {
     const s = makeState();
     setCalendar(s, 1, 1, 2, 1, 0); // 夏, 晴, 温和, 无风
-    expect(calculateMorale(s).morale).toBe(102);
+    expect(calculateMorale(s).morale).toBe(100);  // capped at 100
   });
 
   it('晴天(weather=2)+ 有风(wind=1)+ 热(temp=2) → +2', () => {
     const s = makeState();
     setCalendar(s, 1, 1, 2, 2, 1);
-    expect(calculateMorale(s).morale).toBe(102);
+    expect(calculateMorale(s).morale).toBe(100);  // capped at 100
   });
 
   it('雷暴(weather=0, temp>0, wind=1) → -5', () => {
@@ -223,17 +223,23 @@ describe('娱乐加成', () => {
 // ============================================================
 
 describe('士气上限', () => {
-  it('默认上限为 125', () => {
+  it('默认上限为 100', () => {
     const s = makeState();
     setCalendar(s, 1);
-    expect(calculateMorale(s).moraleCap).toBe(125);
+    expect(calculateMorale(s).moraleCap).toBe(100);
   });
 
   it('每座圆形剧场 +1 上限', () => {
     const s = makeState();
     setCalendar(s, 1);
     (s.city['amphitheatre'] as any) = { count: 3, on: 3 };
-    expect(calculateMorale(s).moraleCap).toBe(128);
+    expect(calculateMorale(s).moraleCap).toBe(103);
+  });
+
+  it('每座已通电赌场 +1 上限', () => {
+    const s = makeState();
+    setCalendar(s, 1);
+    expect(calculateMorale(s, { activeCasinos: 2 }).moraleCap).toBe(102);
   });
 
   it('税率 10 → 低税率奖励 +5（10 - floor(10/2)）', () => {
@@ -241,21 +247,21 @@ describe('士气上限', () => {
     setCalendar(s, 1);
     (s.civic as any).taxes = { tax_rate: 10 };
     // 10 - floor(10/2) = 10 - 5 = 5
-    expect(calculateMorale(s).moraleCap).toBe(130);
+    expect(calculateMorale(s).moraleCap).toBe(105);
   });
 
   it('税率 0 → 低税率奖励 +10', () => {
     const s = makeState();
     setCalendar(s, 1);
     (s.civic as any).taxes = { tax_rate: 0 };
-    expect(calculateMorale(s).moraleCap).toBe(135);
+    expect(calculateMorale(s).moraleCap).toBe(110);
   });
 
   it('税率 ≥ 20 → 无奖励', () => {
     const s = makeState();
     setCalendar(s, 1);
     (s.civic as any).taxes = { tax_rate: 20 };
-    expect(calculateMorale(s).moraleCap).toBe(125);
+    expect(calculateMorale(s).moraleCap).toBe(100);
   });
 
   it('士气超过上限时钳位到 moraleCap', () => {
@@ -265,8 +271,8 @@ describe('士气上限', () => {
     (s.civic['entertainer'] as any) = { workers: 10, max: -1, display: true }; // +30
     // morale = 107 + 30 = 137，但上限 125 → 钳位到 125
     const { morale, moraleCap } = calculateMorale(s);
-    expect(moraleCap).toBe(125);
-    expect(morale).toBe(125);
+    expect(moraleCap).toBe(100);
+    expect(morale).toBe(100);
   });
 
   it('士气低于 50 时钳位到 50', () => {
@@ -313,11 +319,11 @@ describe('globalMultiplier 公式', () => {
     expect(globalMultiplier).toBeCloseTo(expected, 4);
   });
 
-  it('morale=125（上限）→ 1 + 25/200 = 1.125', () => {
+  it('morale=100（上限）→ 1 + 0/200 = 1.0', () => {
     const s = makeState();
     setCalendar(s, 0, 1, 2, 1, 0); // 春+5, 晴+2
     s.tech['theatre'] = 3;
-    (s.civic['entertainer'] as any) = { workers: 10, max: -1, display: true }; // +30 → 钳位到125
-    expect(calculateMorale(s).globalMultiplier).toBeCloseTo(1.125, 4);
+    (s.civic['entertainer'] as any) = { workers: 10, max: -1, display: true }; // +30 → 钳位到100
+    expect(calculateMorale(s).globalMultiplier).toBeCloseTo(1.0, 4);
   });
 });

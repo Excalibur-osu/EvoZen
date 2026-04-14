@@ -62,7 +62,7 @@
   --radius-lg: 8px;
 
   /* 字体系统 */
-  --font-sans: 'Inter', '-apple-system', 'BlinkMacSystemFont', sans-serif;
+  --font-sans: 'Inter', 'Noto Sans SC', '-apple-system', 'BlinkMacSystemFont', sans-serif;
   --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
 }
 
@@ -128,7 +128,7 @@ html, body {
   border-color: var(--border-hover);
 }
 .btn:active {
-  transform: translateY(1px);
+  transform: scale(0.97) translateY(1px);
 }
 .btn.primary {
   background: rgba(34, 197, 94, 0.1);
@@ -153,8 +153,9 @@ html, body {
   box-shadow: 0 0 8px var(--danger-glow);
 }
 .btn.sm {
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-size: 11px;
+  letter-spacing: 0.2px;
 }
 .btn:disabled {
   opacity: 0.6;
@@ -169,8 +170,9 @@ html, body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 2px 4px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 .card:hover {
   border-color: var(--border-hover);
@@ -248,8 +250,8 @@ html, body {
 .gap-lg { gap: var(--gap-lg); }
 .flex-1 { flex: 1; min-width: 0; }
 
-.text-sm { font-size: 11px; }
-.text-xs { font-size: 10px; }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; letter-spacing: 0.2px; }
 .font-mono { font-family: var(--font-mono); font-size: 0.95em; letter-spacing: -0.2px; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

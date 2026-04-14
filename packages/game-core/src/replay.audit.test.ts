@@ -154,11 +154,11 @@ describe('deterministic replay audit', () => {
     expectPopulationConsistency(result.state, 'human');
     expect(snapshotState(result.state, 'human')).toEqual({
       calendar: { day: 2, year: 0, season: 0, weather: 2, temp: 1, wind: 0 },
-      morale: { current: 97.4, cap: 125, stress: -1.6, entertain: 0, weather: 0 },
-      power: { generated: 5, consumed: 1, surplus: 4 },
+      morale: { current: 97.4, cap: 100, stress: -1.6, entertain: 0, weather: 0 },
+      power: { generated: 5, consumed: 2, surplus: 3 },
       resources: {
         human: 10,
-        Food: 169.1356,
+        Food: 174.4588,
         Lumber: 177.0939,
         Stone: 130.0348,
         Copper: 31.4054,
@@ -246,16 +246,16 @@ describe('deterministic replay audit', () => {
     expectPopulationConsistency(result.state, 'human');
     expect(snapshotState(result.state, 'human')).toEqual({
       calendar: { day: 3, year: 0, season: 0, weather: 2, temp: 1, wind: 1 },
-      morale: { current: 94.5, cap: 125, stress: -1.5, entertain: 0, weather: 0 },
+      morale: { current: 94.5, cap: 100, stress: -1.5, entertain: 0, weather: 0 },
       power: { generated: 11, consumed: 10, surplus: 1 },
       resources: {
         human: 12,
-        Food: 240.901,
+        Food: 244.6649,
         Lumber: 0.2882,
         Stone: 147.3073,
         Copper: 92.2696,
         Iron: 76.6592,
-        Coal: 25.2,
+        Coal: 50,
         Knowledge: 172.6401,
         Faith: 0,
         Money: 548,
@@ -292,7 +292,7 @@ describe('deterministic replay audit', () => {
     expectPopulationConsistency(result.state, 'human');
     expect(snapshotState(result.state, 'human')).toEqual({
       calendar: { day: 40, year: 0, season: 0, weather: 1, temp: 0, wind: 0 },
-      morale: { current: 94, cap: 125, stress: 0, entertain: 0, weather: -5 },
+      morale: { current: 94, cap: 100, stress: 0, entertain: 0, weather: -5 },
       power: { generated: 0, consumed: 0, surplus: 0 },
       resources: {
         human: 1,

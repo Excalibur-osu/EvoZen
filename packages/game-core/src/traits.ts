@@ -43,7 +43,7 @@ export const SPECIES_TRAITS: Record<SupportedSpeciesId, SpeciesTraitId[]> = {
 
 export const SPECIES_TRAIT_DESCRIPTORS: Record<SupportedSpeciesId, SpeciesTraitDescriptor[]> = {
   human: [
-    { id: 'creative', label: '创造性', summary: 'ARPA 相关系统待接入。', activeNow: false },
+    { id: 'creative', label: '创造性', summary: 'ARPA 项目费用递增系数 -0.01。', activeNow: true },
     { id: 'diverse', label: '多样性', summary: '训练士兵速度 -20%（训练进度 ÷ 1.25）。', activeNow: true },
   ],
   elven: [

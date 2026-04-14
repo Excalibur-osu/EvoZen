@@ -183,7 +183,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
   if ((s.tech['primitive'] ?? 0) >= 3) {
     s.resource['Knowledge'].display = true;
   }
-  if ((s.tech['mining'] ?? 0) >= 1) {
+  if ((s.tech['mining'] ?? 0) >= 2) {
     s.resource['Copper'].display = true;
   }
   if ((s.tech['smelting'] ?? 0) >= 2) {
@@ -204,15 +204,17 @@ export function applyDerivedStateInPlace(state: GameState): void {
   setJobMax('priest', temples);
 
   // ── 岗位展示解锁 (early game UI sync) ──────────────────────────────
-  if (s.resource[species] && s.resource[species].amount > 0) {
-    if (s.civic['unemployed']) (s.civic['unemployed'] as { display: boolean }).display = true;
+  const isHunterBase = s.race['carnivore'] || s.race['soul_eater'] || s.race['unfathomable'];
+  const isForagerBase = s.race['forager'];
+
+  if (s.civic['unemployed']) {
+    (s.civic['unemployed'] as { display: boolean }).display = 
+      !isHunterBase && !isForagerBase && !!(s.resource[species] && s.resource[species].amount > 0);
   }
   if ((s.tech['primitive'] ?? 0) >= 1) {
-    if (s.civic['hunter']) (s.civic['hunter'] as { display: boolean }).display = true;
-    if (s.civic['lumberjack']) (s.civic['lumberjack'] as { display: boolean }).display = true;
-  }
-  if ((s.tech['primitive'] ?? 0) >= 2) {
-    if (s.civic['quarry_worker']) (s.civic['quarry_worker'] as { display: boolean }).display = true;
+    if (s.civic['hunter']) {
+      (s.civic['hunter'] as { display: boolean }).display = !!isHunterBase;
+    }
   }
   if ((s.tech['agriculture'] ?? 0) >= 1) {
     if (s.civic['farmer']) (s.civic['farmer'] as { display: boolean }).display = true;

@@ -113,7 +113,7 @@ export function createNewGame(): GameState {
     resource: {
       // 进化阶段
       RNA: makeResource('RNA', 100, 1, true),
-      DNA: makeResource('DNA', 100, 1, true),
+      DNA: makeResource('DNA', 100, 1, false),
       // 基础资源
       Money: { ...makeResource('金币', 1000, 1), value: 0 },
       Food: { ...makeResource('食物', 250, 1), value: 5 },

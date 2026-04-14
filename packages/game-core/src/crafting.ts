@@ -56,19 +56,36 @@ function getAutoCraftRatio(
   const foundryLevel = state.tech['foundry'] ?? 0;
   const foundryCount = (state.city['foundry'] as FoundryState | undefined)?.count ?? 0;
 
+  // foundry:2 unlock, skill increases at foundry:5 and foundry:8
   if (foundryLevel >= 2) {
-    ratio += foundryCount * 0.03;
+    const skill = foundryLevel >= 8 ? 0.08 : (foundryLevel >= 5 ? 0.05 : 0.03);
+    ratio += foundryCount * skill;
   }
 
+  // foundry:3 unlock, bonus per extra worker
   if (foundryLevel >= 3 && assignedWorkers > 1) {
+    // TODO: integrate highPopAdjust(0.03) when insectoids are supported
     ratio += (assignedWorkers - 1) * 0.03;
   }
 
+  // foundry:4 unlock, sawmills boost plywood
   if (foundryLevel >= 4 && craftId === 'Plywood') {
     const sawmills = (state.city['sawmill'] as { count?: number } | undefined)?.count ?? 0;
     ratio += sawmills * 0.02;
   }
 
+  // foundry:6 unlock, foundries additionally boost brick
+  if (foundryLevel >= 6 && craftId === 'Brick') {
+    ratio += foundryCount * 0.02;
+  }
+
+  // foundry:7 unlock, factories boost all crafting
+  if (foundryLevel >= 7) {
+    const factories = (state.city['factory'] as { on?: number } | undefined)?.on ?? 0;
+    ratio += factories * 0.05;
+  }
+
+  // Artisan race trait
   if (state.race['artisan']) {
     ratio *= 1.5;
   }

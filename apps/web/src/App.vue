@@ -19,13 +19,14 @@ import StoragePanel from './components/StoragePanel.vue'
 import PowerPanel from './components/PowerPanel.vue'
 import MilitaryPanel from './components/MilitaryPanel.vue'
 import ArpaPanel from './components/ArpaPanel.vue'
+import SpacePanel from './components/SpacePanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 import MobileNotSupported from './components/MobileNotSupported.vue'
 
 
 const game = useGameStore()
-const activeTab = ref<'evolution' | 'city' | 'civic' | 'arpa' | 'resources' | 'industry' | 'market' | 'storage'>('evolution')
+const activeTab = ref<'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'>('evolution')
 /** 市政 Tab 下的子 Tab */
 const civicSubTab = ref<'jobs' | 'government' | 'military'>('jobs')
 
@@ -76,6 +77,7 @@ const tabs = computed(() => {
       { id: 'city', label: cityTabLabel.value, visible: true },
       { id: 'civic', label: '市政', visible: game.state.settings.showCivic },
       { id: 'arpa', label: 'ARPA', visible: (game.state.tech['monument'] ?? 0) >= 1 },
+      { id: 'space', label: '太空', visible: (game.state.tech['high_tech'] ?? 0) >= 7 || (game.state.tech['space_explore'] ?? 0) >= 1 || (game.state.tech['mars'] ?? 0) >= 1 },
       { id: 'industry', label: '工坊', visible: (game.state.tech['foundry'] ?? 0) >= 1 },
       { id: 'market', label: '贸易', visible: game.state.settings.showMarket },
       { id: 'storage', label: '仓储', visible: game.state.settings.showStorage }
@@ -164,6 +166,7 @@ const cityTabLabel = computed(() => {
               <MilitaryPanel v-if="civicSubTab === 'military'" />
             </template>
             <ArpaPanel v-if="activeTab === 'arpa'" />
+            <SpacePanel v-if="activeTab === 'space'" />
             <CraftPanel v-if="activeTab === 'industry'" />
             <TradePanel v-if="activeTab === 'market'" />
             <StoragePanel v-if="activeTab === 'storage'" />
@@ -271,10 +274,13 @@ const cityTabLabel = computed(() => {
 .tab-bar {
   display: flex;
   flex-shrink: 0;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.7); /* Translucent version of slate-900 */
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   padding: 0 10px;
   gap: 2px;
+  position: relative;
+  z-index: 10;
 }
 .tab-btn {
   padding: 6px 14px;

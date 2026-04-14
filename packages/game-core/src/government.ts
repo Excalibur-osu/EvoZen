@@ -7,9 +7,11 @@
  * 政体解锁：
  *   - govern:1 (government 科技)    → 无政府/独裁/民主/寡头 可选
  *   - gov_theo:1 (theocracy 科技)   → 神权政体 可选（需 govern:1 + theology:2）
- *   - govern:2 (republic 科技)      → 共和国 可选（后期，暂不实装）
+ *   - govern:2 (republic 科技)      → 共和国 可选
+ *   - gov_soc:1 (socialist 科技)    → 社会主义政体 可选
+ *   - gov_corp:1 (corpocracy 科技)  → 企业政体 可选
  *
- * 第一阶段实装 5 种政体 + 「变更政体」的冷却计数器。
+ * 当前实装 8 种政体 + 「变更政体」的冷却计数器。
  */
 
 import type { GameState } from '@evozen/shared-types';
@@ -18,8 +20,16 @@ import type { GameState } from '@evozen/shared-types';
 // 政体 ID 联合类型
 // ============================================================
 
-/** 目前可选的政体（第一阶段） */
-export type GovernmentType = 'anarchy' | 'autocracy' | 'democracy' | 'oligarchy' | 'theocracy';
+/** 当前可选的政体 */
+export type GovernmentType =
+  | 'anarchy'
+  | 'autocracy'
+  | 'democracy'
+  | 'oligarchy'
+  | 'theocracy'
+  | 'republic'
+  | 'socialist'
+  | 'corpocracy';
 
 // ============================================================
 // 政体定义（名称 + 描述 + 效果摘要）
@@ -84,6 +94,27 @@ export const GOVERNMENT_DEFS: GovernmentDef[] = [
     // [2] sci_malus = 50% (科学家效率降低)
     effects: ['神庙效果 +12%', '教授效率 -25%', '科学家效率 -50%'],
   },
+  {
+    id: 'republic',
+    name: '共和国',
+    description: '以法治与代议制度维系秩序。',
+    reqGovern: 2,
+    effects: ['银行家收益 +25%', '基础士气 +20'],
+  },
+  {
+    id: 'socialist',
+    name: '社会主义',
+    description: '强调公共控制与工业协调。',
+    reqGovern: 1,
+    effects: ['工厂产线效率 +10%', '所有金钱类收入 -20%', '压力惩罚 +10%'],
+  },
+  {
+    id: 'corpocracy',
+    name: '企业政体',
+    description: '由资本驱动国家机器扩张利润。',
+    reqGovern: 2,
+    effects: ['赌场收入 +200%', '旅游收入 +100%', '工厂产线效率 +30%', '基础士气 -10', '税收效率 -50%'],
+  },
 ];
 
 // ============================================================
@@ -105,9 +136,70 @@ export function getTaxMultiplier(state: GameState): number {
       // 对标 legacy/src/main.js L7628-7629:
       // income_base *= 1 - (govEffect.oligarchy()[0] / 100) → oligarchy()[0] = 5
       return 1 - (5 / 100);  // 0.95
+    case 'corpocracy':
+      // 企业政体：税收效率减半
+      // 对标 legacy/src/main.js L7631-7633
+      return 0.5;
+    case 'socialist':
+      // 社会主义：金钱类收入 -20%
+      // 对标 legacy/src/main.js L7634-7635
+      return 1 - (20 / 100); // 0.8
     default:
       // 独裁/民主/无政府：对税收无特殊加减
       // 原版 main.js L7586-7636 中，autocracy 没有任何税收乘数
+      return 1.0;
+  }
+}
+
+/**
+ * 获取当前政体对银行家收益的乘数
+ * 对标 legacy/src/main.js L7609-7610
+ */
+export function getBankerImpactMultiplier(state: GameState): number {
+  return state.civic.govern?.type === 'republic' ? 1.25 : 1.0;
+}
+
+/**
+ * 获取当前政体对赌场收入的乘数
+ * 对标 legacy/src/actions.js L5625-5629
+ */
+export function getCasinoIncomeMultiplier(state: GameState): number {
+  switch (state.civic.govern?.type ?? 'anarchy') {
+    case 'corpocracy':
+      return 3.0;
+    case 'socialist':
+      return 0.8;
+    default:
+      return 1.0;
+  }
+}
+
+/**
+ * 获取当前政体对旅游收入的乘数
+ * 对标 legacy/src/main.js L7716-7720
+ */
+export function getTourismIncomeMultiplier(state: GameState): number {
+  switch (state.civic.govern?.type ?? 'anarchy') {
+    case 'corpocracy':
+      return 2.0;
+    case 'socialist':
+      return 0.8;
+    default:
+      return 1.0;
+  }
+}
+
+/**
+ * 获取当前政体对工厂产线产出的乘数
+ * 对标 legacy/src/main.js L4774-4778
+ */
+export function getFactoryOutputMultiplier(state: GameState): number {
+  switch (state.civic.govern?.type ?? 'anarchy') {
+    case 'corpocracy':
+      return 1.3;
+    case 'socialist':
+      return 1.1;
+    default:
       return 1.0;
   }
 }
@@ -179,9 +271,11 @@ export function changeGovernment(state: GameState, newType: GovernmentType): Gam
   if (!def) return null;
   if ((state.tech['govern'] ?? 0) < def.reqGovern) return null;
 
-  // 神权政体额外需要 gov_theo:1 科技
-  // 对标 legacy/src/civics.js L397: if (global.tech['gov_theo'])
+  // 专属政体额外需要对应科技
+  // 对标 legacy/src/civics.js L397-L407
   if (newType === 'theocracy' && (state.tech['gov_theo'] ?? 0) < 1) return null;
+  if (newType === 'socialist' && (state.tech['gov_soc'] ?? 0) < 1) return null;
+  if (newType === 'corpocracy' && (state.tech['gov_corp'] ?? 0) < 1) return null;
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
   const newGovern = newState.civic.govern;

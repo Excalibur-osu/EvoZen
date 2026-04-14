@@ -723,8 +723,11 @@ describe('system audit scenarios', () => {
           Oil: -0.65,
         },
         activeConsumers: {
+          sawmill: 0,
+          rock_quarry: 0,
           mine: 2,
           coal_mine: 1,
+          cement_plant: 0,
           wardenclyffe: 1,
           metal_refinery: 0,
           biolab: 0,
@@ -831,10 +834,10 @@ describe('system audit scenarios', () => {
         stone: 183.1278,
         copper: 97.3996,
         iron: 92.5117,
-        coal: 42.0351,
+        coal: 50,
         oil: 79.85,
         aluminium: 49.75,
-        steel: 49.32,
+        steel: 50,
         alloy: 0.375,
         polymer: 0.625,
         knowledge: 157.6524,
@@ -1198,7 +1201,7 @@ describe('system audit scenarios', () => {
       population: 6,
       popMax: 6,
       unemployed: 6,
-      food: 187.5,
+      food: 185.125,
       days: 1,
     });
   });
@@ -1216,7 +1219,7 @@ describe('system audit scenarios', () => {
       state.city.silo = { count: 2 };
       state.tech.military = 5;
       state.tech.medic = 2;
-      state.resource.Food.amount = 1000;
+      state.resource.Food.amount = 3000;
       state.resource.Money.amount = 400;
 
       applySimulationDerivedStateInPlace(state);
@@ -2107,9 +2110,10 @@ describe('Evolution Tree — 进化步骤 advanceEvoStep', () => {
     expect(result!.evolution['final']).toBe(60);
   });
 
-  it('bilateral_symmetry: 需要 evo=4, 消耗 230 DNA, 解锁 evo_mammals 等', () => {
+  it('bilateral_symmetry: 需要 evo=4 + evo_animal=1, 消耗 230 DNA, 解锁 evo_mammals 等', () => {
     const state = createNewGame();
     state.tech['evo'] = 4;
+    state.tech['evo_animal'] = 1;
     state.resource['DNA'].amount = 300;
     const result = advanceEvoStep(state, 'bilateral_symmetry');
     expect(result!.tech['evo']).toBe(5);
@@ -2117,18 +2121,20 @@ describe('Evolution Tree — 进化步骤 advanceEvoStep', () => {
     expect(result!.tech['evo_insectoid']).toBe(1);
   });
 
-  it('mammals: 需要 evo=5, 消耗 245 DNA, 解锁 evo_humanoid=1', () => {
+  it('mammals: 需要 evo=5 + evo_mammals=1, 消耗 245 DNA, 解锁 evo_humanoid=1', () => {
     const state = createNewGame();
     state.tech['evo'] = 5;
+    state.tech['evo_mammals'] = 1;
     state.resource['DNA'].amount = 300;
     const result = advanceEvoStep(state, 'mammals');
     expect(result!.tech['evo']).toBe(6);
     expect(result!.tech['evo_humanoid']).toBe(1);
   });
 
-  it('humanoid: 需要 evo=6, 消耗 260 DNA, 授予 evo=7 + evo_humanoid=2', () => {
+  it('humanoid: 需要 evo=6 + evo_humanoid=1, 消耗 260 DNA, 授予 evo=7 + evo_humanoid=2', () => {
     const state = createNewGame();
     state.tech['evo'] = 6;
+    state.tech['evo_humanoid'] = 1;
     state.resource['DNA'].amount = 300;
     const result = advanceEvoStep(state, 'humanoid');
     expect(result!.tech['evo']).toBe(7);
@@ -2219,8 +2225,8 @@ describe('Evolution Tree — parity 费用验证（对标 legacy actions.js）',
     expect(cost.dna).toBe(3 * 4 + 4);  // = 16
   });
 
-  // legacy L104-105: nucleus cost RNA=count*32+38, DNA=count*16+18
-  it('nucleus 第 2 次购买费用 = 102 RNA, 50 DNA', () => {
+  // legacy L104-105: nucleus cost RNA=count*mult+38, DNA=count*mult+18 (evo<4: mult=32/16)
+  it('nucleus 第 2 次购买费用 = 102 RNA, 50 DNA (evo<4)', () => {
     const state = createNewGame();
     state.evolution['nucleus'] = { count: 2 };
     const cost = getUpgradeCost(state, 'nucleus');

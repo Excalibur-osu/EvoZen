@@ -3,7 +3,7 @@
  * 严格对标 legacy/src/actions.js 原版数值
  *
  * 每项建筑的 reqs、costs 均从原版源码逐行核对。
- * 费用递增公式: Math.ceil(base * Math.pow(mult, count))
+ * 费用递增公式: Math.round(base * Math.pow(mult, count))
  *
  * 注意：原版很多建筑的 Money 费用在前几座为 0（条件性出现），
  * 这里简化为始终有 Money 费用，以 base 值为准。
@@ -32,7 +32,7 @@ export interface StructureDefinition {
 
 // 通用费用递增公式
 function scaleCost(base: number, mult: number): CostFunction {
-  return (_state, count) => Math.ceil(base * Math.pow(mult, count));
+  return (_state, count) => Math.round(base * Math.pow(mult, count));
 }
 
 function hasCityTrait(state: GameState, trait: string): boolean {
@@ -59,8 +59,8 @@ function scaleConditionalCost(
 function scaleHousingCost(base: number, mult: number): CostFunction {
   return (state, count) => {
     const reduction = state.tech['housing_reduction'] ?? 0;
-    const effectiveMult = Math.max(mult - reduction * 0.02, 1.01);
-    return Math.ceil(base * Math.pow(effectiveMult, count));
+    const effectiveMult = Math.max(mult - reduction * 0.02, 1.005);
+    return Math.round(base * Math.pow(effectiveMult, count));
   };
 }
 
@@ -92,7 +92,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { housing: 1 },
     costs: {
       Money: (_state, count) => {
-        if (count >= 5) return Math.ceil(20 * Math.pow(1.17, count));
+        if (count >= 5) return Math.round(20 * Math.pow(1.17, count));
         return 0;
       },
       Lumber: scaleHousingCost(10, 1.23),
@@ -127,7 +127,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { agriculture: 1 },
     costs: {
       Money: (_state, count) => {
-        if (count >= 3) return Math.ceil(50 * Math.pow(1.32, count));
+        if (count >= 3) return Math.round(50 * Math.pow(1.32, count));
         return 0;
       },
       Lumber: scaleCost(20, 1.36),
@@ -161,7 +161,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { axe: 1 },
     costs: {
       Money: (_state, count) => {
-        if (count >= 5) return Math.ceil(5 * Math.pow(1.85, count));
+        if (count >= 5) return Math.round(5 * Math.pow(1.85, count));
         return 0;
       },
       Lumber: scaleCost(6, 1.9),
@@ -178,13 +178,15 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { mining: 1 },
     costs: {
       Money: (_state, count) => {
-        if (count >= 2) return Math.ceil(20 * Math.pow(1.45, count));
+        if (count >= 2) return Math.round(20 * Math.pow(1.45, count));
         return 0;
       },
       Lumber: scaleCost(50, 1.36),
       Stone: scaleCost(10, 1.36),
     },
     effect: '石头上限 +100，石头产量 +2',
+    powered: true,
+    powerCost: 1,
   },
   // actions.js L2960-3005: mine
   {
@@ -231,6 +233,8 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Stone: scaleCost(2000, 1.32),
     },
     effect: '解锁水泥工人岗位（每座+2工人位）。',
+    powered: true,
+    powerCost: 2,
   },
 
   // ---- 存储 ----
@@ -574,6 +578,8 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Cement: scaleCost(420, 1.26),
     },
     effect: '木材上限 +200，伐木工木材产量 +5%。',
+    powered: true,
+    powerCost: 1,
   },
   // actions.js L3053-3095: oil_well
   {

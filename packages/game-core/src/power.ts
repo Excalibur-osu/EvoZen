@@ -43,8 +43,11 @@ interface ConsumerDef {
 }
 
 const CONSUMERS: ConsumerDef[] = [
+  { id: 'sawmill', powerCost: 1 },
+  { id: 'rock_quarry', powerCost: 1 },
   { id: 'mine', powerCost: 1 },
   { id: 'coal_mine', powerCost: 1 },
+  { id: 'cement_plant', powerCost: 2 },
   { id: 'wardenclyffe', powerCost: 2 },
   { id: 'metal_refinery', powerCost: 2 },
   { id: 'biolab', powerCost: 2 },

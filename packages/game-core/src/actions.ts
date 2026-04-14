@@ -13,6 +13,12 @@ function cloneState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
 }
 
+function ensureSpaceStructure(state: GameState, id: string): void {
+  if (!state.space[id]) {
+    state.space[id] = { count: 0 };
+  }
+}
+
 export function getBuildCost(state: GameState, structureId: string): Record<string, number> {
   const def = BASIC_STRUCTURES.find((structure) => structure.id === structureId);
   if (!def) return {};
@@ -155,6 +161,43 @@ export function researchTech(state: GameState, techId: string): GameState | null
 
   const [grantKey, grantLvl] = def.grant;
   next.tech[grantKey] = grantLvl;
+
+  // 太空入口骨架：研究关键科技时预注册对应的太空结构槽位，
+  // 后续补建筑/产线时无需再迁移旧存档。
+  switch (techId) {
+    case 'rocketry':
+      // legacy 中 space:2 由 test_launch 给予；当前用火箭学作为最小桥接入口
+      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 2);
+      break;
+    case 'astrophysics':
+      ensureSpaceStructure(next, 'propellant_depot');
+      break;
+    case 'rover':
+      // legacy 中月球前哨阶段会推进到 space:3，并建立 luna 入口
+      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 3);
+      next.tech['luna'] = Math.max(next.tech['luna'] ?? 0, 1);
+      ensureSpaceStructure(next, 'moon_base');
+      break;
+    case 'probes':
+      // legacy 中月球任务/火星任务会推进到 space:4，并建立 mars 入口
+      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 4);
+      next.tech['mars'] = Math.max(next.tech['mars'] ?? 0, 1);
+      ensureSpaceStructure(next, 'spaceport');
+      break;
+    case 'observatory':
+      ensureSpaceStructure(next, 'observatory');
+      break;
+    case 'colonization':
+      ensureSpaceStructure(next, 'mars_base');
+      break;
+    case 'red_tower':
+      ensureSpaceStructure(next, 'red_tower');
+      break;
+    case 'space_manufacturing':
+      ensureSpaceStructure(next, 'red_factory');
+      break;
+  }
+
   applyDerivedStateInPlace(next);
   return next;
 }

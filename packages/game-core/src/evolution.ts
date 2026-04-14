@@ -30,10 +30,10 @@ export interface EvoUpgrade {
   id: string;
   name: string;
   desc: string;
-  /** RNA 费用函数：接收当前 count，返回费用 */
-  rnaCost?: (count: number) => number;
-  /** DNA 费用函数：接收当前 count，返回费用 */
-  dnaCost?: (count: number) => number;
+  /** RNA 费用函数：接收当前 count 和 evo 等级，返回费用 */
+  rnaCost?: (count: number, evoLevel?: number) => number;
+  /** DNA 费用函数：接收当前 count 和 evo 等级，返回费用 */
+  dnaCost?: (count: number, evoLevel?: number) => number;
   /** effect 文本（函数以便动态计算）
    * @param count 该升级当前已购次数
    * @param ctx   相关升级的 count 映射（如 mitochondria），供需要上下文的升级使用
@@ -48,6 +48,8 @@ export interface EvoStep {
   id: string;
   name: string;
   desc: string;
+  /** 额外前置 tech 要求（除 reqEvo 外） */
+  reqs?: Record<string, number>;
   /** DNA 费用 */
   dnaCost: number;
   /** 触发条件（基于 tech.evo） */
@@ -104,15 +106,14 @@ export const EVO_UPGRADES: EvoUpgrade[] = [
     isAvailable: (evo) => 'organelles' in evo,
   },
 
-  // nucleus: RNA×(38 + count×32) + DNA×(18 + count×16)
-  // evo >= 4 时成本减半（核输送的 evo_tech 后期加成，EvoZen 暂不实现该加成）
+  // nucleus: RNA×(38 + count×mult) + DNA×(18 + count×mult)
+  // legacy L104-105: evo >= 4 时 RNA 乘数 32→16, DNA 乘数 16→12
   {
     id: 'nucleus',
     name: '细胞核',
     desc: '强化细胞核，自动将 RNA 转化为 DNA。',
-    rnaCost: (count) => count * 32 + 38,
-    dnaCost: (count) => count * 16 + 18,
-    // legacy L108-109: 每个细胞核每秒消耗 2 RNA，产生 1 DNA（固定值）
+    rnaCost: (count, evoLevel) => count * ((evoLevel ?? 0) >= 4 ? 16 : 32) + 38,
+    dnaCost: (count, evoLevel) => count * ((evoLevel ?? 0) >= 4 ? 12 : 16) + 18,
     effectText: (_count) => '每秒自动消耗 2 RNA，产生 1 DNA（购买后生效）。',
     isAvailable: (evo) => 'nucleus' in evo,
   },
@@ -199,6 +200,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 230,
     reqEvo: 4,
     grantEvo: 5,
+    reqs: { evo_animal: 1 },
     grants: {
       evo_insectoid: 1,
       evo_mammals: 1,
@@ -222,6 +224,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 245,
     reqEvo: 5,
     grantEvo: 6,
+    reqs: { evo_mammals: 1 },
     grants: {
       evo_humanoid: 1,
       evo_giant: 1,
@@ -242,6 +245,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    reqs: { evo_humanoid: 1 },
     grants: { evo_humanoid: 2 },
     effectText: '解锁种族选择，即将踏上文明之路！',
   },
@@ -259,7 +263,7 @@ export const EVO_RACES: EvoRace[] = [
     name: '人类',
     emoji: '🧑',
     requiredEvoTech: 'evo_humanoid',
-    desc: '平衡发展的多面手，创造力待 ARPA 解锁后生效。',
+    desc: '平衡发展的多面手，ARPA 项目扩张成本更低。',
     rnaCost: 320,
     dnaCost: 320,
   },
@@ -456,8 +460,9 @@ export function purchaseEvoUpgrade(
     return null;
 
   const count = evoCount(state, upgradeId);
-  const rnaCost = upgrade.rnaCost ? upgrade.rnaCost(count) : 0;
-  const dnaCost = upgrade.dnaCost ? upgrade.dnaCost(count) : 0;
+  const evoLevel = techLevel(state, 'evo');
+  const rnaCost = upgrade.rnaCost ? upgrade.rnaCost(count, evoLevel) : 0;
+  const dnaCost = upgrade.dnaCost ? upgrade.dnaCost(count, evoLevel) : 0;
 
   const rna = state.resource['RNA'];
   const dna = state.resource['DNA'];
@@ -521,6 +526,13 @@ export function advanceEvoStep(
 
   // 检查 evo 等级
   if (techLevel(state, 'evo') !== step.reqEvo) return null;
+
+  // 检查额外前置 tech
+  if (step.reqs) {
+    for (const [techId, lvl] of Object.entries(step.reqs)) {
+      if (techLevel(state, techId) < lvl) return null;
+    }
+  }
 
   // 检查 DNA
   const dna = state.resource['DNA'];
@@ -593,6 +605,10 @@ export function evolveSentience(
   newState.resource['RNA'].amount -= raceDef.rnaCost;
   newState.resource['DNA'].amount -= raceDef.dnaCost;
 
+  // 隐藏 RNA/DNA — legacy sentience() L8354-8359
+  if (newState.resource['RNA']) newState.resource['RNA'].display = false;
+  if (newState.resource['DNA']) newState.resource['DNA'].display = false;
+
   // 清理 evolution 和 evo_xxx tech — legacy sentience() L8426-8432
   newState.evolution = {};
   const techKeys = Object.keys(newState.tech);
@@ -647,8 +663,9 @@ export function getUpgradeCost(
   const upgrade = EVO_UPGRADES.find((u) => u.id === upgradeId);
   if (!upgrade) return { rna: 0, dna: 0 };
   const count = evoCount(state, upgradeId);
+  const evoLevel = techLevel(state, 'evo');
   return {
-    rna: upgrade.rnaCost ? upgrade.rnaCost(count) : 0,
-    dna: upgrade.dnaCost ? upgrade.dnaCost(count) : 0,
+    rna: upgrade.rnaCost ? upgrade.rnaCost(count, evoLevel) : 0,
+    dna: upgrade.dnaCost ? upgrade.dnaCost(count, evoLevel) : 0,
   };
 }

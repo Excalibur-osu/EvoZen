@@ -47,7 +47,7 @@ watch(() => game.lastSaveTime, () => {
     </div>
 
     <div class="bar-center" v-if="!game.isEvolving">
-      <template v-if="(game.state.tech['sundial'] ?? 0) >= 1">
+      <template v-if="(game.state.tech['primitive'] ?? 0) >= 3">
         <span class="cal-year">年 <b>{{ game.year }}</b></span>
         <span class="cal-day">日 <b>{{ game.day }}</b></span>
         <span class="cal-season" :class="'season-' + game.state.city.calendar?.season">{{ game.season }}</span>
@@ -91,11 +91,12 @@ watch(() => game.lastSaveTime, () => {
   justify-content: space-between;
   padding: 0 12px;
   height: 32px; /* reduced height */
-  background: var(--bg-primary); /* Darker background */
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 1px 12px rgba(2, 6, 23, 0.8);
+  background: rgba(2, 6, 23, 0.7); /* Deep darker background with transparency */
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
-  z-index: 10;
+  z-index: 20;
   font-size: 12px;
 }
 

@@ -42,6 +42,20 @@ const taxRate = computed(() => game.state.civic.taxes?.tax_rate ?? 20)
 /** 最高税率（受政体影响） */
 const maxTaxRate = computed(() => game.getMaxTaxRate())
 
+/** 税收侧政体乘数 */
+const taxIncomeGovMultiplier = computed(() => {
+  switch (currentGovType.value) {
+    case 'oligarchy':
+      return 0.95
+    case 'corpocracy':
+      return 0.5
+    case 'socialist':
+      return 0.8
+    default:
+      return 1
+  }
+})
+
 /** 是否已解锁政府系统 */
 const isGovUnlocked = computed(() => (game.state.tech['govern'] ?? 0) >= 1)
 
@@ -67,6 +81,8 @@ function isGovAvailable(def: { id: string; reqGovern: number }): boolean {
   if ((game.state.tech['govern'] ?? 0) < def.reqGovern) return false
   // 神权政体额外需要 gov_theo:1（对标 legacy/src/civics.js L397）
   if (def.id === 'theocracy' && (game.state.tech['gov_theo'] ?? 0) < 1) return false
+  if (def.id === 'socialist' && (game.state.tech['gov_soc'] ?? 0) < 1) return false
+  if (def.id === 'corpocracy' && (game.state.tech['gov_corp'] ?? 0) < 1) return false
   return true
 }
 </script>
@@ -162,13 +178,21 @@ function isGovAvailable(def: { id: string; reqGovern: number }): boolean {
               -->
               {{ (
                 (game.population * 0.4 * (taxRate / 20)) * 0.25 * 4
-                * (currentGovType === 'oligarchy' ? 0.95 : 1)
+                * taxIncomeGovMultiplier
               ).toFixed(2) }}
             </span>
           </div>
           <div v-if="currentGovType === 'oligarchy'" class="tax-effect-row" style="margin-top:4px">
             <span class="effect-lbl" style="color:var(--accent)">⚠️ 寡头税收效率</span>
             <span class="effect-val" style="color:var(--accent)">×0.95</span>
+          </div>
+          <div v-if="currentGovType === 'socialist'" class="tax-effect-row" style="margin-top:4px">
+            <span class="effect-lbl" style="color:var(--accent)">⚠️ 社会主义税收效率</span>
+            <span class="effect-val" style="color:var(--accent)">×0.80</span>
+          </div>
+          <div v-if="currentGovType === 'corpocracy'" class="tax-effect-row" style="margin-top:4px">
+            <span class="effect-lbl" style="color:var(--accent)">⚠️ 企业政体税收效率</span>
+            <span class="effect-val" style="color:var(--accent)">×0.50</span>
           </div>
         </div>
       </section>

@@ -70,10 +70,19 @@ export function getTradeRouteQtyLimit(state: GameState): number {
  * 原版公式简化：buyPrice = value × tradeRatio
  */
 export function getBuyPrice(resourceId: string, state?: GameState): number {
-  const value = RESOURCE_VALUES[resourceId] ?? 0;
+  const baseValue = RESOURCE_VALUES[resourceId] ?? 0;
+  const value = state?.resource[resourceId]?.value || baseValue;
   const ratio = TRADE_RATIOS[resourceId] ?? 1;
   const traitMult = state ? getTradeBuyPriceMultiplier(state) : 1;
-  return +(value * ratio * traitMult).toFixed(1);
+  let price = value * ratio * traitMult;
+
+  // Wharf discount: each wharf provides a stacking 1% discount
+  if (state && (state.city['wharf'] as { count?: number })?.count) {
+    const wharves = (state.city['wharf'] as { count: number }).count;
+    price *= Math.pow(0.99, wharves);
+  }
+
+  return +price.toFixed(1);
 }
 
 /**
@@ -82,10 +91,20 @@ export function getBuyPrice(resourceId: string, state?: GameState): number {
  * 原版公式简化：sellPrice = value × tradeRatio / 4
  */
 export function getSellPrice(resourceId: string, state?: GameState): number {
-  const value = RESOURCE_VALUES[resourceId] ?? 0;
+  const baseValue = RESOURCE_VALUES[resourceId] ?? 0;
+  const value = state?.resource[resourceId]?.value || baseValue;
   const ratio = TRADE_RATIOS[resourceId] ?? 1;
   const traitMult = state ? getTradeSellPriceMultiplier(state) : 1;
-  return +(((value * ratio) / 4) * traitMult).toFixed(1);
+  let price = ((value * ratio) / 4) * traitMult;
+
+  // Wharf bonus: each wharf provides a stacking 1% sell price increase
+  // 对标 legacy resources.js L1978-1979: price *= (1 + wharf.count * 0.01)
+  if (state && (state.city['wharf'] as { count?: number })?.count) {
+    const wharves = (state.city['wharf'] as { count: number }).count;
+    price *= 1 + wharves * 0.01;
+  }
+
+  return +price.toFixed(1);
 }
 
 // ============================================================
@@ -106,9 +125,10 @@ export function buyResource(
 ): GameState | null {
   qty = Math.max(1, Math.floor(qty));
   qty = Math.min(qty, getManualTradeLimit(state));
-  const price = getBuyPrice(resourceId, state) * qty;
+  const pricePerUnit = getBuyPrice(resourceId, state);
+  const totalPrice = pricePerUnit * qty;
   const money = state.resource['Money'];
-  if (!money || money.amount < price) return null;
+  if (!money || money.amount < totalPrice) return null;
 
   const res = state.resource[resourceId];
   if (!res) return null;
@@ -116,12 +136,18 @@ export function buyResource(
   if (res.max > 0 && res.amount >= res.max) return null;
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
-  newState.resource['Money'].amount -= price;
+  newState.resource['Money'].amount -= totalPrice;
   const targetRes = newState.resource[resourceId];
   targetRes.amount += qty;
   // 钳位到上限
   if (targetRes.max > 0 && targetRes.amount > targetRes.max) {
     targetRes.amount = targetRes.max;
+  }
+
+  // 价格爬坡
+  if (targetRes.value !== undefined) {
+    const randDivisor = 1000 + Math.random() * 9000;
+    targetRes.value += Number((qty / randDivisor).toFixed(2));
   }
 
   return newState;
@@ -147,12 +173,23 @@ export function sellResource(
   const income = getSellPrice(resourceId, state) * qty;
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
-  newState.resource[resourceId].amount -= qty;
+  const targetRes = newState.resource[resourceId];
+  targetRes.amount -= qty;
   newState.resource['Money'].amount += income;
   // 金币钳位
   const moneyRes = newState.resource['Money'];
   if (moneyRes.max > 0 && moneyRes.amount > moneyRes.max) {
     moneyRes.amount = moneyRes.max;
+  }
+
+  // 价格下跌
+  if (targetRes.value !== undefined) {
+    const randDivisor = 1000 + Math.random() * 9000;
+    targetRes.value -= Number((qty / randDivisor).toFixed(2));
+    const baseValue = RESOURCE_VALUES[resourceId] ?? 0;
+    if (targetRes.value < baseValue / 2) {
+      targetRes.value = baseValue / 2;
+    }
   }
 
   return newState;

@@ -88,6 +88,10 @@ export const EVENTS: EventDefinition[] = [
     id: 'inspiration',
     type: 'major',
     reqs: { resource: 'Knowledge' },
+    condition(state) {
+      const species = state.race.species;
+      return (state.resource[species]?.amount ?? 0) > 0;
+    },
     effect(state) {
       const ticks = rng(300, 600);
       (state.race as any)['inspired'] = ticks;

@@ -39,6 +39,10 @@ export interface MoraleResult {
   breakdown: MoraleState;
 }
 
+export interface MoraleOptions {
+  activeCasinos?: number;
+}
+
 // ============================================================
 // 主计算函数
 // ============================================================
@@ -49,7 +53,7 @@ export interface MoraleResult {
  * @param state - 当前游戏状态
  * @returns MoraleResult
  */
-export function calculateMorale(state: GameState): MoraleResult {
+export function calculateMorale(state: GameState, options: MoraleOptions = {}): MoraleResult {
   let morale = 100;
 
   // ----------------------------------------------------------
@@ -151,6 +155,11 @@ export function calculateMorale(state: GameState): MoraleResult {
   if (state.civic.govern?.type === 'autocracy') {
     stress *= 0.75; // 压力减 25%
   }
+  // 社会主义：压力惩罚 +10%
+  // 对标 legacy main.js L3123-3124
+  if (state.civic.govern?.type === 'socialist') {
+    stress *= 1.1;
+  }
 
   // mellow 行星特性：猎人和士兵压力除数 ×1.5
   // 对标 legacy main.js L1476, L1509-1510
@@ -164,6 +173,18 @@ export function calculateMorale(state: GameState): MoraleResult {
   }
 
   morale += stress;
+
+  // 驻军压力 — 对标 legacy main.js L1507-1518
+  // army_stress = garrison.max / divisor(2)
+  if (state.civic.garrison) {
+    let armyDivisor = 2;
+    if (hasPlanetTrait(state, 'mellow')) {
+      armyDivisor *= mellowVars()[0];
+    }
+    const armyStress = state.civic.garrison.max / armyDivisor;
+    stress -= armyStress;
+    morale -= armyStress;
+  }
 
   // ----------------------------------------------------------
   // 5. 娱乐 — 对标 legacy main.js L3020-3041
@@ -183,15 +204,27 @@ export function calculateMorale(state: GameState): MoraleResult {
   }
   morale += entertainment;
 
+  // 政体直接调整基础士气
+  // 对标 legacy main.js L1378-1382
+  if (state.civic.govern?.type === 'corpocracy') {
+    morale -= 10;
+  }
+  if (state.civic.govern?.type === 'republic') {
+    morale += 20;
+  }
+
   // ----------------------------------------------------------
   // 6. 士气上限 — 对标 legacy main.js L3164-3211
   // moraleCap = 125 + amphitheatre_count + low_tax_bonus
   // ----------------------------------------------------------
-  let moraleCap = 125;
+  let moraleCap = 100;
 
   // 圆形剧场提高上限 — 对标 legacy main.js L3172-3174
   const amphitheatres = (state.city['amphitheatre'] as { count: number } | undefined)?.count ?? 0;
   moraleCap += amphitheatres;
+
+  // 赌场提高士气上限 — 对标 legacy main.js L3167
+  moraleCap += options.activeCasinos ?? 0;
 
   // 纪念碑士气上限加成 — 对标 legacy arpa.js L172-175: +2 per monument
   moraleCap += getMonumentMoraleBonus(state);

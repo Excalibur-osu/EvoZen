@@ -10,8 +10,17 @@
 import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
 import { craftingTick } from './crafting';
 import { tradeTick } from './trade';
-import { getTaxMultiplier, getKnowledgeMultiplier, tickGovernmentCooldown } from './government';
+import {
+  getTaxMultiplier,
+  getKnowledgeMultiplier,
+  getBankerImpactMultiplier,
+  getCasinoIncomeMultiplier,
+  getTourismIncomeMultiplier,
+  getFactoryOutputMultiplier,
+  tickGovernmentCooldown,
+} from './government';
 import { BASIC_STRUCTURES } from './structures';
+import { RESOURCE_VALUES } from './resources';
 import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier, getHungerMultiplier } from './traits';
 import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
@@ -28,6 +37,11 @@ import {
 } from './planet-traits';
 import { evolutionTick } from './evolution';
 import { arpaTick } from './arpa';
+import {
+  getCasinoIncomePerActive,
+  getTourismFoodDemand,
+  getTourismIncome,
+} from './commerce';
 
 /**
  * 原版全局时间缩放因子
@@ -82,11 +96,25 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const explosiveLevel = techLevel('explosives');
 
   // ============================================================
+  // 0a. 电力网格
+  // ============================================================
+  // 在资源产出计算前执行电力分配，确定用电建筑实际开启数
+  const powerResult = powerTick(state);
+  // 合入燃料消耗 delta
+  for (const [resId, delta] of Object.entries(powerResult.fuelDeltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+  }
+  // 用电建筑实际开启数
+  const poweredOn = powerResult.activeConsumers;
+
+  // ============================================================
   // 0. 士气 & 全局乘数
   // ============================================================
   // 对标 legacy/src/main.js L1286-3290:
   // morale 决定 global_multiplier，影响所有工人产出
-  const moraleResult = calculateMorale(state);
+  const moraleResult = calculateMorale(state, {
+    activeCasinos: poweredOn['casino'] ?? 0,
+  });
   const prodMult = moraleResult.globalMultiplier;
 
   // ============================================================
@@ -100,18 +128,6 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // mellow 行星特性：全局产出 ×0.9
   const planetGlobalMult = getGlobalPlanetMultiplier(state);
   const effectiveProdMult = prodMult * hungerMult * planetGlobalMult;
-
-  // ============================================================
-  // 0a. 电力网格
-  // ============================================================
-  // 在资源产出计算前执行电力分配，确定用电建筑实际开启数
-  const powerResult = powerTick(state);
-  // 合入燃料消耗 delta
-  for (const [resId, delta] of Object.entries(powerResult.fuelDeltas)) {
-    deltas[resId] = (deltas[resId] ?? 0) + delta;
-  }
-  // 用电建筑实际开启数
-  const poweredOn = powerResult.activeConsumers;
 
   // ============================================================
   // 1. 食物
@@ -157,12 +173,31 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const farmerFood = farmers * farmerBase * foodMult;
 
   // 食物消耗 — 原版 main.js L3711:
-  // consume = (pop + soldiers - (unemployed + hunters) * 0.5)
-  // 简化版（暂无士兵系统），food_consume_mod = 1（标准人类）
+  // consume = (pop + soldiers - (unemployed + hunters) * 0.5) * food_consume_mod
   const unemployed = workers('unemployed');
-  const foodConsumption = pop - (unemployed + hunters) * 0.5;
+  const soldiers = state.civic.garrison?.workers ?? 0;
+  const foodConsumption = pop + soldiers - (unemployed + hunters) * 0.5;
+  const touristCenters = (state.city['tourist_center'] as { count?: number; on?: number } | undefined)?.on
+    ?? structCount('tourist_center');
+  const tourismFoodDemand = getTourismFoodDemand(touristCenters);
 
-  deltas['Food'] = (hunterFood * rageHuntMult + farmerFood) * prodMult * planetGlobalMult - foodConsumption;
+  // 天气对农业的影响 — 原版 main.js L3532-3544
+  // temp=0(冷)+rain: ×0.7, temp=0(冷)+非rain: ×0.85, sunny: ×1.1
+  let weatherFoodMult = 1;
+  const cal = state.city.calendar;
+  if (cal) {
+    if (cal.temp === 0) {
+      weatherFoodMult *= cal.weather === 0 ? 0.7 : 0.85;
+    }
+    if (cal.weather === 2) {
+      weatherFoodMult *= 1.1;
+    }
+  }
+
+  deltas['Food'] =
+    (hunterFood * rageHuntMult + farmerFood * weatherFoodMult) * prodMult * planetGlobalMult
+    - foodConsumption
+    - tourismFoodDemand;
 
   // ============================================================
   // 2. 毛皮（猎人副产品）
@@ -345,9 +380,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (techLevel('banking') >= 10) {
       bankerImpact += 0.02 * techLevel('stock_exchange');
     }
-    if (state.civic.govern?.type === 'republic') {
-      bankerImpact *= 1.25;
-    }
+    bankerImpact *= getBankerImpactMultiplier(state);
     incomeBase *= 1 + bankers * bankerImpact;
   }
   incomeBase *= getTaxIncomeTraitMultiplier(state);
@@ -356,42 +389,71 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   incomeBase *= getTaxMultiplier(state);
   deltas['Money'] = incomeBase;
 
+  // 赌场收入 — 对标 legacy main.js L7674-7684
+  const activeCasinos = poweredOn['casino'] ?? 0;
+  if (techLevel('gambling') >= 1 && activeCasinos > 0) {
+    deltas['Money'] += activeCasinos
+      * getCasinoIncomePerActive(state)
+      * getCasinoIncomeMultiplier(state)
+      * prodMult
+      * hungerMult;
+  }
+
+  // 旅游收入 — 对标 legacy main.js L7687-7728（当前阶段只保留已实装的贡献项）
+  if (touristCenters > 0) {
+    deltas['Money'] += getTourismIncome(state, touristCenters)
+      * getTourismIncomeMultiplier(state)
+      * prodMult
+      * hungerMult;
+  }
+
   // ============================================================
-  // 9a. 冶金系统 (Metallurgy)
+  // 9a. 冶金系统 (Metallurgy) — 对标 legacy main.js L4842-5146
   // ============================================================
   const smelters = structCount('smelter');
   if (smelters > 0) {
-    const blastFurnaceMult = techLevel('smelting') >= 3 ? 1.2 : 1;
-    const bessemerMult = techLevel('smelting') >= 4 ? 1.2 : 1;
-    const oxygenConverterMult = techLevel('smelting') >= 5 ? 1.2 : 1;
-    // 根据 tech.ts，'steel' 科技赋予 'smelting: 2'
+    // 原版 L5007: iron_smelter *= smelting >= 3 ? 1.2 : 1
+    // 原版 L5015-5018: smelting >= 7: iron *= 1.25
+    const ironBlast = techLevel('smelting') >= 3 ? 1.2 : 1;
+    const ironAdvanced = techLevel('smelting') >= 7 ? 1.25 : 1;
+
     if (techLevel('smelting') >= 2) {
-      // 生产钢 (消耗 铁和煤)
+      // ---- 钢铁生产模式 ----
+      // 原版 L5068-5069: iron_consume = steel_smelter * 2, coal_consume = steel_smelter * 0.25
       const ironCost = 2;
-      const coalCost = 2;
+      const coalCost = 0.25;
       const availableIron = state.resource['Iron']?.amount ?? 0;
       const availableCoal = state.resource['Coal']?.amount ?? 0;
       const maxByIron = Math.floor(availableIron / ironCost);
       const maxByCoal = Math.floor(availableCoal / coalCost);
       const effectiveSmelters = Math.min(smelters, Math.min(maxByIron, maxByCoal));
-      deltas['Steel'] = (deltas['Steel'] ?? 0)
-        + effectiveSmelters * 0.5 * blastFurnaceMult * bessemerMult * oxygenConverterMult;
+
+      // 原版 L5081-5096: steel_base = 1, smelting 4/5/6 各 ×1.2, smelting 7 ×1.25
+      let steelBase = 1;
+      for (let i = 4; i <= 6; i++) {
+        if (techLevel('smelting') >= i) steelBase *= 1.2;
+      }
+      if (techLevel('smelting') >= 7) steelBase *= 1.25;
+
+      // 原版 L5117: smelter_output = steel_smelter * steel_base
+      const steelOutput = effectiveSmelters * steelBase;
+      deltas['Steel'] = (deltas['Steel'] ?? 0) + steelOutput;
       deltas['Iron'] = (deltas['Iron'] ?? 0) - effectiveSmelters * ironCost;
       deltas['Coal'] = (deltas['Coal'] ?? 0) - effectiveSmelters * coalCost;
 
-      // 钛副产物 (titanium tech >= 1) — 对标 legacy main.js L5130-5144
-      // 原版: smelter_output / divisor, divisor = titanium >= 3 ? 10 : 25
+      // 钛副产物 — 原版 L5130-5144
       if (techLevel('titanium') >= 1) {
-        const steelOutput = effectiveSmelters * 0.5 * blastFurnaceMult * bessemerMult * oxygenConverterMult;
         const titaniumDivisor = techLevel('titanium') >= 3 ? 10 : 25;
         deltas['Titanium'] = (deltas['Titanium'] ?? 0) + steelOutput / titaniumDivisor;
       }
     } else {
-      // 初期仅生产铁 (消耗木材)
-      const lumberCost = 5;
+      // ---- 初期铁生产模式 ----
+      // 原版 L4929: consume_wood = smelter.Wood * l_cost (l_cost=3)
+      const lumberCost = 3;
       const availableLumber = state.resource['Lumber']?.amount ?? 0;
       const effectiveSmelters = Math.min(smelters, Math.floor(availableLumber / lumberCost));
-      deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * 2.0 * blastFurnaceMult;
+      // 原版 L4932+L5007: iron_smelter = count × (smelting≥3 ? 1.2 : 1) × (smelting≥7 ? 1.25 : 1)
+      deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * ironBlast * ironAdvanced;
       deltas['Lumber'] = (deltas['Lumber'] ?? 0) - effectiveSmelters * lumberCost;
     }
   }
@@ -509,9 +571,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
       if (finished) {
         if (!newState.city[item.id]) {
-          newState.city[item.id] = { count: 0 };
+          newState.city[item.id] = { count: 0, on: 0 };
         }
-        (newState.city[item.id] as { count: number }).count++;
+        const building = newState.city[item.id] as { count: number; on?: number };
+        building.count++;
+        if (building.on !== undefined) {
+          building.on++;
+        }
 
         messages.push({
           text: `✔️ 建造完成：${item.label}`,
@@ -528,6 +594,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
 
   // ============================================================
+  // 10.5 人口自然增长 (Pop Spawn)
+  // ============================================================
+  tickPopulationGrowth(newState, TIME_MULTIPLIER, messages);
+
+  // ============================================================
   // 11. 饥荒效果：食物 0 且负产出时人口减少
   // ============================================================
   if (newState.resource['Food']?.amount === 0 && (deltas['Food'] ?? 0) < 0) {
@@ -540,6 +611,34 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
           type: 'danger',
           category: 'progress',
         });
+      }
+    }
+  }
+
+  // ============================================================
+  // 11.5 市场价格波动收敛 (Market Price Fluctuation)
+  // ============================================================
+  if ((newState.tech['currency'] ?? 0) >= 2) {
+    const fluxVal = 4; // 'risktaker' gov trait not implemented yet, so 4
+    for (const [resId, targetRes] of Object.entries(newState.resource)) {
+      if (targetRes.value !== undefined) {
+        let baseVal = RESOURCE_VALUES[resId] ?? 0;
+        // 原版中 Copper 会在这个阶段如果有 high_tech >= 2 降半
+        if (resId === 'Copper' && (newState.tech['high_tech'] ?? 0) >= 2) {
+          baseVal /= 2;
+        }
+
+        if (targetRes.value > baseVal) {
+          targetRes.value -= (targetRes.value - baseVal) / (100 * fluxVal);
+          if (targetRes.value < baseVal) {
+            targetRes.value = baseVal;
+          }
+        } else if (targetRes.value < baseVal) {
+          targetRes.value += (baseVal - targetRes.value) / (100 * fluxVal);
+          if (targetRes.value > baseVal) {
+            targetRes.value = baseVal;
+          }
+        }
       }
     }
   }
@@ -737,6 +836,63 @@ function removeOneCitizen(state: GameState): void {
   }
 }
 
+/**
+ * 原版人口自然增长 (Birth Rate)
+ * 处理自然人口随进度条增涨并填充空闲住房的逻辑。
+ */
+function tickPopulationGrowth(state: GameState, timeMultiplier: number, messages: GameMessage[]): void {
+  const species = state.race.species;
+  const popRes = state.resource[species];
+  if (!popRes) return;
+
+  const currentPop = popRes.amount;
+  const maxPop = popRes.max;
+
+  // 已达人口上限，停止生长
+  if (currentPop >= maxPop) return;
+
+  // 饥饿判定: 需要有食物储备才增加人口
+  // 按照原版逻辑，有 fasting 等特质时允许无食物繁衍，这里先简化接入
+  const food = state.resource['Food'];
+  if (food && food.amount <= 0 && !state.race['fasting']) return;
+
+  // 基础繁殖下限概率由 reproduction 科技决定
+  let lowerBound = Number(state.tech['reproduction'] ?? 0);
+  let upperBound = currentPop;
+
+  // 繁衍科技 >= 2 且有医院，增加 lowerBound
+  if (Number(state.tech['reproduction'] ?? 0) >= 2) {
+    const hospitalCount = (state.city['hospital'] as { count?: number })?.count ?? 0;
+    lowerBound += hospitalCount;
+  }
+
+  // TODO: 后续可接入各种族特质加成 (fast_growth, spores, promiscuous)
+
+  // 概率衰减曲线: 随着运行逐渐降低实际命中概率
+  upperBound *= (3 - Math.pow(2, timeMultiplier));
+  
+  // 原版采用 Math.rand(0, upperBound) = Math.floor(Math.random() * upperBound)
+  // 范围 [0, upperBound)
+  const randVal = Math.floor(Math.random() * upperBound);
+  
+  if (randVal <= lowerBound) {
+    popRes.amount += 1;
+    
+    // 分配到默认岗位（原版 L3972: global.civic[global.civic.d_job].workers++）
+    const defaultJob = (state.civic as any).d_job ?? 'unemployed';
+    const jobSlot = state.civic[defaultJob] as { workers?: number } | undefined;
+    if (jobSlot) {
+      jobSlot.workers = (jobSlot.workers ?? 0) + 1;
+    }
+
+    messages.push({
+      text: `一位新市民加入了你的部落！人口: ${popRes.amount}`,
+      type: 'success',
+      category: 'progress'
+    });
+  }
+}
+
 // ============================================================
 // 工厂产线 tick
 // 对标 legacy/src/industry.js L117-147 f_rate 表，下标 0 (无 assembly 科技)
@@ -755,6 +911,7 @@ export function factoryTick(
   const allocAlloy = Math.min(factory.Alloy, poweredOn);
   const remainAfterAlloy = poweredOn - allocAlloy;
   const allocPolymer = Math.min(factory.Polymer, remainAfterAlloy);
+  const outputMultiplier = getFactoryOutputMultiplier(state);
 
   // ----------------------------------------------------------
   // 合金 (Alloy) 产线
@@ -764,7 +921,7 @@ export function factoryTick(
   if (allocAlloy > 0 && state.resource['Alloy']) {
     const copperCost = allocAlloy * 0.75 * timeMul;
     const aluminiumCost = allocAlloy * 1.0 * timeMul;
-    const alloyOutput = allocAlloy * 0.075 * timeMul;
+    const alloyOutput = allocAlloy * 0.075 * outputMultiplier * timeMul;
 
     // 扭读钳造保证资源足够
     const availCopper = (state.resource['Copper']?.amount ?? 0);
@@ -794,7 +951,7 @@ export function factoryTick(
   if (allocPolymer > 0 && state.resource['Polymer']) {
     const oilCost = allocPolymer * 0.18 * timeMul;
     const lumberCost = allocPolymer * 15 * timeMul;
-    const polymerOutput = allocPolymer * 0.125 * timeMul;
+    const polymerOutput = allocPolymer * 0.125 * outputMultiplier * timeMul;
 
     const availOil = (state.resource['Oil']?.amount ?? 0);
     const availLumber = (state.resource['Lumber']?.amount ?? 0);

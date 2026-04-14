@@ -47,6 +47,13 @@ export {
 export { gameTick, factoryTick } from './tick';
 export { saveGame, loadGame, exportSave, importSave } from './save';
 export {
+  getBankVault,
+  getCasinoVault,
+  getCasinoIncomePerActive,
+  getTourismFoodDemand,
+  getTourismIncome,
+} from './commerce';
+export {
   manualCraft,
   craftingTick,
   assignCraftsman,
@@ -77,6 +84,10 @@ export {
   getMaxTaxRate,
   getTempleMultiplier,
   getKnowledgeMultiplier,
+  getBankerImpactMultiplier,
+  getCasinoIncomeMultiplier,
+  getTourismIncomeMultiplier,
+  getFactoryOutputMultiplier,
   type GovernmentType,
   type GovernmentDef,
 } from './government';

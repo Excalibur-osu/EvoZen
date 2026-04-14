@@ -53,131 +53,276 @@ function canAssignMore(jobId: string): boolean {
 </script>
 
 <template>
-  <div class="job-list">
-    <h3 class="section-title">👷 岗位分配</h3>
-
-    <div
-      v-for="job in visibleJobs"
-      :key="job.id"
-      class="job-row"
-      :class="{ 'job-unemployed': job.id === 'unemployed' }"
-    >
-      <div class="job-info">
-        <div class="job-name-row">
-          <span class="job-name">{{ job.name }}</span>
-          <span class="job-output text-xs" v-if="JOB_OUTPUT[job.id]">{{ JOB_OUTPUT[job.id] }}</span>
-        </div>
-        <span class="job-desc text-xs" v-if="job.id !== 'unemployed'">{{ job.description }}</span>
-      </div>
-      <div class="job-controls">
-        <template v-if="job.id !== 'unemployed'">
-          <button class="ctrl-btn" @click="game.removeWorker(job.id)" :disabled="getWorkers(job.id) <= 0" title="减少工人">−</button>
-        </template>
-        <span class="job-count font-mono">{{ getWorkers(job.id) }}</span>
-        <span class="job-max font-mono text-xs" v-if="getMax(job.id) >= 0">/ {{ getMax(job.id) }}</span>
-        <span class="job-max font-mono text-xs" v-else-if="job.id !== 'unemployed'">/ ∞</span>
-        <template v-if="job.id !== 'unemployed'">
-          <button class="ctrl-btn" @click="game.assignWorker(job.id)" :disabled="!canAssignMore(job.id)" title="增加工人">+</button>
-        </template>
+  <div class="job-panel">
+    <div class="panel-header">
+      <h3 class="section-title">
+        <span class="title-icon">👷</span>
+        岗位中心
+      </h3>
+      
+      <!-- 待分配劳动力移至头部，作为紧凑的 Badge -->
+      <div 
+        class="unemployed-badge" 
+        v-if="visibleJobs.some(j => j.id === 'unemployed')"
+        :class="{ 'has-unemployed': getWorkers('unemployed') > 0 }"
+      >
+        <span class="ub-icon" v-if="getWorkers('unemployed') > 0">⚡</span>
+        <span class="ub-icon" v-else>👥</span>
+        <span class="ub-label">待分配:</span>
+        <span class="ub-count">{{ getWorkers('unemployed') }}</span>
       </div>
     </div>
+
+    <!-- 紧凑型岗位网格 -->
+    <TransitionGroup name="list" tag="div" class="job-grid">
+      <template v-for="job in visibleJobs" :key="job.id">
+        <div class="job-widget" v-if="job.id !== 'unemployed'" :data-tooltip="job.description">
+          
+          <div class="jw-header">
+            <span class="jw-name">{{ job.name }}</span>
+            <span class="jw-output" v-if="JOB_OUTPUT[job.id]">{{ JOB_OUTPUT[job.id] }}</span>
+          </div>
+          
+          <div class="jw-controls">
+            <button 
+              class="jw-btn" 
+              @click="game.removeWorker(job.id)" 
+              :disabled="getWorkers(job.id) <= 0"
+            >
+              <svg viewBox="0 0 24 24" fill="none" class="icon-minus" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+            
+            <div class="jw-value">
+              <span class="val-curr" :class="{ 'val-active': getWorkers(job.id) > 0 }">{{ getWorkers(job.id) }}</span>
+              <span class="val-sep">/</span>
+              <span class="val-max">{{ getMax(job.id) >= 0 ? getMax(job.id) : '∞' }}</span>
+            </div>
+
+            <button 
+              class="jw-btn" 
+              @click="game.assignWorker(job.id)" 
+              :disabled="!canAssignMore(job.id)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" class="icon-plus" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+          </div>
+          
+        </div>
+      </template>
+    </TransitionGroup>
   </div>
 </template>
 
 <style scoped>
-.job-list {
+.job-panel {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 12px;
 }
 
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-accent);
-  margin-bottom: 8px;
-}
-
-.job-row {
+.panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-}
-.job-unemployed {
-  background: rgba(248, 113, 113, 0.05);
-  border-color: rgba(248, 113, 113, 0.15);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.job-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-}
-.job-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.job-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.job-output {
-  color: var(--text-muted);
-  opacity: 0.8;
-}
-.job-desc {
-  color: var(--text-muted);
-  line-height: 1.3;
-}
-
-.job-controls {
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
+  margin: 0;
 }
 
-.ctrl-btn {
-  width: 24px;
+.title-icon {
+  font-size: 16px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+/* 顶部紧凑 Badge */
+.unemployed-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.unemployed-badge.has-unemployed {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+
+.ub-icon {
+  font-size: 13px;
+}
+.has-unemployed .ub-icon {
+  color: #60a5fa;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.ub-label {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.ub-count {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #94a3b8;
+}
+
+.has-unemployed .ub-count {
+  color: #60a5fa;
+  text-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+}
+
+/* 紧凑型网格 */
+.job-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.job-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  transition: background 0.2s, transform 0.1s;
+  cursor: default;
+}
+
+.job-widget:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.jw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.jw-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+}
+
+.jw-output {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 操作器 */
+.jw-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.jw-btn {
+  width: 28px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 3px;
   cursor: pointer;
-  transition: all 0.15s;
-  font-family: var(--font-sans);
-  padding: 0;
+  transition: all 0.1s;
 }
-.ctrl-btn:hover:not(:disabled) {
-  background: var(--bg-card-hover);
-  border-color: var(--border-hover);
+
+.jw-btn svg {
+  width: 12px;
+  height: 12px;
 }
-.ctrl-btn:disabled {
-  opacity: 0.3;
+
+.jw-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.jw-btn:not(:disabled):hover .icon-plus {
+  color: #10b981;
+}
+
+.jw-btn:not(:disabled):hover .icon-minus {
+  color: #f43f5e;
+}
+
+.jw-btn:disabled {
+  opacity: 0.2;
   cursor: not-allowed;
 }
 
-.job-count {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-accent);
-  min-width: 20px;
-  text-align: center;
+.jw-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
-.job-max {
-  color: var(--text-muted);
+
+.val-curr {
+  font-weight: 700;
+  color: #64748b;
+  transition: color 0.1s;
+}
+.val-curr.val-active {
+  color: #f8fafc;
+}
+
+.val-sep {
+  margin: 0 4px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.val-max {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* 列表过渡动画 */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.3s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
 }
 </style>

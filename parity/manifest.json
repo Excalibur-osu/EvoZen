@@ -1,6 +1,6 @@
 {
-  "version": "0.7.7",
-  "lastVerified": "2026-04-12",
+  "version": "0.7.8",
+  "lastVerified": "2026-04-15",
   "coverageEstimate": "30-35% of total original game; ~90% of Phase 1A civilized era scope",
   "statusLegend": {
     "exact": "Implemented and intended to match legacy behavior within current scope.",
@@ -26,9 +26,17 @@
         "34 new unit tests fully verify all unlock rules, costs, and the complete evo 0→7→sentience path."
       ],
       "refs": [
-        { "path": "packages/game-core/src/evolution.ts" },
-        { "path": "legacy/src/actions.js", "lines": "22-930" },
-        { "path": "legacy/src/main.js", "lines": "1216-1282" }
+        {
+          "path": "packages/game-core/src/evolution.ts"
+        },
+        {
+          "path": "legacy/src/actions.js",
+          "lines": "22-930"
+        },
+        {
+          "path": "legacy/src/main.js",
+          "lines": "1216-1282"
+        }
       ]
     },
     {
@@ -42,8 +50,12 @@
         "ARPA tick now integrated via arpaTick() called at end of gameTick()."
       ],
       "refs": [
-        { "path": "packages/game-core/src/tick.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/tick.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -57,14 +69,19 @@
         "Monument types (Obelisk/Statue/Sculpture/Monolith/Pillar) and costs match legacy arpa.js L1652-1664.",
         "Monument morale cap bonus (+2 per rank) matches legacy arpa.js L172-175.",
         "stock_exchange unlock condition (banking:9) matches legacy arpa.js L81.",
-        "Not yet implemented: stock_exchange effect on bank income.",
+        "stock_exchange banker income bonus (+0.02 impact per rank at banking:10) matches current scope.",
         "Not yet implemented: launch_facility, railway, supercollider (require Space tech).",
         "Not yet implemented: Genetics/CRISPR/Blood pools (require prestige/reset system).",
         "ARPA tab appears after monument tech research — matches legacy visibility logic."
       ],
       "refs": [
-        { "path": "packages/game-core/src/arpa.ts" },
-        { "path": "legacy/src/arpa.js", "lines": "37-300,1649-1742" }
+        {
+          "path": "packages/game-core/src/arpa.ts"
+        },
+        {
+          "path": "legacy/src/arpa.js",
+          "lines": "37-300,1649-1742"
+        }
       ]
     },
     {
@@ -76,8 +93,12 @@
         "Later-era and non-whitelisted legacy structures remain unimplemented."
       ],
       "refs": [
-        { "path": "packages/game-core/src/structures.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/structures.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -89,8 +110,12 @@
         "Most legacy tech tree content is still outside current scope."
       ],
       "refs": [
-        { "path": "packages/game-core/src/tech.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/tech.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -101,8 +126,12 @@
         "Current jobs are parity-audited against legacy impact and stress values."
       ],
       "refs": [
-        { "path": "packages/game-core/src/jobs.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/jobs.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -113,9 +142,15 @@
         "Buy and sell ratios, manual limits, route limits, and auto-trade are covered by tests and parity checks."
       ],
       "refs": [
-        { "path": "packages/game-core/src/trade.ts" },
-        { "path": "packages/game-core/src/trade.test.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/trade.ts"
+        },
+        {
+          "path": "packages/game-core/src/trade.test.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -126,9 +161,15 @@
         "Season, weather, unemployment, stress, entertainment, cap, and multiplier formulas are covered."
       ],
       "refs": [
-        { "path": "packages/game-core/src/morale.ts" },
-        { "path": "packages/game-core/src/morale.test.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/morale.ts"
+        },
+        {
+          "path": "packages/game-core/src/morale.test.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -141,9 +182,15 @@
         "Later-era power systems (fusion, etc.) are not implemented."
       ],
       "refs": [
-        { "path": "packages/game-core/src/power.ts" },
-        { "path": "packages/game-core/src/power.test.ts" },
-        { "path": "scripts/audit.mjs" }
+        {
+          "path": "packages/game-core/src/power.ts"
+        },
+        {
+          "path": "packages/game-core/src/power.test.ts"
+        },
+        {
+          "path": "scripts/audit.mjs"
+        }
       ]
     },
     {
@@ -155,8 +202,12 @@
         "Legacy spy, annexation, and deeper combat systems are not yet restored."
       ],
       "refs": [
-        { "path": "packages/game-core/src/military.ts" },
-        { "path": "dev_notes.md" }
+        {
+          "path": "packages/game-core/src/military.ts"
+        },
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -168,8 +219,12 @@
         "The broader legacy religion tree is still missing."
       ],
       "refs": [
-        { "path": "packages/game-core/src/tick.ts" },
-        { "path": "dev_notes.md" }
+        {
+          "path": "packages/game-core/src/tick.ts"
+        },
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -181,9 +236,15 @@
         "Legacy event catalog is much larger than the current subset."
       ],
       "refs": [
-        { "path": "packages/game-core/src/events.ts" },
-        { "path": "packages/game-core/src/events.test.ts" },
-        { "path": "dev_notes.md" }
+        {
+          "path": "packages/game-core/src/events.ts"
+        },
+        {
+          "path": "packages/game-core/src/events.test.ts"
+        },
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -194,15 +255,18 @@
         "Elven (studious/arrogant), Dwarf (artisan/stubborn), Goblin (greedy/merchant): all activeNow=true, parity-audited.",
         "Orc (brute/angry): both activeNow=true; brute affects training rate and merc cost; angry affects hunger production multiplier.",
         "Human (diverse): activeNow=true; slows training rate by 25%.",
-        "Human (creative): remains activeNow=false; blocked on ARPA system.",
+        "Human (creative): activeNow=true; reduces ARPA project multiplier by 0.01.",
         "Uranium resource added; coal mines produce trace uranium when uranium tech is researched."
       ],
       "refs": [
-        { "path": "packages/game-core/src/traits.ts" },
-        { "path": "dev_notes.md" }
+        {
+          "path": "packages/game-core/src/traits.ts"
+        },
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
-
     {
       "id": "planet_traits",
       "title": "Planet Traits",
@@ -212,8 +276,12 @@
         "The full legacy trait system is not restored yet."
       ],
       "refs": [
-        { "path": "packages/game-core/src/structures.ts" },
-        { "path": "dev_notes.md" }
+        {
+          "path": "packages/game-core/src/structures.ts"
+        },
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -224,7 +292,9 @@
         "Legacy late-game research systems remain outside the current reconstruction scope."
       ],
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -235,7 +305,9 @@
         "Moon, Mars, asteroid, gas giant, and related progression are not implemented yet."
       ],
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -246,7 +318,9 @@
         "Bioseed, blackhole, ascend, and other reset paths are not implemented yet."
       ],
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -257,7 +331,9 @@
         "Legacy achievement and permanent bonus systems are still missing."
       ],
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -268,7 +344,9 @@
         "Legacy governor automation is not implemented yet."
       ],
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     }
   ],
@@ -280,17 +358,21 @@
       "evozen": "Simplified RNA and DNA collection with direct species choice.",
       "plan": "Restore the full evolution tree in a later phase.",
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
       "id": "reduced_species_count",
       "status": "intentional_diff",
       "legacy": "30+ playable species.",
-      "evozen": "5 basic species for the current single-player reconstruction scope.",
+      "evozen": "11 current species for the single-player reconstruction scope, still below legacy's full 30+ roster.",
       "plan": "Expand species gradually after core parity is stronger.",
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -300,7 +382,9 @@
       "evozen": "250 ticks until the long-loop cadence is fully aligned.",
       "plan": "Re-align after the loop timing is finalized.",
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -310,7 +394,9 @@
       "evozen": "Simplified pre-steel and post-steel fuel logic.",
       "plan": "Expand metallurgy fuel handling later.",
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -320,7 +406,9 @@
       "evozen": "Basic campaigns with a narrower tactic and foreign-state model.",
       "plan": "Restore spy and annexation layers in later sprints.",
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     },
     {
@@ -330,7 +418,9 @@
       "evozen": "A hardcoded QoL Quick Start button relying on a simple localStorage flag that skips the entire phase and instantly forces a Human start to save testing time.",
       "plan": "Remove or refactor into a proper Prestige/Challenge progression system during Phase 2 development.",
       "refs": [
-        { "path": "dev_notes.md" }
+        {
+          "path": "dev_notes.md"
+        }
       ]
     }
   ]
