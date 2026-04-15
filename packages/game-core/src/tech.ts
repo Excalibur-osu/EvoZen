@@ -1374,7 +1374,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     description: '用特殊的探矿杖寻找地下水脉和矿脉。',
     category: 'mining',
     era: '文明',
-    reqs: { mining: 2 },
+    reqs: { mining: 2, foraging: 1 },
     grant: ['dowsing', 1],
     costs: { Knowledge: 450, Lumber: 750 },
     effect: '解锁地质探测，矿工额外随机探测到更多矿脉（效果待接入）。',

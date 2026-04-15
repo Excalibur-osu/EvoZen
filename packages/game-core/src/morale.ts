@@ -23,6 +23,11 @@ import type { GameState, MoraleState } from '@evozen/shared-types';
 import { BASE_JOBS } from './jobs';
 import { hasPlanetTrait, mellowVars, denseVars } from './planet-traits';
 import { getMonumentMoraleBonus } from './arpa';
+import {
+  getAutocracyStressMultiplier,
+  getDemocracyEntertainmentMultiplier,
+  getGovernmentMoraleOffset,
+} from './government';
 
 // ============================================================
 // 结果类型
@@ -150,10 +155,10 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
     stress -= jobState.workers / stressLevel;
   }
 
-  // 独裁政体：压力容忍度 +25%（即压力减少 25%）
-  // 对标 legacy main.js L3120-3121: autocracy → stress tolerance boost
+  // 独裁政体：压力容忍度受高科技档位影响
+  // 对标 legacy civics.js L186-191 + main.js L3120-3121
   if (state.civic.govern?.type === 'autocracy') {
-    stress *= 0.75; // 压力减 25%
+    stress *= getAutocracyStressMultiplier(state);
   }
   // 社会主义：压力惩罚 +10%
   // 对标 legacy main.js L3123-3124
@@ -189,7 +194,7 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
   // ----------------------------------------------------------
   // 5. 娱乐 — 对标 legacy main.js L3020-3041
   // entertainment = entertainers × theatre_tech_level
-  // 民主政体下 ×1.2（govEffect.democracy()[0] = 20）
+  // 民主政体下倍率受 high_tech 档位影响（20% / 25% / 30%）
   // ----------------------------------------------------------
   let entertainment = 0;
   const theatreLevel = state.tech['theatre'] ?? 0;
@@ -199,19 +204,14 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
 
     // 民主政体加成
     if (state.civic.govern?.type === 'democracy') {
-      entertainment *= 1.2; // +20%
+      entertainment *= getDemocracyEntertainmentMultiplier(state);
     }
   }
   morale += entertainment;
 
   // 政体直接调整基础士气
   // 对标 legacy main.js L1378-1382
-  if (state.civic.govern?.type === 'corpocracy') {
-    morale -= 10;
-  }
-  if (state.civic.govern?.type === 'republic') {
-    morale += 20;
-  }
+  morale += getGovernmentMoraleOffset(state);
 
   // ----------------------------------------------------------
   // 6. 士气上限 — 对标 legacy main.js L3164-3211

@@ -1,8 +1,15 @@
 import type { GameState } from '@evozen/shared-types';
 import { BASE_JOBS } from './jobs';
-import { getStorageBonus, getStorageMultiplier, SHED_BASE_VALUES } from './storage';
+import {
+  getStorageBonus,
+  getStorageMultiplier,
+  getTotalAssignedContainers,
+  getTotalAssignedCrates,
+  SHED_BASE_VALUES,
+} from './storage';
 import { getLibraryKnowledgeCapMultiplier } from './traits';
 import { getMaxTradeRoutes } from './trade';
+import { getBankVault, getCasinoVault } from './commerce';
 import { hasPlanetTrait, magneticVars, permafrostVars } from './planet-traits';
 
 export function applyDerivedStateInPlace(state: GameState): void {
@@ -128,11 +135,23 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const libraries = getStructCount('library');
   const universities = getStructCount('university');
   const wardenclyffes = getStructCount('wardenclyffe');
+  const wardenclyffeOn = Math.min(
+    wardenclyffes,
+    (s.city['wardenclyffe'] as { on?: number } | undefined)?.on ?? wardenclyffes,
+  );
   const scientists = (s.civic['scientist'] as { workers?: number } | undefined)?.workers ?? 0;
   const universityBase = (s.tech['science'] ?? 0) >= 8 ? 700 : 500;
   const universityMult = (s.tech['science'] ?? 0) >= 4 ? 1 + libraries * 0.02 : 1;
   const journalMult = (s.tech['science'] ?? 0) >= 5 ? 1 + scientists * 0.12 : 1;
-  knowledgeMax += libraries * 125 * getLibraryKnowledgeCapMultiplier(s) * journalMult;
+  let libraryShelving = 125 * getLibraryKnowledgeCapMultiplier(s);
+  if ((s.tech['science'] ?? 0) >= 8) {
+    libraryShelving *= 1.4;
+  }
+  libraryShelving *= journalMult;
+  if ((s.tech['anthropology'] ?? 0) >= 2) {
+    libraryShelving *= 1 + getStructCount('temple') * 0.05;
+  }
+  knowledgeMax += Math.round(libraries * libraryShelving);
   // permafrost 行星特性：大学知识基础 +100
   // 对标 legacy actions.js L3668: base += permafrost.vars()[1]
   const universityPlanetBonus = hasPlanetTrait(s, 'permafrost') ? permafrostVars()[1] : 0;
@@ -140,16 +159,17 @@ export function applyDerivedStateInPlace(state: GameState): void {
   // magnetic 行星特性：沃登克里夫知识上限 +100/座
   // 对标 legacy actions.js L3867: gain += magnetic.vars()[1]
   const wardenclyffePlanetBonus = hasPlanetTrait(s, 'magnetic') ? magneticVars()[1] : 0;
-  knowledgeMax += wardenclyffes * (1000 + wardenclyffePlanetBonus);
+  const wardenclyffeBase = 1000 + wardenclyffePlanetBonus;
+  const wardenclyffePoweredBonus = (s.tech['science'] ?? 0) >= 7 ? 1500 : 1000;
+  knowledgeMax += wardenclyffes * wardenclyffeBase;
+  knowledgeMax += wardenclyffeOn * wardenclyffePoweredBonus;
   s.resource['Knowledge'].max = knowledgeMax;
 
   let moneyMax = 1000;
   const banks = getStructCount('bank');
-  let bankCapacity = 1800;
-  if ((s.tech['banking'] ?? 0) >= 3) {
-    bankCapacity = 4000;
-  }
-  moneyMax += banks * bankCapacity;
+  const casinos = getStructCount('casino');
+  moneyMax += banks * getBankVault(s);
+  moneyMax += casinos * getCasinoVault(s);
   s.resource['Money'].max = moneyMax;
 
   setJobMax('farmer', farms);
@@ -197,8 +217,8 @@ export function applyDerivedStateInPlace(state: GameState): void {
   setJobMax('craftsman', foundries);
 
   const amphitheatres = getStructCount('amphitheatre');
-  const casinos = getStructCount('casino');
-  setJobMax('entertainer', amphitheatres + casinos);
+  const casinoCount = getStructCount('casino');
+  setJobMax('entertainer', amphitheatres + casinoCount);
 
   const temples = getStructCount('temple');
   setJobMax('priest', temples);
@@ -258,10 +278,16 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const crateCapacity = (s.tech['container'] ?? 0) >= 3 ? 20 : 10;
   const containerCapacity = (s.tech['steel_container'] ?? 0) >= 2 ? 20 : 10;
   if (s.resource['Crates']) {
-    s.resource['Crates'].max = storageYards * crateCapacity + wharves * 10;
+    s.resource['Crates'].max = Math.max(0, storageYards * crateCapacity + wharves * 10 - getTotalAssignedCrates(s));
+    if (s.resource['Crates'].amount > s.resource['Crates'].max) {
+      s.resource['Crates'].amount = s.resource['Crates'].max;
+    }
   }
   if (s.resource['Containers']) {
-    s.resource['Containers'].max = warehouses * containerCapacity + wharves * 10;
+    s.resource['Containers'].max = Math.max(0, warehouses * containerCapacity + wharves * 10 - getTotalAssignedContainers(s));
+    if (s.resource['Containers'].amount > s.resource['Containers'].max) {
+      s.resource['Containers'].amount = s.resource['Containers'].max;
+    }
   }
 
   if ((s.tech['container'] ?? 0) >= 1) {

@@ -221,8 +221,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 伐木场加成 +2%/座（原版 main.js L5575-5576）
   const lumberYards = structCount('lumber_yard');
   const sawmills = structCount('sawmill');
+  const activeSawmills = poweredOn['sawmill'] ?? 0;
   const sawmillBonus = techLevel('saw') >= 2 ? 0.08 : 0.05;
   let lumberMult = 1 + lumberYards * 0.02 + sawmills * sawmillBonus;
+  if (activeSawmills > 0) {
+    lumberMult *= 1 + activeSawmills * 0.04;
+  }
   deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * effectiveProdMult;
 
   // ============================================================
@@ -239,14 +243,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 炸药科技加成 — 原版 main.js: explosives >= 2 时采石场/铝精炼基础产量 + (tech * 25%)
   const quarryExplosiveMult = explosiveLevel >= 2 ? 1 + explosiveLevel * 0.25 : 1;
   stoneBase *= quarryExplosiveMult;
-  // 回收工具升级（reclaimer:2 = shovel +5%, reclaimer:3 = iron_shovel +10%）
-  // 对标 legacy tech.js shovel/iron_shovel 实际属于 reclaimer 系列
-  const reclaimerLevel = techLevel('reclaimer');
-  const shovelMult = reclaimerLevel >= 3 ? 1.10 : (reclaimerLevel >= 2 ? 1.05 : 1);
-  stoneBase *= shovelMult;
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
+  const activeQuarries = poweredOn['rock_quarry'] ?? 0;
   let stoneMult = 1 + quarries * 0.02;
+  if (activeQuarries > 0) {
+    stoneMult *= 1 + activeQuarries * 0.04;
+  }
   deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * effectiveProdMult;
 
   // ============================================================
@@ -255,21 +258,21 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 原版 main.js L6117-6119: miner_base = workers * impact(1.0)
   // 铜系数 main.js L6158: copper_mult = 1/7
   // 铁系数 main.js L6225: iron_mult  = 1/4
-  const miners = poweredOn['mine'] ?? workers('miner');
-  const actualMiners = Math.min(workers('miner'), miners);
+  const activeMines = poweredOn['mine'] ?? 0;
+  const actualMiners = Math.min(workers('miner'), activeMines);
   const pickaxeLevel = techLevel('pickaxe');
   const minerToolMult = 1 + pickaxeLevel * 0.15;
   const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
-  // 回收工具加成（shovelMult 已在上方声明）
-  // 探矿仪 dowsing:2 额外 +8% 矿工产量
-  const dowsingLevel = techLevel('dowsing');
-  const dowsingMult = dowsingLevel >= 2 ? 1.08 : 1;
+  // 矿井通电加成：+5%/座
+  const minePowerMult = activeMines > 0 ? 1 + activeMines * 0.05 : 1;
   // dense/permafrost/magnetic 行星特性：影响矿工产出
   const minerPlanetMult = getMinerPlanetMultiplier(state);
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * minerPlanetMult * effectiveProdMult;  // ≈0.143
+  const copperGeologyMult = 1 + (state.city.geology?.['Copper'] ?? 0);
+  const ironGeologyMult = 1 + (state.city.geology?.['Iron'] ?? 0);
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * minerPlanetMult * effectiveProdMult;  // ≈0.143
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * shovelMult * dowsingMult * minerPlanetMult * effectiveProdMult;  // 1/4
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * minerPlanetMult * effectiveProdMult;  // 1/4
   }
 
   // ============================================================
@@ -278,7 +281,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const coalMineActive = poweredOn['coal_mine'] ?? workers('coal_miner');
   const actualCoalMiners = Math.min(workers('coal_miner'), coalMineActive);
   const coalToolMult = 1 + pickaxeLevel * 0.12;
-  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * shovelMult * dowsingMult * effectiveProdMult;
+  const coalPowerMult = coalMineActive > 0 ? 1 + coalMineActive * 0.05 : 1;
+  const coalGeologyMult = 1 + (state.city.geology?.['Coal'] ?? 0);
+  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * coalPowerMult * coalGeologyMult * effectiveProdMult;
 
   // 铀 — 煤矿副产物
   // 对标 legacy main.js L6595: uranium = coal_delta / 115
@@ -298,12 +303,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (cementWorkers > 0) {
     const stonePerCement = 3;
     // 实际可用的石头限制水泥产出
-    const availableStone = state.resource['Stone']?.amount ?? 0;
+    const availableStone = (state.resource['Stone']?.amount ?? 0) + (deltas['Stone'] ?? 0);
     const maxByStone = Math.floor(availableStone / stonePerCement);
     const effectiveCement = Math.min(cementWorkers, maxByStone);
     const cementLevel = techLevel('cement');
     const cementTechMult = cementLevel >= 7 ? 1.45 : (cementLevel >= 4 ? 1.2 : 1);
-    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * effectiveProdMult;
+    const activeCementPlants = poweredOn['cement_plant'] ?? 0;
+    const cementPowerRate = cementLevel >= 6 ? 0.08 : 0.05;
+    const cementPowerMult = activeCementPlants > 0 ? 1 + activeCementPlants * cementPowerRate : 1;
+    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * cementPowerMult * effectiveProdMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
   }
 
@@ -345,7 +353,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const libraryMult = 1 + libraries * 0.05;
   // 教授+科学家受饥饿影响；日晷不受（原版 L4228-4229）
   const workerKnowledge = (professorsBase + scientistBase) * libraryMult;
-  const sundialKnowledge = (sundialBase + sundialPlanet) * libraryMult;
+  // legacy 先把教授/科学家与日晷相加，再只对前者套用 library multiplier；
+  // 日晷知识不受图书馆加成影响。
+  const sundialKnowledge = sundialBase + sundialPlanet;
   deltas['Knowledge'] = workerKnowledge * effectiveProdMult + sundialKnowledge * prodMult * planetGlobalMult;
 
   // ============================================================
@@ -370,41 +380,49 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // banking >= 2 时: income_base *= 1 + (bankers * impact)
   // income_base *= tax_rate / 20
   // 政体加成（civics.js govEffect）：getTaxMultiplier() 返回政体税收乘数
-  const taxRate = state.civic.taxes?.tax_rate ?? 20;
-  const bankers = workers('banker');
-  const citizens = pop - unemployed;  // 原版 L7587
-  let incomeBase = citizens * 0.4;  // 原版 L7592, non-truepath
-  // 银行家加成（需要 banking:2）— 原版 L7601-7615
-  if (techLevel('banking') >= 2 && bankers > 0) {
-    let bankerImpact = 0.1;  // 基础 impact
-    if (techLevel('banking') >= 10) {
-      bankerImpact += 0.02 * techLevel('stock_exchange');
+  if (techLevel('currency') >= 1) {
+    const taxRate = state.civic.taxes?.tax_rate ?? 20;
+    const bankers = workers('banker');
+    const taxMoneyMult = prodMult * hungerMult * planetGlobalMult;
+    // 原版 L7587: citizens = pop + soldiers - unemployed
+    const citizens = pop + soldiers - unemployed;
+    let incomeBase = citizens * 0.4;  // 原版 L7592, non-truepath
+    // 银行家加成只在“已喂饱 fed”时生效 — 原版 L7601
+    if ((state.resource['Food']?.amount ?? 0) > 0 && techLevel('banking') >= 2 && bankers > 0) {
+      let bankerImpact = 0.1;  // 基础 impact
+      if (techLevel('banking') >= 10) {
+        bankerImpact += 0.02 * techLevel('stock_exchange');
+      }
+      bankerImpact *= getBankerImpactMultiplier(state);
+      incomeBase *= 1 + bankers * bankerImpact;
     }
-    bankerImpact *= getBankerImpactMultiplier(state);
-    incomeBase *= 1 + bankers * bankerImpact;
-  }
-  incomeBase *= getTaxIncomeTraitMultiplier(state);
-  incomeBase *= taxRate / 20;  // 原版 L7626
-  // 政体税收加成（civics.js govEffect.autocracy/oligarchy）
-  incomeBase *= getTaxMultiplier(state);
-  deltas['Money'] = incomeBase;
+    incomeBase *= getTaxIncomeTraitMultiplier(state);
+    incomeBase *= taxRate / 20;  // 原版 L7626
+    incomeBase *= getTaxMultiplier(state);
 
-  // 赌场收入 — 对标 legacy main.js L7674-7684
-  const activeCasinos = poweredOn['casino'] ?? 0;
-  if (techLevel('gambling') >= 1 && activeCasinos > 0) {
-    deltas['Money'] += activeCasinos
-      * getCasinoIncomePerActive(state)
-      * getCasinoIncomeMultiplier(state)
-      * prodMult
-      * hungerMult;
-  }
+    // anthropology:4 开始，每座神庙使税收 +2.5%
+    let templeTaxMult = 1;
+    if (techLevel('anthropology') >= 4) {
+      templeTaxMult += structCount('temple') * 0.025;
+    }
 
-  // 旅游收入 — 对标 legacy main.js L7687-7728（当前阶段只保留已实装的贡献项）
-  if (touristCenters > 0) {
-    deltas['Money'] += getTourismIncome(state, touristCenters)
-      * getTourismIncomeMultiplier(state)
-      * prodMult
-      * hungerMult;
+    deltas['Money'] = incomeBase * templeTaxMult * taxMoneyMult;
+
+    // 赌场收入 — 对标 legacy main.js L7674-7684
+    const activeCasinos = poweredOn['casino'] ?? 0;
+    if (techLevel('gambling') >= 1 && activeCasinos > 0) {
+      deltas['Money'] += activeCasinos
+        * getCasinoIncomePerActive(state)
+        * getCasinoIncomeMultiplier(state)
+        * taxMoneyMult;
+    }
+
+    // 旅游收入 — 对标 legacy main.js L7687-7728（当前阶段只保留已实装的贡献项）
+    if (touristCenters > 0) {
+      deltas['Money'] += getTourismIncome(state, touristCenters)
+        * getTourismIncomeMultiplier(state)
+        * taxMoneyMult;
+    }
   }
 
   // ============================================================
@@ -461,23 +479,39 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 9b. 石油产出 — 对标 legacy main.js L6720-6760
   // ============================================================
-  // 每座油井产出 0.4 Oil/tick (oil tech >= 4 时 0.48，暂设 0.4)
   const oilWells = structCount('oil_well');
   if (oilWells > 0 && techLevel('oil') >= 1) {
-    const oilPerWell = 0.4;
-    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWells * oilPerWell;
+    let oilPerWell = techLevel('oil') >= 4 ? 0.48 : 0.4;
+    if (techLevel('oil') >= 7) {
+      oilPerWell *= 2;
+    } else if (techLevel('oil') >= 5) {
+      oilPerWell *= techLevel('oil') >= 6 ? 1.75 : 1.25;
+    }
+    oilPerWell *= 1 + (state.city.geology?.['Oil'] ?? 0);
+    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWells * oilPerWell * effectiveProdMult;
   }
 
   const metalRefineries = structCount('metal_refinery');
-  const maxRefineries = poweredOn['metal_refinery'] ?? metalRefineries;
-  const activeRefineries = Math.min(metalRefineries, maxRefineries);
-  if (activeRefineries > 0) {
-    // 生产铝 (消耗 石头)
-    const stoneCost = 5;
-    const availableStone = (state.resource['Stone']?.amount ?? 0) + (deltas['Stone'] ?? 0);
-    const effectiveRefineries = Math.min(activeRefineries, Math.floor(Math.max(0, availableStone) / stoneCost));
-    deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + effectiveRefineries * 1.0 * quarryExplosiveMult;
-    deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveRefineries * stoneCost;
+  if (metalRefineries > 0 && actualMiners > 0) {
+    let refineryBonus = metalRefineries * 6;
+    const activeRefineries = poweredOn['metal_refinery'] ?? 0;
+    if (techLevel('alumina') >= 2 && activeRefineries > 0) {
+      refineryBonus += activeRefineries * 6;
+    }
+
+    const aluminiumGeologyMult = 1 + (state.city.geology?.['Aluminium'] ?? 0);
+    const aluminiumBase =
+      actualMiners
+      * minerToolMult
+      * minerExplosiveMult
+      * minePowerMult
+      * 0.088
+      * aluminiumGeologyMult
+      * minerPlanetMult;
+
+    deltas['Aluminium'] =
+      (deltas['Aluminium'] ?? 0)
+      + aluminiumBase * (1 + refineryBonus / 100) * effectiveProdMult;
   }
 
   // ============================================================
@@ -620,26 +654,38 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   if ((newState.tech['currency'] ?? 0) >= 2) {
     const fluxVal = 4; // 'risktaker' gov trait not implemented yet, so 4
-    for (const [resId, targetRes] of Object.entries(newState.resource)) {
-      if (targetRes.value !== undefined) {
-        let baseVal = RESOURCE_VALUES[resId] ?? 0;
-        // 原版中 Copper 会在这个阶段如果有 high_tech >= 2 降半
-        if (resId === 'Copper' && (newState.tech['high_tech'] ?? 0) >= 2) {
-          baseVal /= 2;
-        }
+    for (const [resId, baseResourceValue] of Object.entries(RESOURCE_VALUES)) {
+      const targetRes = newState.resource[resId];
+      if (!targetRes || !targetRes.display || targetRes.value === undefined) {
+        continue;
+      }
 
-        if (targetRes.value > baseVal) {
-          targetRes.value -= (targetRes.value - baseVal) / (100 * fluxVal);
-          if (targetRes.value < baseVal) {
-            targetRes.value = baseVal;
-          }
-        } else if (targetRes.value < baseVal) {
-          targetRes.value += (baseVal - targetRes.value) / (100 * fluxVal);
-          if (targetRes.value > baseVal) {
-            targetRes.value = baseVal;
-          }
+      if (Math.floor(Math.random() * fluxVal) !== 0) {
+        continue;
+      }
+
+      let baseVal = newState.race['truepath'] ? baseResourceValue * 2 : baseResourceValue;
+      if (resId === 'Copper' && (newState.tech['high_tech'] ?? 0) >= 2) {
+        baseVal *= 2;
+      }
+      if (resId === 'Titanium') {
+        if ((newState.tech['titanium'] ?? 0) > 0) {
+          baseVal *= newState.resource['Alloy']?.display ? 1 : 2.5;
+        } else {
+          baseVal *= 5;
         }
       }
+
+      const max = baseVal * 3;
+      const min = baseVal / 2;
+      const variance = (Math.floor(Math.random() * 200) - 100) / 100;
+      let nextValue = targetRes.value + variance;
+      if (nextValue < min) {
+        nextValue = baseVal;
+      } else if (nextValue > max) {
+        nextValue = max - baseVal;
+      }
+      targetRes.value = nextValue;
     }
   }
 
@@ -763,7 +809,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 15. 工厂产线 tick
   // 对标 legacy/src/industry.js f_rate表，工厂 powered = on
   // ============================================================
-  factoryTick(newState, powerResult.activeConsumers['factory'] ?? 0, TIME_MULTIPLIER, deltas);
+  factoryTick(newState, powerResult.activeConsumers['factory'] ?? 0, TIME_MULTIPLIER, deltas, effectiveProdMult);
 
   // ============================================================
   // 16. ARPA 长线研究 tick
@@ -776,6 +822,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       type: 'special',
       category: 'progress',
     });
+  }
+
+  // 14-16 阶段仍可能继续改写 deltas；在返回前统一回填最终 diff。
+  for (const [resId, delta] of Object.entries(deltas)) {
+    if (newState.resource[resId]) {
+      newState.resource[resId].diff = delta;
+    }
   }
 
   return {
@@ -902,16 +955,97 @@ export function factoryTick(
   state: GameState,
   poweredOn: number,
   timeMul: number,
-  deltas: Record<string, number>
+  deltas: Record<string, number>,
+  prodMultiplier: number,
 ): void {
-  const factory = state.city['factory'] as { count: number; on: number; Alloy: number; Polymer: number } | undefined;
-  if (!factory || poweredOn <= 0) return;
+  const factory = state.city['factory'] as {
+    count: number;
+    on: number;
+    Lux?: number;
+    Furs?: number;
+    Alloy: number;
+    Polymer: number;
+  } | undefined;
+  if (!factory) return;
 
-  // 工厂 powered 市已用于分配，确保分配不超过通电数
-  const allocAlloy = Math.min(factory.Alloy, poweredOn);
-  const remainAfterAlloy = poweredOn - allocAlloy;
-  const allocPolymer = Math.min(factory.Polymer, remainAfterAlloy);
+  const maxFactories = Math.max(0, factory.on ?? factory.count ?? 0);
+  const eff = maxFactories > 0 ? poweredOn / maxFactories : 0;
+  if (eff <= 0) return;
+
+  let remainingLines = maxFactories;
+  const allocate = (requested: number | undefined): number => {
+    const lines = Math.max(0, Math.min(requested ?? 0, remainingLines));
+    remainingLines -= lines;
+    return lines;
+  };
+
+  const allocLux = allocate(factory.Lux);
+  const allocFurs = allocate(factory.Furs);
+  const allocAlloy = allocate(factory.Alloy);
+  const allocPolymer = allocate(factory.Polymer);
+
+  const assembly = Math.min(state.tech['factory'] ?? 0, 4);
   const outputMultiplier = getFactoryOutputMultiplier(state);
+  const luxDemandMultiplier = state.civic.govern?.type === 'corpocracy'
+    ? 2.5
+    : (state.civic.govern?.type === 'socialist' ? 0.8 : 1);
+  let pendingMoneyGain = 0;
+
+  if (allocLux > 0) {
+    const furPerLine = [2, 3, 4, 5, 6][assembly] * eff * timeMul;
+    let workDone = allocLux;
+    let furCost = workDone * furPerLine;
+    while (workDone > 0 && furCost > (state.resource['Furs']?.amount ?? 0)) {
+      workDone--;
+      furCost = workDone * furPerLine;
+    }
+
+    if (workDone > 0) {
+      if (state.resource['Furs']) {
+        state.resource['Furs'].amount -= furCost;
+      }
+      deltas['Furs'] = (deltas['Furs'] ?? 0) - furCost;
+
+      const demand = (getPopulation(state) * [0.14, 0.21, 0.28, 0.35, 0.42][assembly] * eff)
+        * luxDemandMultiplier;
+      pendingMoneyGain += workDone * demand * prodMultiplier * timeMul;
+    }
+  }
+
+  if (allocFurs > 0 && state.resource['Furs']) {
+    const moneyPerLine = [10, 15, 20, 25, 30][assembly] * eff * timeMul;
+    const polymerPerLine = [1.5, 2.25, 3, 3.75, 4.5][assembly] * eff * timeMul;
+    let workDone = allocFurs;
+    let moneyCost = workDone * moneyPerLine;
+    let polymerCost = workDone * polymerPerLine;
+
+    while (workDone > 0 && polymerCost > (state.resource['Polymer']?.amount ?? 0)) {
+      workDone--;
+      moneyCost = workDone * moneyPerLine;
+      polymerCost = workDone * polymerPerLine;
+    }
+    while (workDone > 0 && moneyCost > (state.resource['Money']?.amount ?? 0)) {
+      workDone--;
+      moneyCost = workDone * moneyPerLine;
+      polymerCost = workDone * polymerPerLine;
+    }
+
+    if (workDone > 0) {
+      if (state.resource['Money']) state.resource['Money'].amount -= moneyCost;
+      if (state.resource['Polymer']) state.resource['Polymer'].amount -= polymerCost;
+      deltas['Money'] = (deltas['Money'] ?? 0) - moneyCost;
+      deltas['Polymer'] = (deltas['Polymer'] ?? 0) - polymerCost;
+
+      const fursOutput = workDone * [1, 1.5, 2, 2.5, 3][assembly] * outputMultiplier * prodMultiplier * timeMul;
+      const furs = state.resource['Furs'];
+      const maxFurs = furs.max >= 0 ? furs.max : Infinity;
+      const actual = Math.min(fursOutput, maxFurs - furs.amount);
+      if (actual > 0) {
+        furs.amount += actual;
+        deltas['Furs'] = (deltas['Furs'] ?? 0) + actual;
+      }
+    }
+  }
 
   // ----------------------------------------------------------
   // 合金 (Alloy) 产线
@@ -919,19 +1053,33 @@ export function factoryTick(
   // 每条产线每 tick 消耗铜 0.75 + 铝 1.0，产出合金 0.075
   // ----------------------------------------------------------
   if (allocAlloy > 0 && state.resource['Alloy']) {
-    const copperCost = allocAlloy * 0.75 * timeMul;
-    const aluminiumCost = allocAlloy * 1.0 * timeMul;
-    const alloyOutput = allocAlloy * 0.075 * outputMultiplier * timeMul;
+    const copperPerLine = [0.75, 1.12, 1.49, 1.86, 2.23][assembly] * eff * timeMul;
+    const aluminiumPerLine = [1, 1.5, 2, 2.5, 3][assembly] * eff * timeMul;
+    let workDone = allocAlloy;
+    let copperCost = workDone * copperPerLine;
+    let aluminiumCost = workDone * aluminiumPerLine;
 
-    // 扭读钳造保证资源足够
-    const availCopper = (state.resource['Copper']?.amount ?? 0);
-    const availAluminium = (state.resource['Aluminium']?.amount ?? 0);
+    while (workDone > 0 && copperCost > (state.resource['Copper']?.amount ?? 0)) {
+      workDone--;
+      copperCost = workDone * copperPerLine;
+      aluminiumCost = workDone * aluminiumPerLine;
+    }
+    while (workDone > 0 && aluminiumCost > (state.resource['Aluminium']?.amount ?? 0)) {
+      workDone--;
+      copperCost = workDone * copperPerLine;
+      aluminiumCost = workDone * aluminiumPerLine;
+    }
 
-    if (availCopper >= copperCost && availAluminium >= aluminiumCost) {
+    if (workDone > 0) {
       if (state.resource['Copper']) state.resource['Copper'].amount -= copperCost;
       if (state.resource['Aluminium']) state.resource['Aluminium'].amount -= aluminiumCost;
       deltas['Copper'] = (deltas['Copper'] ?? 0) - copperCost;
       deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) - aluminiumCost;
+
+      let alloyOutput = workDone * [0.075, 0.112, 0.149, 0.186, 0.223][assembly] * outputMultiplier * prodMultiplier * timeMul;
+      if ((state.tech['alloy'] ?? 0) >= 1) {
+        alloyOutput *= 1.37;
+      }
 
       const alloy = state.resource['Alloy'];
       const maxAlloy = alloy.max >= 0 ? alloy.max : Infinity;
@@ -949,18 +1097,39 @@ export function factoryTick(
   // 每条产线每 tick 消耗石油 0.18 + 木材 15，产出聚合物 0.125
   // ----------------------------------------------------------
   if (allocPolymer > 0 && state.resource['Polymer']) {
-    const oilCost = allocPolymer * 0.18 * timeMul;
-    const lumberCost = allocPolymer * 15 * timeMul;
-    const polymerOutput = allocPolymer * 0.125 * outputMultiplier * timeMul;
+    const oilTable = state.race['kindling_kindred'] || state.race['smoldering']
+      ? [0.22, 0.33, 0.44, 0.55, 0.66]
+      : [0.18, 0.27, 0.36, 0.45, 0.54];
+    const lumberTable = state.race['kindling_kindred'] || state.race['smoldering']
+      ? [0, 0, 0, 0, 0]
+      : [15, 22, 29, 36, 43];
+    const oilPerLine = oilTable[assembly] * eff * timeMul;
+    const lumberPerLine = lumberTable[assembly] * eff * timeMul;
+    let workDone = allocPolymer;
+    let oilCost = workDone * oilPerLine;
+    let lumberCost = workDone * lumberPerLine;
 
-    const availOil = (state.resource['Oil']?.amount ?? 0);
-    const availLumber = (state.resource['Lumber']?.amount ?? 0);
+    while (workDone > 0 && lumberCost > (state.resource['Lumber']?.amount ?? 0)) {
+      workDone--;
+      oilCost = workDone * oilPerLine;
+      lumberCost = workDone * lumberPerLine;
+    }
+    while (workDone > 0 && oilCost > (state.resource['Oil']?.amount ?? 0)) {
+      workDone--;
+      oilCost = workDone * oilPerLine;
+      lumberCost = workDone * lumberPerLine;
+    }
 
-    if (availOil >= oilCost && availLumber >= lumberCost) {
+    if (workDone > 0) {
       if (state.resource['Oil']) state.resource['Oil'].amount -= oilCost;
       if (state.resource['Lumber']) state.resource['Lumber'].amount -= lumberCost;
       deltas['Oil'] = (deltas['Oil'] ?? 0) - oilCost;
       deltas['Lumber'] = (deltas['Lumber'] ?? 0) - lumberCost;
+
+      let polymerOutput = workDone * [0.125, 0.187, 0.249, 0.311, 0.373][assembly] * outputMultiplier * prodMultiplier * timeMul;
+      if ((state.tech['polymer'] ?? 0) >= 2) {
+        polymerOutput *= 1.42;
+      }
 
       const polymer = state.resource['Polymer'];
       const maxPolymer = polymer.max >= 0 ? polymer.max : Infinity;
@@ -969,6 +1138,16 @@ export function factoryTick(
         polymer.amount += actual;
         deltas['Polymer'] = (deltas['Polymer'] ?? 0) + actual;
       }
+    }
+  }
+
+  if (pendingMoneyGain > 0 && state.resource['Money']) {
+    const money = state.resource['Money'];
+    const maxMoney = money.max >= 0 ? money.max : Infinity;
+    const actual = Math.min(pendingMoneyGain, maxMoney - money.amount);
+    if (actual > 0) {
+      money.amount += actual;
+      deltas['Money'] = (deltas['Money'] ?? 0) + actual;
     }
   }
 }

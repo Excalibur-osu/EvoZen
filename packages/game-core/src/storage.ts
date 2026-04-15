@@ -31,7 +31,7 @@ export const CONTAINER_COST_STEEL = 125;
 /** 可以分配板条箱/集装箱的资源列表 — 对标原版 actions.js shed.res() */
 export const STORABLE_RESOURCES = [
   'Lumber', 'Stone', 'Furs', 'Copper', 'Iron',
-  'Aluminium', 'Cement', 'Coal', 'Steel',
+  'Aluminium', 'Cement', 'Coal', 'Steel', 'Titanium',
 ] as const;
 
 export type StorableResourceId = typeof STORABLE_RESOURCES[number];
@@ -72,12 +72,34 @@ export function getStorageMultiplier(state: GameState): number {
 
 /** 获取当前单个板条箱提供的上限值 */
 export function getCrateValue(state: GameState): number {
-  return (state.tech['container'] ?? 0) >= 2 ? 500 : BASE_CRATE_VALUE;
+  const tech = state.tech['container'] ?? 0;
+  let value = tech >= 2 ? 500 : BASE_CRATE_VALUE;
+  if (tech >= 4) {
+    value += tech >= 5 ? 500 : 250;
+  }
+  if (tech >= 6) {
+    value += tech >= 7 ? 1200 : 500;
+  }
+  if (tech >= 8) {
+    value += tech >= 9 ? 7800 : 4000;
+  }
+  return value;
 }
 
 /** 获取当前单个集装箱提供的上限值 */
-export function getContainerValue(_state: GameState): number {
-  return CONTAINER_VALUE;
+export function getContainerValue(state: GameState): number {
+  const tech = state.tech['steel_container'] ?? 0;
+  let value = tech >= 3 ? 1200 : CONTAINER_VALUE;
+  if (tech >= 4) {
+    value += tech >= 5 ? 1000 : 400;
+  }
+  if (tech >= 6) {
+    value += tech >= 7 ? 7500 : 1000;
+  }
+  if (tech >= 8) {
+    value += tech >= 9 ? 15300 : 8000;
+  }
+  return value;
 }
 
 // ============================================================
@@ -139,16 +161,16 @@ export function assignCrate(state: GameState, resourceId: string, qty: number = 
   const crates = state.resource['Crates'];
   const target = state.resource[resourceId];
   if (!crates || !target) return null;
+  if (crates.amount <= 0) return null;
 
-  // 未分配的 = 拥有总数 - 所有已分配的
-  const totalAssigned = getTotalAssignedCrates(state);
-  const available = crates.amount - totalAssigned;
-  if (available <= 0) return null;
-
-  const actualQty = Math.min(qty, available);
+  const actualQty = Math.min(qty, crates.amount);
+  const crateValue = getCrateValue(state);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
+  newState.resource['Crates'].amount -= actualQty;
+  newState.resource['Crates'].max = Math.max(0, newState.resource['Crates'].max - actualQty);
   newState.resource[resourceId].crates = (newState.resource[resourceId].crates ?? 0) + actualQty;
+  newState.resource[resourceId].max += crateValue * actualQty;
   return newState;
 }
 
@@ -160,9 +182,13 @@ export function unassignCrate(state: GameState, resourceId: string, qty: number 
   if (!target || (target.crates ?? 0) <= 0) return null;
 
   const actualQty = Math.min(qty, target.crates ?? 0);
+  const crateValue = getCrateValue(state);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
+  newState.resource['Crates'].amount += actualQty;
+  newState.resource['Crates'].max += actualQty;
   newState.resource[resourceId].crates = Math.max(0, (newState.resource[resourceId].crates ?? 0) - actualQty);
+  newState.resource[resourceId].max = Math.max(0, newState.resource[resourceId].max - crateValue * actualQty);
   return newState;
 }
 
@@ -174,15 +200,16 @@ export function assignContainer(state: GameState, resourceId: string, qty: numbe
   const containers = state.resource['Containers'];
   const target = state.resource[resourceId];
   if (!containers || !target) return null;
+  if (containers.amount <= 0) return null;
 
-  const totalAssigned = getTotalAssignedContainers(state);
-  const available = containers.amount - totalAssigned;
-  if (available <= 0) return null;
-
-  const actualQty = Math.min(qty, available);
+  const actualQty = Math.min(qty, containers.amount);
+  const containerValue = getContainerValue(state);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
+  newState.resource['Containers'].amount -= actualQty;
+  newState.resource['Containers'].max = Math.max(0, newState.resource['Containers'].max - actualQty);
   newState.resource[resourceId].containers = (newState.resource[resourceId].containers ?? 0) + actualQty;
+  newState.resource[resourceId].max += containerValue * actualQty;
   return newState;
 }
 
@@ -194,9 +221,13 @@ export function unassignContainer(state: GameState, resourceId: string, qty: num
   if (!target || (target.containers ?? 0) <= 0) return null;
 
   const actualQty = Math.min(qty, target.containers ?? 0);
+  const containerValue = getContainerValue(state);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
+  newState.resource['Containers'].amount += actualQty;
+  newState.resource['Containers'].max += actualQty;
   newState.resource[resourceId].containers = Math.max(0, (newState.resource[resourceId].containers ?? 0) - actualQty);
+  newState.resource[resourceId].max = Math.max(0, newState.resource[resourceId].max - containerValue * actualQty);
   return newState;
 }
 

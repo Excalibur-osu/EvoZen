@@ -9,7 +9,13 @@ import {
   setTaxRate,
   enqueueStructure,
 } from './actions';
-import { changeGovernment, getMaxTaxRate, getTaxMultiplier, tickGovernmentCooldown } from './government';
+import {
+  changeGovernment,
+  getGovernmentChangeCooldown,
+  getMaxTaxRate,
+  getTaxMultiplier,
+  tickGovernmentCooldown,
+} from './government';
 import { warCampaign, mercCost, hireMerc } from './military';
 import { applyDerivedStateInPlace } from './derived-state';
 import { assignSpeciesTraits } from './traits';
@@ -191,7 +197,7 @@ describe('system audit scenarios', () => {
       ],
       govern: {
         type: 'theocracy',
-        rev: 230,
+        rev: 980,
       },
       resources: {
         human: 8,
@@ -676,10 +682,10 @@ describe('system audit scenarios', () => {
         { resource: 'Food', action: 'none', qty: 1 },
       ],
       resources: {
-        food: 191,
+        food: 193,
         lumber: 61,
         stone: 100,
-        money: 80,
+        money: 69.4,
       },
       tradeLimits: {
         manual: 5000,
@@ -742,7 +748,7 @@ describe('system audit scenarios', () => {
         consumed: 5,
         surplus: 1,
       },
-      knowledgeMax: 1100,
+      knowledgeMax: 2100,
       oil: 0.0375,
       messages: [],
     });
@@ -831,19 +837,294 @@ describe('system audit scenarios', () => {
       },
       resources: {
         lumber: 129.5852,
-        stone: 183.1278,
-        copper: 97.3996,
-        iron: 92.5117,
+        stone: 200,
+        copper: 97.3676,
+        iron: 92.4559,
         coal: 50,
-        oil: 79.85,
-        aluminium: 49.75,
+        oil: 79.7112,
+        aluminium: 45.7298,
         steel: 50,
-        alloy: 0.375,
-        polymer: 0.625,
-        knowledge: 157.6524,
-        money: 516,
+        alloy: 0.362,
+        polymer: 0.6033,
+        knowledge: 157.4111,
+        money: 515.4448,
       },
       days: 1,
+    });
+  });
+
+  it('tax income applies soldier count, fed banker bonus, hunger, and temple multiplier', () => {
+    const fed = createNewGame();
+    bootstrapCivilization(fed, 'human', 6, 6);
+    fed.tech.currency = 1;
+    fed.tech.banking = 2;
+    fed.tech.anthropology = 4;
+    fed.resource.Food.amount = 200;
+    fed.resource.Money.amount = 0;
+    fed.city.temple = { count: 2 };
+    fed.civic.garrison.workers = 2;
+    setJobWorkers(fed, 'banker', 1);
+    setJobWorkers(fed, 'unemployed', 1);
+    fed.event.t = 999999;
+    fed.m_event.t = 999999;
+
+    const hungry = createNewGame();
+    bootstrapCivilization(hungry, 'human', 6, 6);
+    hungry.tech.currency = 1;
+    hungry.tech.banking = 2;
+    hungry.tech.anthropology = 4;
+    hungry.resource.Food.amount = 0;
+    hungry.resource.Money.amount = 0;
+    hungry.city.temple = { count: 2 };
+    hungry.civic.garrison.workers = 2;
+    setJobWorkers(hungry, 'banker', 1);
+    setJobWorkers(hungry, 'unemployed', 1);
+    hungry.event.t = 999999;
+    hungry.m_event.t = 999999;
+
+    const fedOut = gameTick(fed).state;
+    const hungryOut = gameTick(hungry).state;
+
+    const citizens = 6 + 2 - 1;
+    const templeMult = 1 + 2 * 0.025;
+    const fedMoraleMult = calculateMorale(fed, { activeCasinos: 0 }).globalMultiplier;
+    const hungryMoraleMult = calculateMorale(hungry, { activeCasinos: 0 }).globalMultiplier;
+    const fedExpected = citizens * 0.4 * 1.1 * templeMult * fedMoraleMult * 0.25;
+    const hungryExpected = citizens * 0.4 * templeMult * hungryMoraleMult * 0.5 * 0.25;
+
+    expect({
+      fedMoney: round(fedOut.resource.Money.amount),
+      hungryMoney: round(hungryOut.resource.Money.amount),
+      fedExpected: round(fedExpected),
+      hungryExpected: round(hungryExpected),
+    }).toEqual({
+      fedMoney: round(fedExpected),
+      hungryMoney: round(hungryExpected),
+      fedExpected: round(fedExpected),
+      hungryExpected: round(hungryExpected),
+    });
+  });
+
+  it('miner tick uses mine power and geology, but ignores dowsing/reclaimer spillover', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 6, 6);
+    state.tech.mining = 3;
+    state.tech.pickaxe = 2;
+    state.tech.explosives = 2;
+    state.tech.dowsing = 2;
+    state.tech.reclaimer = 3;
+    state.resource.Food.amount = 200;
+    state.resource.Coal.amount = 100;
+    state.resource.Copper.amount = 0;
+    state.resource.Iron.amount = 0;
+    state.city.coal_power = { count: 1, on: 1 };
+    state.city.mine = { count: 1, on: 1 };
+    state.city.geology = { Copper: 1, Iron: 2 };
+    setJobWorkers(state, 'miner', 1);
+    setJobWorkers(state, 'unemployed', 5);
+    state.event.t = 999999;
+    state.m_event.t = 999999;
+
+    const out = gameTick(state).state;
+    const moraleMult = calculateMorale(state, { activeCasinos: 0 }).globalMultiplier;
+    const expectedCopper = (1 / 7) * 1.3 * 1.25 * 1.05 * 2 * moraleMult * 0.25;
+    const expectedIron = 0.25 * 1.3 * 1.25 * 1.05 * 3 * moraleMult * 0.25;
+
+    expect({
+      copper: round(out.resource.Copper.amount),
+      iron: round(out.resource.Iron.amount),
+      expectedCopper: round(expectedCopper),
+      expectedIron: round(expectedIron),
+    }).toEqual({
+      copper: round(expectedCopper),
+      iron: round(expectedIron),
+      expectedCopper: round(expectedCopper),
+      expectedIron: round(expectedIron),
+    });
+  });
+
+  it('wood and stone ticks use sawmill/quarry power bonuses without reclaimer spillover', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 6, 6);
+    state.resource.Food.amount = 200;
+    state.resource.Coal.amount = 100;
+    state.resource.Lumber.amount = 0;
+    state.resource.Stone.amount = 0;
+    state.tech.saw = 1;
+    state.tech.hammer = 1;
+    state.tech.reclaimer = 3;
+    state.city.coal_power = { count: 1, on: 1 };
+    state.city.sawmill = { count: 1, on: 1 };
+    state.city.rock_quarry = { count: 1, on: 1 };
+    setJobWorkers(state, 'lumberjack', 1);
+    setJobWorkers(state, 'quarry_worker', 1);
+    setJobWorkers(state, 'unemployed', 4);
+    state.event.t = 999999;
+    state.m_event.t = 999999;
+
+    const out = gameTick(state).state;
+    const moraleMult = calculateMorale(state, { activeCasinos: 0 }).globalMultiplier;
+    const expectedLumber = 1 * 1.05 * 1.04 * moraleMult * 0.25;
+    const expectedStone = 1 * 1.4 * 1.02 * 1.04 * moraleMult * 0.25;
+
+    expect({
+      lumber: round(out.resource.Lumber.amount),
+      stone: round(out.resource.Stone.amount),
+      expectedLumber: round(expectedLumber),
+      expectedStone: round(expectedStone),
+    }).toEqual({
+      lumber: round(expectedLumber),
+      stone: round(expectedStone),
+      expectedLumber: round(expectedLumber),
+      expectedStone: round(expectedStone),
+    });
+  });
+
+  it('coal and cement ticks use mine/plant power, geology, and same-tick stone flow correctly', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 6, 6);
+    state.resource.Food.amount = 200;
+    state.resource.Coal.amount = 100;
+    state.resource.Stone.amount = 0;
+    state.resource.Cement.amount = 0;
+    state.resource.Cement.max = 500;
+    state.tech.mining = 4;
+    state.tech.cement = 1;
+    state.tech.dowsing = 2;
+    state.tech.reclaimer = 3;
+    state.city.coal_power = { count: 1, on: 1 };
+    state.city.coal_mine = { count: 1, on: 1 };
+    state.city.rock_quarry = { count: 1, on: 1 };
+    state.city.cement_plant = { count: 1, on: 1 };
+    state.city.geology = { Coal: 1 };
+    setJobWorkers(state, 'coal_miner', 1);
+    setJobWorkers(state, 'quarry_worker', 3);
+    setJobWorkers(state, 'cement_worker', 1);
+    setJobWorkers(state, 'unemployed', 1);
+    state.event.t = 999999;
+    state.m_event.t = 999999;
+
+    const out = gameTick(state).state;
+    const moraleMult = calculateMorale(state, { activeCasinos: 0 }).globalMultiplier;
+    const expectedCoal = 0.2 * 1.05 * 2 * moraleMult * 0.25;
+    const expectedCement = 0.4 * 1.05 * moraleMult * 0.25;
+
+    expect({
+      coal: round(out.resource.Coal.diff),
+      cement: round(out.resource.Cement.amount),
+      expectedCoal: round(expectedCoal),
+      expectedCement: round(expectedCement),
+    }).toEqual({
+      coal: round(expectedCoal),
+      cement: round(expectedCement),
+      expectedCoal: round(expectedCoal),
+      expectedCement: round(expectedCement),
+    });
+  });
+
+  it('oil and aluminium ticks use oil tech tiers, geology, miner throughput, and refinery bonuses', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 6, 6);
+    state.resource.Food.amount = 200;
+    state.resource.Coal.amount = 100;
+    state.resource.Oil.amount = 0;
+    state.resource.Oil.max = 500;
+    state.resource.Aluminium.amount = 0;
+    state.resource.Aluminium.max = 500;
+    state.resource.Stone.amount = 10;
+    state.tech.mining = 4;
+    state.tech.pickaxe = 2;
+    state.tech.oil = 4;
+    state.tech.alumina = 2;
+    state.city.coal_power = { count: 1, on: 1 };
+    state.city.mine = { count: 1, on: 1 };
+    state.city.metal_refinery = { count: 1, on: 1 };
+    state.city.oil_well = { count: 2 };
+    state.city.geology = { Oil: 0.5, Aluminium: 0.25 };
+    setJobWorkers(state, 'miner', 1);
+    setJobWorkers(state, 'unemployed', 5);
+    state.event.t = 999999;
+    state.m_event.t = 999999;
+
+    const out = gameTick(state).state;
+    const moraleMult = calculateMorale(state, { activeCasinos: 0 }).globalMultiplier;
+    const expectedOil = 2 * 0.48 * 1.5 * moraleMult * 0.25;
+    const expectedAluminium = 0.088 * 1.3 * 1.05 * 1.25 * 1.12 * moraleMult * 0.25;
+
+    expect({
+      oil: round(out.resource.Oil.diff),
+      aluminium: round(out.resource.Aluminium.diff),
+      stone: round(out.resource.Stone.amount),
+      expectedOil: round(expectedOil),
+      expectedAluminium: round(expectedAluminium),
+    }).toEqual({
+      oil: round(expectedOil),
+      aluminium: round(expectedAluminium),
+      stone: 10,
+      expectedOil: round(expectedOil),
+      expectedAluminium: round(expectedAluminium),
+    });
+  });
+
+  it('market price fluctuation uses random variance and legacy reset bounds', () => {
+    const lowCopper = createNewGame();
+    bootstrapCivilization(lowCopper, 'human', 6, 6);
+    lowCopper.tech.currency = 2;
+    lowCopper.tech.high_tech = 2;
+    lowCopper.resource.Copper.display = true;
+    lowCopper.resource.Copper.value = 24;
+    lowCopper.event.t = 999999;
+    lowCopper.m_event.t = 999999;
+
+    const highFood = createNewGame();
+    bootstrapCivilization(highFood, 'human', 6, 6);
+    highFood.tech.currency = 2;
+    highFood.resource.Food.amount = 200;
+    highFood.resource.Food.display = true;
+    highFood.resource.Food.value = 20;
+    highFood.event.t = 999999;
+    highFood.m_event.t = 999999;
+
+    const lowCopperOut = withRandom(() => 0, () => gameTick(lowCopper).state);
+    const foodSequence = [0, 0.995];
+    const highFoodOut = withRandom(() => foodSequence.shift() ?? 0.995, () => gameTick(highFood).state);
+
+    expect({
+      copperValue: round(lowCopperOut.resource.Copper.value),
+      foodValue: round(highFoodOut.resource.Food.value),
+    }).toEqual({
+      copperValue: 50,
+      foodValue: 10,
+    });
+  });
+
+  it('knowledge tick keeps sundial separate from library multiplier', () => {
+    const base = createNewGame();
+    bootstrapCivilization(base, 'human', 6, 6);
+    base.tech.primitive = 3;
+    base.resource.Food.amount = 200;
+    base.resource.Knowledge.amount = 0;
+    base.event.t = 999999;
+    base.m_event.t = 999999;
+
+    const withLib = createNewGame();
+    bootstrapCivilization(withLib, 'human', 6, 6);
+    withLib.tech.primitive = 3;
+    withLib.resource.Food.amount = 200;
+    withLib.resource.Knowledge.amount = 0;
+    withLib.city.library = { count: 4 };
+    withLib.event.t = 999999;
+    withLib.m_event.t = 999999;
+
+    const baseOut = gameTick(base).state;
+    const withLibOut = gameTick(withLib).state;
+
+    expect({
+      baseKnowledge: round(baseOut.resource.Knowledge.amount),
+      withLibKnowledge: round(withLibOut.resource.Knowledge.amount),
+    }).toEqual({
+      baseKnowledge: 0.24,
+      withLibKnowledge: 0.24,
     });
   });
 
@@ -858,7 +1139,7 @@ describe('system audit scenarios', () => {
     const blockedDuringCooldown = changeGovernment(state, 'democracy');
     state = setTaxRate(state, 99);
 
-    for (let i = 0; i < 250; i++) {
+    for (let i = 0; i < 1000; i++) {
       tickGovernmentCooldown(state);
     }
 
@@ -893,11 +1174,31 @@ describe('system audit scenarios', () => {
       blockedDuringCooldown: true,
       afterDemocracy: {
         type: 'democracy',
-        rev: 250,
+        rev: 1000,
         taxRate: 20,
         maxTaxRate: 20,
         taxMultiplier: 1,
       },
+    });
+  });
+
+  it('government high-tech scaling and revolution cooldown match legacy reachable tiers', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 6, 6);
+
+    state.tech.govern = 1;
+    state.tech.high_tech = 2;
+    state.tech.space_explore = 3;
+    state.civic.govern.type = 'oligarchy';
+
+    expect({
+      cooldown: getGovernmentChangeCooldown(state),
+      taxMultiplier: getTaxMultiplier(state),
+      maxTaxRate: getMaxTaxRate(state),
+    }).toEqual({
+      cooldown: 1500,
+      taxMultiplier: 0.98,
+      maxTaxRate: 40,
     });
   });
 
@@ -956,6 +1257,14 @@ describe('system audit scenarios', () => {
           lumberContainers: state.resource.Lumber.containers,
           coalContainers: state.resource.Coal.containers,
         },
+        crates: {
+          amount: state.resource.Crates.amount,
+          max: state.resource.Crates.max,
+        },
+        containers: {
+          amount: state.resource.Containers.amount,
+          max: state.resource.Containers.max,
+        },
         caps: {
           lumber: state.resource.Lumber.max,
           stone: state.resource.Stone.max,
@@ -965,12 +1274,12 @@ describe('system audit scenarios', () => {
     }).toEqual({
       allocated: {
         crates: {
-          amount: 3,
-          max: 10,
+          amount: 0,
+          max: 7,
         },
         containers: {
-          amount: 2,
-          max: 10,
+          amount: 0,
+          max: 8,
         },
         assignments: {
           lumberCrates: 2,
@@ -991,11 +1300,65 @@ describe('system audit scenarios', () => {
           lumberContainers: 1,
           coalContainers: 0,
         },
+        crates: {
+          amount: 1,
+          max: 8,
+        },
+        containers: {
+          amount: 1,
+          max: 9,
+        },
         caps: {
           lumber: 1500,
           stone: 700,
           coal: 50,
         },
+      },
+    });
+  });
+
+  it('storage tiers apply legacy crate/container values and allow titanium allocation', () => {
+    let state = createNewGame();
+    bootstrapCivilization(state, 'human', 6, 6);
+
+    state.tech.container = 4;
+    state.tech.steel_container = 3;
+    state.city.storage_yard = { count: 1 };
+    state.city.warehouse = { count: 1 };
+    state.resource.Crates.display = true;
+    state.resource.Crates.amount = 1;
+    state.resource.Containers.display = true;
+    state.resource.Containers.amount = 1;
+    state.resource.Titanium.display = true;
+
+    applySimulationDerivedStateInPlace(state);
+    state = must(assignCrate(state, 'Titanium', 1), 'assign_crate_titanium');
+    state = must(assignContainer(state, 'Titanium', 1), 'assign_container_titanium');
+    applySimulationDerivedStateInPlace(state);
+
+    expect({
+      titaniumCrates: state.resource.Titanium.crates,
+      titaniumContainers: state.resource.Titanium.containers,
+      titaniumMax: state.resource.Titanium.max,
+      crates: {
+        amount: state.resource.Crates.amount,
+        max: state.resource.Crates.max,
+      },
+      containers: {
+        amount: state.resource.Containers.amount,
+        max: state.resource.Containers.max,
+      },
+    }).toEqual({
+      titaniumCrates: 1,
+      titaniumContainers: 1,
+      titaniumMax: 2000,
+      crates: {
+        amount: 0,
+        max: 19,
+      },
+      containers: {
+        amount: 0,
+        max: 19,
       },
     });
   });
@@ -1042,6 +1405,53 @@ describe('system audit scenarios', () => {
         money: 100,
         stone: 100,
       },
+    });
+  });
+
+  it('derived money cap follows bank vault and casino vault formulas', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 20, 20);
+
+    state.tech.banking = 8;
+    state.tech.stock_exchange = 2;
+    state.tech.gambling = 4;
+    state.city.bank = { count: 2 };
+    state.city.casino = { count: 1, on: 1 };
+    setJobWorkers(state, 'banker', 2);
+
+    applyDerivedStateInPlace(state);
+
+    expect({
+      moneyMax: state.resource.Money.max,
+      bankCount: (state.city.bank as { count?: number }).count,
+      casinoCount: (state.city.casino as { count?: number }).count,
+    }).toEqual({
+      moneyMax: 91960,
+      bankCount: 2,
+      casinoCount: 1,
+    });
+  });
+
+  it('derived knowledge cap includes science:8 library boost, anthropology temples, and powered wardenclyffe bonus', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 10, 10);
+
+    state.tech.science = 8;
+    state.tech.anthropology = 2;
+    state.city.library = { count: 2 };
+    state.city.temple = { count: 2 };
+    state.city.university = { count: 1 };
+    state.city.wardenclyffe = { count: 2, on: 1 };
+    setJobWorkers(state, 'scientist', 1);
+
+    applyDerivedStateInPlace(state);
+
+    expect({
+      knowledgeMax: state.resource.Knowledge.max,
+      scientistMax: (state.civic.scientist as { max?: number }).max,
+    }).toEqual({
+      knowledgeMax: 4759,
+      scientistMax: 2,
     });
   });
 

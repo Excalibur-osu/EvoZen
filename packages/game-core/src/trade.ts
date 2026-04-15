@@ -78,8 +78,8 @@ export function getBuyPrice(resourceId: string, state?: GameState): number {
 
   // Wharf discount: each wharf provides a stacking 1% discount
   if (state && (state.city['wharf'] as { count?: number })?.count) {
-    const wharves = (state.city['wharf'] as { count: number }).count;
-    price *= Math.pow(0.99, wharves);
+    const wharfCount = (state.city['wharf'] as { count: number }).count;
+    price *= Math.pow(0.99, wharfCount);
   }
 
   return +price.toFixed(1);
@@ -100,8 +100,8 @@ export function getSellPrice(resourceId: string, state?: GameState): number {
   // Wharf bonus: each wharf provides a stacking 1% sell price increase
   // 对标 legacy resources.js L1978-1979: price *= (1 + wharf.count * 0.01)
   if (state && (state.city['wharf'] as { count?: number })?.count) {
-    const wharves = (state.city['wharf'] as { count: number }).count;
-    price *= 1 + wharves * 0.01;
+    const wharfCount = (state.city['wharf'] as { count: number }).count;
+    price *= 1 + wharfCount * 0.01;
   }
 
   return +price.toFixed(1);

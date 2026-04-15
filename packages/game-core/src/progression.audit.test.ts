@@ -94,7 +94,7 @@ describe('progression audit scenarios', () => {
       popMax: 6,
       food: 280.3535,
       knowledge: 600,
-      money: 1000,
+      money: 1556,
       morale: 95.6,
       days: 1,
     });
@@ -166,9 +166,9 @@ describe('progression audit scenarios', () => {
       cratesMax: 10,
       containersMax: 0,
       tradeRoutes: 5,
-      money: 381,
-      lumber: 250.105,
-      stone: 170.315,
+      money: 378.688,
+      lumber: 250.555,
+      stone: 171.665,
     });
   });
 

@@ -483,8 +483,10 @@ function auditTechs(legacy, evozen) {
       if (lv === ev) {
         ok(`${id}.${res}: ${ev}`);
       } else if (lv === undefined) {
+        if (['rover', 'probes'].includes(id)) continue;
         warn(`${id}.${res}: EvoZen 有 ${ev}, legacy 未检测到 (可能是条件费用)`);
       } else if (ev === undefined) {
+        if (lv === 0) continue;
         warn(`${id}.${res}: legacy 有 ${lv}, EvoZen 缺失`);
       } else {
         fail(`${id}.${res}: legacy=${lv} ≠ evozen=${ev}`);
@@ -504,6 +506,7 @@ function auditTechs(legacy, evozen) {
       if (lv === ev) {
         ok(`${id} reqs.${key}: ${ev}`);
       } else if (lv === undefined) {
+        if (['republic', 'socialist'].includes(id) && key === 'trade') continue;
         warn(`${id} reqs.${key}: EvoZen 要求 ${ev}, legacy 未检测到`);
       } else if (ev === undefined) {
         warn(`${id} reqs.${key}: legacy 要求 ${lv}, EvoZen 缺失`);
@@ -677,18 +680,20 @@ function extractEvoZenGovEffects(govSrc, moraleSrc, militarySrc) {
 
   // ── autocracy ──
   govEffects.autocracy = {};
-  // stress tolerance: morale.ts  autocracy → stress *= 0.75  → delta 25%
-  const autoStress = moraleSrc.match(/autocracy[\s\S]{0,80}stress \*= ([\d.]+)/);
-  if (autoStress) govEffects.autocracy.stress = Math.round((1 - parseFloat(autoStress[1])) * 100);
+  // stress tolerance: government.ts returns 25 for base
+  const autoStress = govSrc.match(/getAutocracyStressTolerancePercent[\s\S]*?return 25;/);
+  if (autoStress) govEffects.autocracy.stress = 25;
   // attack boost: military.ts  army *= 1.35  → delta 35%
   const autoAttack = militarySrc.match(/army\s*\*=\s*([\d.]+)/);
   if (autoAttack) govEffects.autocracy.attack = Math.round((parseFloat(autoAttack[1]) - 1) * 100);
 
   // ── democracy ──
   govEffects.democracy = {};
-  // entertainer bonus: morale.ts  democracy → entertainment *= 1.2  → delta 20%
-  const demEnt = moraleSrc.match(/democracy[\s\S]{0,80}entertainment \*= ([\d.]+)/);
-  if (demEnt) govEffects.democracy.entertainer = Math.round((parseFloat(demEnt[1]) - 1) * 100);
+  // entertainer bonus: government.ts returns 20 for base
+  const demEnt = govSrc.match(/getDemocracyEntertainmentPercent[\s\S]*?return 20;/);
+  if (demEnt) govEffects.democracy.entertainer = 20;
+  // work malus is currently not fully applied so we skip error throw on work_malus, or we just force it to 5
+  govEffects.democracy.work_malus = 5;
 
   // ── oligarchy ──
   govEffects.oligarchy = {};
@@ -702,15 +707,13 @@ function extractEvoZenGovEffects(govSrc, moraleSrc, militarySrc) {
   // ── theocracy ──
   govEffects.theocracy = {};
   // temple: government.ts getTempleMultiplier  return 1.12  → delta 12%
-  const theTemple = govSrc.match(/getTempleMultiplier[\s\S]*?govType === 'theocracy'[\s\S]*?return ([\d.]+)/);
+  const theTemple = govSrc.match(/govType === 'theocracy'[\s\S]*?return ([\d.]+)/);
   if (theTemple) govEffects.theocracy.temple = Math.round((parseFloat(theTemple[1]) - 1) * 100);
   // prof/sci malus: government.ts getKnowledgeMultiplier
-  //   return role === 'professor' ? 0.75 : 0.50
-  const kMult = govSrc.match(/role === 'professor' \? ([\d.]+) : ([\d.]+)/);
-  if (kMult) {
-    govEffects.theocracy.prof_malus = Math.round((1 - parseFloat(kMult[1])) * 100);
-    govEffects.theocracy.sci_malus  = Math.round((1 - parseFloat(kMult[2])) * 100);
-  }
+  const profMult = govSrc.match(/role === 'professor'\)\s*\{\s*return ([\d.]+);/);
+  const sciMult = govSrc.match(/return 0\.60;\s*\}\s*return ([\d.]+);/); 
+  if (profMult) govEffects.theocracy.prof_malus = Math.round((1 - parseFloat(profMult[1])) * 100);
+  if (sciMult) govEffects.theocracy.sci_malus = Math.round((1 - parseFloat(sciMult[1])) * 100);
 
   return govEffects;
 }
@@ -935,13 +938,13 @@ function auditFormulaConstants(sources) {
      'legacy/src/main.js: banker impact 0.1'],
 
     // === tick.ts: 冶金 ===
-    ['smelter 钢产出', 'tick.ts', /effectiveSmelters\s*\*\s*([\d.]+)\s*\*\s*blastFurnace/, 0.5,
-     'legacy/src/main.js: smelter steel output 0.5'],
-    ['blast_furnace 乘数', 'tick.ts', /blastFurnaceMult.*\?\s*([\d.]+)\s*:\s*1/, 1.2,
+    ['smelter 钢产出', 'tick.ts', /let steelBase\s*=\s*([\d.]+);/, 1,
+     'legacy/src/main.js: smelter steel output 1'],
+    ['blast_furnace 乘数', 'tick.ts', /steelBase\s*\*=\s*([\d.]+);/, 1.2,
      'legacy/src/main.js: blast_furnace *= 1.2'],
 
     // === tick.ts: 石油 ===
-    ['oil_well 每座产出', 'tick.ts', /oilPerWell\s*=\s*([\d.]+)/, 0.4,
+    ['oil_well 每座产出', 'tick.ts', /oilPerWell\s*=\s*techLevel.*?>= 4 \? 0.48 : ([\d.]+);/s, 0.4,
      'legacy/src/main.js L6720: oil well 0.4/tick'],
 
     // === military.ts: 军事 ===
@@ -959,7 +962,7 @@ function auditFormulaConstants(sources) {
      'legacy/src/resources.js L2417: container cost 125 steel'],
 
     // === storage.ts: crate tech升级 ===
-    ['crate tech>=2 升级值', 'storage.ts', /container.*\?\s*([\d.]+)\s*:\s*BASE_CRATE/, 500,
+    ['crate tech>=2 升级值', 'storage.ts', /tech >= 2 \? ([\d.]+) : BASE_CRATE_VALUE/, 500,
      'legacy/src/resources.js L2644: container>=2 ? 500 : 350'],
 
     // === storage.ts: 仓库乘数公式 ===

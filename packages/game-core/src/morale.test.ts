@@ -175,6 +175,23 @@ describe('压力计算', () => {
     // 独裁压力 = 基础压力 × 0.75
     expect(autoStress).toBeCloseTo(baseStress * 0.75, 5);
   });
+
+  it('独裁政体在 high_tech:2 时压力修正降为 18%', () => {
+    const base = makeState();
+    setCalendar(base, 1);
+    (base.civic['hunter'] as any) = { workers: 10, max: -1, display: true };
+
+    const auto = makeState();
+    setCalendar(auto, 1);
+    auto.tech['high_tech'] = 2;
+    (auto.civic['hunter'] as any) = { workers: 10, max: -1, display: true };
+    (auto.civic as any).govern = { type: 'autocracy', rev: 0 };
+
+    const baseStress = calculateMorale(base).breakdown.stress;
+    const autoStress = calculateMorale(auto).breakdown.stress;
+
+    expect(autoStress).toBe(-1.6);
+  });
 });
 
 // ============================================================
@@ -215,6 +232,25 @@ describe('娱乐加成', () => {
     const demoEnt = calculateMorale(demo).breakdown.entertain;
 
     expect(demoEnt).toBeCloseTo(baseEnt * 1.2, 5);
+  });
+
+  it('民主政体在 high_tech:2 时娱乐加成提升到 +25%', () => {
+    const base = makeState();
+    setCalendar(base, 1);
+    base.tech['theatre'] = 2;
+    (base.civic['entertainer'] as any) = { workers: 2, max: -1, display: true };
+
+    const demo = makeState();
+    setCalendar(demo, 1);
+    demo.tech['theatre'] = 2;
+    demo.tech['high_tech'] = 2;
+    (demo.civic['entertainer'] as any) = { workers: 2, max: -1, display: true };
+    (demo.civic as any).govern = { type: 'democracy', rev: 0 };
+
+    const baseEnt = calculateMorale(base).breakdown.entertain;
+    const demoEnt = calculateMorale(demo).breakdown.entertain;
+
+    expect(demoEnt).toBeCloseTo(baseEnt * 1.25, 5);
   });
 });
 

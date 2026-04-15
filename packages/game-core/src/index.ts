@@ -79,6 +79,7 @@ export {
 export {
   GOVERNMENT_DEFS,
   changeGovernment,
+  getGovernmentChangeCooldown,
   getTaxMultiplier,
   getProductionMultiplier,
   getMaxTaxRate,

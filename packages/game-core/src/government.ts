@@ -16,6 +16,24 @@
 
 import type { GameState } from '@evozen/shared-types';
 
+function techLevel(state: GameState, techId: string): number {
+  return state.tech[techId] ?? 0;
+}
+
+function getAutocracyStressTolerancePercent(state: GameState): number {
+  const highTech = techLevel(state, 'high_tech');
+  if (highTech >= 12) return 10;
+  if (highTech >= 2) return 18;
+  return 25;
+}
+
+function getDemocracyEntertainmentPercent(state: GameState): number {
+  const highTech = techLevel(state, 'high_tech');
+  if (highTech >= 12) return 30;
+  if (highTech >= 2) return 25;
+  return 20;
+}
+
 // ============================================================
 // 政体 ID 联合类型
 // ============================================================
@@ -63,7 +81,7 @@ export const GOVERNMENT_DEFS: GovernmentDef[] = [
     // [0] stress 容忍度 × (1 + 25/100)（市民在高压下不闹事）
     // [1] military attack boost = 35%
     // 注：独裁对税收无任何加成（main.js L7628 中独裁无任何 income multiplier）
-    effects: ['压力容忍度 +25%（居民更难闹事）', '军事战斗力 +35%'],
+    effects: ['压力容忍度提升（高科技后会进一步减轻压力惩罚）', '军事战斗力 +35%'],
   },
   {
     id: 'democracy',
@@ -73,7 +91,7 @@ export const GOVERNMENT_DEFS: GovernmentDef[] = [
     // legacy civics.js L193-197: govEffect.democracy()
     // [0] entertainer 加成 = 20%
     // [1] work_malus = 5%（影响士气系统，纯属数据备注；士气系统实装后才会展现）
-    effects: ['娱乐业效率 +20%', '居民工作压力 -5%（待士气系统实装后生效）'],
+    effects: ['娱乐业效率提升（高科技后加成更高）', '居民工作压力 -5%（待士气系统实装后生效）'],
   },
   {
     id: 'oligarchy',
@@ -81,7 +99,7 @@ export const GOVERNMENT_DEFS: GovernmentDef[] = [
     description: '精英阶层掌控经济命脉。',
     reqGovern: 1,
     // legacy civics.js L200: tax penalty 5%, tax cap 20%
-    effects: ['税率上限 +20%（最高可调至40%）', '基础税收效率 -5%'],
+    effects: ['税率上限 +20%（最高可调至40%）', '基础税收效率下降（高科技后惩罚减轻）'],
   },
   {
     id: 'theocracy',
@@ -132,10 +150,11 @@ export function getTaxMultiplier(state: GameState): number {
   const govType = state.civic.govern?.type ?? 'anarchy';
   switch (govType) {
     case 'oligarchy':
-      // 寡头：税收效率 -5%（但可设更高上限）
-      // 对标 legacy/src/main.js L7628-7629:
-      // income_base *= 1 - (govEffect.oligarchy()[0] / 100) → oligarchy()[0] = 5
-      return 1 - (5 / 100);  // 0.95
+      // 寡头税收惩罚会在 high_tech:2 后下降到 -2%
+      // 对标 legacy/src/civics.js L199-203 + main.js L7628-7629
+      if (techLevel(state, 'high_tech') >= 12) return 1.0;
+      if (techLevel(state, 'high_tech') >= 2) return 0.98;
+      return 1 - (5 / 100);
     case 'corpocracy':
       // 企业政体：税收效率减半
       // 对标 legacy/src/main.js L7631-7633
@@ -196,11 +215,45 @@ export function getTourismIncomeMultiplier(state: GameState): number {
 export function getFactoryOutputMultiplier(state: GameState): number {
   switch (state.civic.govern?.type ?? 'anarchy') {
     case 'corpocracy':
-      return 1.3;
+      return techLevel(state, 'high_tech') >= 16 ? 1.4 : 1.3;
     case 'socialist':
       return 1.1;
     default:
       return 1.0;
+  }
+}
+
+/**
+ * 获取当前政体对压力项的乘数
+ * 对标 legacy/src/civics.js L186-197 + main.js L3117-3124
+ */
+export function getAutocracyStressMultiplier(state: GameState): number {
+  return 1 - (getAutocracyStressTolerancePercent(state) / 100);
+}
+
+/**
+ * 获取当前政体对娱乐业的乘数
+ * 对标 legacy/src/civics.js L193-197 + main.js L3036-3038
+ */
+export function getDemocracyEntertainmentMultiplier(state: GameState): number {
+  return 1 + (getDemocracyEntertainmentPercent(state) / 100);
+}
+
+/**
+ * 获取当前政体提供的直接士气修正
+ * 对标 legacy/src/civics.js L212-244 + main.js L1378-1382
+ */
+export function getGovernmentMoraleOffset(state: GameState): number {
+  const highTech = techLevel(state, 'high_tech');
+  switch (state.civic.govern?.type ?? 'anarchy') {
+    case 'corpocracy':
+      return highTech >= 12 ? -5 : -10;
+    case 'republic':
+      if (highTech >= 16) return 40;
+      if (highTech >= 12) return 30;
+      return 20;
+    default:
+      return 0;
   }
 }
 
@@ -244,16 +297,39 @@ export function getMaxTaxRate(state: GameState): number {
   }
 }
 
+/**
+ * 获取切换政体后的革命冷却
+ * 对标 legacy/src/civics.js L429-461
+ */
+export function getGovernmentChangeCooldown(state: GameState): number {
+  let time = 1000;
+
+  if (techLevel(state, 'high_tech') >= 1) {
+    time += 250;
+    if (techLevel(state, 'high_tech') >= 3) {
+      time += 250;
+    }
+    if (techLevel(state, 'high_tech') >= 6) {
+      time += 250;
+    }
+  }
+
+  if (techLevel(state, 'space_explore') >= 3) {
+    time += 250;
+  }
+
+  return time + (state.civic.govern?.fr ?? 0);
+}
+
 // ============================================================
 // 政体切换
 // ============================================================
 
 /**
  * 切换政体
- * 完成后重置冷却计数器（rev = 250 ticks ≈ 62.5 秒）
+ * 完成后重置冷却计数器（rev）
  *
- * 对标 legacy/src/civics.js setGov()：原版基础冷却 time = 1000（单位：ms 等价的 long loop 次数）
- * EvoZen 简化为 250 ticks（约 62.5 秒），已在 .dev_notes.md 记录为已知简化。
+ * 对标 legacy/src/civics.js setGov()：基础 1000，并受 high_tech / space_explore / fr 修正。
  *
  * @param state - 当前游戏状态
  * @param newType - 目标政体 ID
@@ -281,9 +357,8 @@ export function changeGovernment(state: GameState, newType: GovernmentType): Gam
   const newGovern = newState.civic.govern;
   newGovern.type = newType;
 
-  // 设置冷却：250 ticks（约 62.5 秒）
-  // 对标 legacy/src/civics.js L461: global.civic.govern.rev = time
-  newGovern.rev = 250;
+  // 对标 legacy/src/civics.js L461: global.civic.govern.rev = time + fr
+  newGovern.rev = getGovernmentChangeCooldown(newState);
 
   return newState;
 }
@@ -333,7 +408,16 @@ export function getTempleMultiplier(state: GameState): number {
 export function getKnowledgeMultiplier(state: GameState, role: 'professor' | 'scientist'): number {
   const govType = state.civic.govern?.type ?? 'anarchy';
   if (govType === 'theocracy') {
-    return role === 'professor' ? 0.75 : 0.50;
+    if (role === 'professor') {
+      return 0.75;
+    }
+    if (techLevel(state, 'high_tech') >= 16) {
+      return 0.75;
+    }
+    if (techLevel(state, 'high_tech') >= 12) {
+      return 0.60;
+    }
+    return 0.50;
   }
   return 1.0;
 }

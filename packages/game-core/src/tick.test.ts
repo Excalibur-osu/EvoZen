@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createNewGame } from './state';
 import { gameTick } from './tick';
 import { assignSpeciesTraits } from './traits';
+import { calculateMorale } from './morale';
 import type { GameState } from '@evozen/shared-types';
 
 // ============================================================
@@ -105,6 +106,26 @@ describe('Lumber 生产 — 对标 legacy main.js L5428-5445', () => {
     expect(deltaWithAxe2 / deltaNoAxe).toBeGreaterThan(1.2);
     expect(deltaWithAxe2 / deltaNoAxe).toBeLessThan(1.5);
   });
+
+  it('通电锯木厂额外提供 4% 木材加成', () => {
+    const noPower = makeCivState();
+    noPower.civic['lumberjack'] = { workers: 1, max: -1, display: true } as any;
+    noPower.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (noPower.city as any)['sawmill'] = { count: 1, on: 1 };
+
+    const powered = makeCivState();
+    powered.resource['Coal'].display = true;
+    powered.resource['Coal'].amount = 100;
+    powered.civic['lumberjack'] = { workers: 1, max: -1, display: true } as any;
+    powered.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (powered.city as any)['sawmill'] = { count: 1, on: 1 };
+    (powered.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const noPowerDelta = gameTick(noPower).state.resource['Lumber'].amount - noPower.resource['Lumber'].amount;
+    const poweredDelta = gameTick(powered).state.resource['Lumber'].amount - powered.resource['Lumber'].amount;
+
+    expect(poweredDelta / noPowerDelta).toBeCloseTo(1.04, 3);
+  });
 });
 
 // ============================================================
@@ -168,6 +189,237 @@ describe('Miner 产出 — 对标 legacy main.js L6117-6160', () => {
     expect(iron).toBeGreaterThan(0.04);
     expect(iron).toBeLessThan(0.10);
   });
+
+  it('dowsing 和 reclaimer 不应提升矿工产量', () => {
+    const base = makeCivState();
+    base.tech['mining'] = 3;
+    base.resource['Copper'].display = true;
+    base.resource['Iron'].display = true;
+    base.resource['Coal'].display = true;
+    base.resource['Coal'].amount = 100;
+    (base.city as any)['coal_power'] = { count: 1, on: 1 };
+    (base.city as any)['mine'] = { count: 1, on: 1 };
+    base.civic['miner'] = { workers: 1, max: 1, display: true } as any;
+    base.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+
+    const boosted = makeCivState();
+    boosted.tech['mining'] = 3;
+    boosted.tech['dowsing'] = 2;
+    boosted.tech['reclaimer'] = 3;
+    boosted.resource['Copper'].display = true;
+    boosted.resource['Iron'].display = true;
+    boosted.resource['Coal'].display = true;
+    boosted.resource['Coal'].amount = 100;
+    (boosted.city as any)['coal_power'] = { count: 1, on: 1 };
+    (boosted.city as any)['mine'] = { count: 1, on: 1 };
+    boosted.civic['miner'] = { workers: 1, max: 1, display: true } as any;
+    boosted.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+
+    const baseOut = gameTick(base).state;
+    const boostedOut = gameTick(boosted).state;
+
+    expect(boostedOut.resource['Copper'].amount).toBeCloseTo(baseOut.resource['Copper'].amount, 4);
+    expect(boostedOut.resource['Iron'].amount).toBeCloseTo(baseOut.resource['Iron'].amount, 4);
+  });
+
+  it('通电采石场额外提供 4% 石头加成，reclaimer 不影响石工产量', () => {
+    const noPower = makeCivState();
+    noPower.civic['quarry_worker'] = { workers: 1, max: 1, display: true } as any;
+    noPower.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (noPower.city as any)['rock_quarry'] = { count: 1, on: 1 };
+
+    const powered = makeCivState();
+    powered.resource['Coal'].display = true;
+    powered.resource['Coal'].amount = 100;
+    powered.civic['quarry_worker'] = { workers: 1, max: 1, display: true } as any;
+    powered.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (powered.city as any)['rock_quarry'] = { count: 1, on: 1 };
+    (powered.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const boosted = makeCivState();
+    boosted.resource['Coal'].display = true;
+    boosted.resource['Coal'].amount = 100;
+    boosted.tech['reclaimer'] = 3;
+    boosted.civic['quarry_worker'] = { workers: 1, max: 1, display: true } as any;
+    boosted.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (boosted.city as any)['rock_quarry'] = { count: 1, on: 1 };
+    (boosted.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const noPowerDelta = gameTick(noPower).state.resource['Stone'].amount;
+    const poweredDelta = gameTick(powered).state.resource['Stone'].amount;
+    const boostedDelta = gameTick(boosted).state.resource['Stone'].amount;
+
+    expect(poweredDelta / noPowerDelta).toBeCloseTo(1.04, 3);
+    expect(boostedDelta).toBeCloseTo(poweredDelta, 4);
+  });
+
+  it('煤矿获得 5% 通电加成，且不受 dowsing/reclaimer 影响', () => {
+    const powered = makeCivState();
+    powered.tech['mining'] = 4;
+    powered.resource['Coal'].display = true;
+    powered.resource['Coal'].amount = 0;
+    powered.resource['Coal'].max = 500;
+    powered.civic['coal_miner'] = { workers: 1, max: 1, display: true } as any;
+    powered.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (powered.city as any)['coal_mine'] = { count: 1, on: 1 };
+    (powered.city as any)['coal_power'] = { count: 1, on: 1 };
+    powered.resource['Coal'].amount = 100;
+
+    const boosted = makeCivState();
+    boosted.tech['mining'] = 4;
+    boosted.tech['dowsing'] = 2;
+    boosted.tech['reclaimer'] = 3;
+    boosted.resource['Coal'].display = true;
+    boosted.resource['Coal'].amount = 100;
+    boosted.resource['Coal'].max = 500;
+    boosted.civic['coal_miner'] = { workers: 1, max: 1, display: true } as any;
+    boosted.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (boosted.city as any)['coal_mine'] = { count: 1, on: 1 };
+    (boosted.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const poweredDelta = gameTick(powered).state.resource['Coal'].diff ?? 0;
+    const boostedDelta = gameTick(boosted).state.resource['Coal'].diff ?? 0;
+    const moraleMult = calculateMorale(powered, { activeCasinos: 0 }).globalMultiplier;
+    const expected = 0.2 * 1.05 * moraleMult * 0.25;
+
+    expect(poweredDelta).toBeCloseTo(expected, 4);
+    expect(boostedDelta).toBeCloseTo(poweredDelta, 4);
+  });
+
+  it('水泥工会消耗本 tick 新产出的石头，并吃到通电加成', () => {
+    const s = makeCivState();
+    s.tech['cement'] = 1;
+    s.resource['Stone'].amount = 0;
+    s.resource['Stone'].max = 500;
+    s.resource['Coal'].display = true;
+    s.resource['Coal'].amount = 100;
+    s.resource['Cement'].display = true;
+    s.resource['Cement'].amount = 0;
+    s.resource['Cement'].max = 500;
+    s.civic['quarry_worker'] = { workers: 3, max: 3, display: true } as any;
+    s.civic['cement_worker'] = { workers: 1, max: 2, display: true } as any;
+    s.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    (s.city as any)['rock_quarry'] = { count: 1, on: 1 };
+    (s.city as any)['cement_plant'] = { count: 1, on: 1 };
+    (s.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const control = makeCivState();
+    control.tech['cement'] = 1;
+    control.resource['Stone'].amount = 0;
+    control.resource['Stone'].max = 500;
+    control.resource['Coal'].display = true;
+    control.resource['Coal'].amount = 100;
+    control.civic['quarry_worker'] = { workers: 3, max: 3, display: true } as any;
+    control.civic['unemployed'] = { workers: 2, max: -1, display: true } as any;
+    (control.city as any)['rock_quarry'] = { count: 1, on: 1 };
+    (control.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const out = gameTick(s).state;
+    const controlOut = gameTick(control).state;
+
+    expect(out.resource['Cement'].amount).toBeGreaterThan(0.1);
+    expect(out.resource['Stone'].amount).toBeLessThan(controlOut.resource['Stone'].amount);
+  });
+
+  it('油井吃到 oil 科技档位、地质与饥饿乘数', () => {
+    const fed = makeCivState();
+    fed.tech['oil'] = 4;
+    fed.resource['Oil'].display = true;
+    fed.resource['Oil'].amount = 0;
+    fed.resource['Oil'].max = 500;
+    fed.city.geology = { ...(fed.city.geology ?? {}), Oil: 0.5 } as any;
+    (fed.city as any)['oil_well'] = { count: 2 };
+
+    const hungry = makeCivState();
+    hungry.tech['oil'] = 4;
+    hungry.resource['Food'].amount = 0;
+    hungry.resource['Oil'].display = true;
+    hungry.resource['Oil'].amount = 0;
+    hungry.resource['Oil'].max = 500;
+    hungry.city.geology = { ...(hungry.city.geology ?? {}), Oil: 0.5 } as any;
+    (hungry.city as any)['oil_well'] = { count: 2 };
+
+    const fedDelta = gameTick(fed).state.resource['Oil'].diff ?? 0;
+    const hungryDelta = gameTick(hungry).state.resource['Oil'].diff ?? 0;
+    const moraleMult = calculateMorale(fed, { activeCasinos: 0 }).globalMultiplier;
+    const expectedFed = 2 * 0.48 * 1.5 * moraleMult * 0.25;
+
+    expect(fedDelta).toBeCloseTo(expectedFed, 4);
+    expect(hungryDelta).toBeCloseTo(fedDelta * 0.5, 4);
+  });
+
+  it('铝产出来自矿工并吃到精炼厂与通电 bonus，不再消耗石头', () => {
+    const s = makeCivState();
+    s.tech['mining'] = 4;
+    s.tech['pickaxe'] = 2;
+    s.tech['alumina'] = 2;
+    s.resource['Coal'].display = true;
+    s.resource['Coal'].amount = 100;
+    s.resource['Aluminium'].display = true;
+    s.resource['Aluminium'].amount = 0;
+    s.resource['Aluminium'].max = 500;
+    s.resource['Stone'].amount = 10;
+    s.city.geology = { ...(s.city.geology ?? {}), Aluminium: 0.25 } as any;
+    s.civic['miner'] = { workers: 1, max: 1, display: true } as any;
+    s.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (s.city as any)['mine'] = { count: 1, on: 1 };
+    (s.city as any)['metal_refinery'] = { count: 1, on: 1 };
+    (s.city as any)['coal_power'] = { count: 1, on: 1 };
+
+    const out = gameTick(s).state;
+    const moraleMult = calculateMorale(s, { activeCasinos: 0 }).globalMultiplier;
+    const expected = 0.088 * 1.3 * 1.05 * 1.25 * 1.12 * moraleMult * 0.25;
+
+    expect(out.resource['Aluminium'].diff).toBeCloseTo(expected, 4);
+    expect(out.resource['Stone'].amount).toBeCloseTo(10, 4);
+  });
+});
+
+describe('Factory 产线', () => {
+  it('assembly 档位会提升合金线参数，且原料不足时按行降档而不是整条停工', () => {
+    const s = makeCivState();
+    s.tech['factory'] = 1;
+    s.resource['Oil'].display = true;
+    s.resource['Oil'].amount = 20;
+    s.resource['Copper'].amount = 0.4;
+    s.resource['Aluminium'].display = true;
+    s.resource['Aluminium'].amount = 0.4;
+    s.resource['Aluminium'].max = 500;
+    s.resource['Alloy'].display = true;
+    s.resource['Alloy'].amount = 0;
+    s.resource['Alloy'].max = 500;
+    s.civic['unemployed'] = { workers: 5, max: -1, display: true } as any;
+    (s.city as any)['oil_power'] = { count: 1, on: 1 };
+    (s.city as any)['factory'] = { count: 2, on: 2, Lux: 0, Furs: 0, Alloy: 2, Polymer: 0 };
+
+    const out = gameTick(s).state;
+    const moraleMult = calculateMorale(s, { activeCasinos: 0 }).globalMultiplier;
+    const expectedAlloy = 0.112 * moraleMult * 0.25;
+
+    expect(out.resource['Alloy'].diff).toBeCloseTo(expectedAlloy, 4);
+    expect(out.resource['Copper'].diff).toBeCloseTo(-1.12 * 0.25, 4);
+    expect(out.resource['Aluminium'].diff).toBeCloseTo(-1.5 * 0.25, 4);
+  });
+
+  it('Lux 收入不会在同 tick 立刻为 synthetic fur 产线提供启动资金', () => {
+    const s = makeCivState();
+    s.resource['Oil'].display = true;
+    s.resource['Oil'].amount = 20;
+    s.resource['Money'].amount = 0;
+    s.resource['Furs'].amount = 100;
+    s.resource['Polymer'].display = true;
+    s.resource['Polymer'].amount = 100;
+    s.resource['Polymer'].max = 500;
+    s.civic['unemployed'] = { workers: 5, max: -1, display: true } as any;
+    (s.city as any)['oil_power'] = { count: 1, on: 1 };
+    (s.city as any)['factory'] = { count: 2, on: 2, Lux: 1, Furs: 1, Alloy: 0, Polymer: 0 };
+
+    const out = gameTick(s).state;
+
+    expect(out.resource['Money'].diff ?? 0).toBeGreaterThan(0);
+    expect(out.resource['Polymer'].amount).toBeCloseTo(100, 4);
+    expect(out.resource['Furs'].amount).toBeLessThan(100);
+  });
 });
 
 // ============================================================
@@ -175,7 +427,7 @@ describe('Miner 产出 — 对标 legacy main.js L6117-6160', () => {
 // ============================================================
 
 describe('Knowledge 产出', () => {
-  it('图书馆每座提升 5% 知识产出', () => {
+  it('图书馆不放大纯日晷知识', () => {
     const noLib = makeCivState();
     noLib.tech['primitive'] = 3;
     noLib.tech['science'] = 1;
@@ -199,10 +451,90 @@ describe('Knowledge 产出', () => {
     const deltaNoLib = outNoLib.resource['Knowledge'].amount;
     const deltaWithLib = outWithLib.resource['Knowledge'].amount;
 
-    // sundial (base) × libraryMult(1 + 4*0.05 = 1.2)
-    if (deltaNoLib > 0) {
-      expect(deltaWithLib / deltaNoLib).toBeCloseTo(1.2, 2);
-    }
+    expect(deltaWithLib).toBeCloseTo(deltaNoLib, 4);
+  });
+
+  it('图书馆仍会提升教授知识产出', () => {
+    const noLib = makeCivState();
+    noLib.tech['science'] = 1;
+    noLib.resource['Knowledge'].display = true;
+    noLib.resource['Knowledge'].amount = 0;
+    noLib.civic['professor'] = { workers: 1, max: 1, display: true } as any;
+    noLib.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+
+    const withLib = makeCivState();
+    withLib.tech['science'] = 1;
+    withLib.resource['Knowledge'].display = true;
+    withLib.resource['Knowledge'].amount = 0;
+    withLib.civic['professor'] = { workers: 1, max: 1, display: true } as any;
+    withLib.civic['unemployed'] = { workers: 4, max: -1, display: true } as any;
+    (withLib.city as any)['library'] = { count: 4, on: 4 };
+
+    const deltaNoLib = gameTick(noLib).state.resource['Knowledge'].amount;
+    const deltaWithLib = gameTick(withLib).state.resource['Knowledge'].amount;
+
+    // professor impact: (0.5 + 4*0.01) * (1 + 4*0.05) = 0.648
+    expect(deltaWithLib / deltaNoLib).toBeCloseTo(1.296, 3);
+  });
+});
+
+// ============================================================
+// 金钱体系
+// ============================================================
+
+describe('Money 产出', () => {
+  it('未研究 currency 时不会获得税收', () => {
+    const s = makeCivState();
+    s.resource['Money'].amount = 0;
+    s.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+
+    const out = gameTick(s);
+
+    expect(out.state.resource['Money'].amount).toBe(0);
+  });
+
+  it('饥饿时税收减半且银行家加成失效', () => {
+    const fed = makeCivState();
+    fed.tech['currency'] = 1;
+    fed.tech['banking'] = 2;
+    fed.resource['Money'].amount = 0;
+    fed.civic['banker'] = { workers: 1, max: 1, display: true } as any;
+    fed.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+
+    const hungry = makeCivState();
+    hungry.tech['currency'] = 1;
+    hungry.tech['banking'] = 2;
+    hungry.resource['Money'].amount = 0;
+    hungry.resource['Food'].amount = 0;
+    hungry.civic['banker'] = { workers: 1, max: 1, display: true } as any;
+    hungry.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+
+    const fedMoney = gameTick(fed).state.resource['Money'].amount;
+    const hungryMoney = gameTick(hungry).state.resource['Money'].amount;
+
+    // fed: 4 citizens * 0.4 * 1.1 banker = 1.76
+    // hungry: banker bonus disabled, then hunger ×0.5 => 4 * 0.4 * 0.5 = 0.8
+    expect(hungryMoney / fedMoney).toBeCloseTo(0.8 / 1.76, 3);
+  });
+
+  it('anthropology:4 后每座神庙提供 +2.5% 税收', () => {
+    const base = makeCivState();
+    base.tech['currency'] = 1;
+    base.tech['anthropology'] = 4;
+    base.resource['Money'].amount = 0;
+    base.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+
+    const withTemples = makeCivState();
+    withTemples.tech['currency'] = 1;
+    withTemples.tech['anthropology'] = 4;
+    withTemples.resource['Money'].amount = 0;
+    withTemples.civic['unemployed'] = { workers: 1, max: -1, display: true } as any;
+    (withTemples.city as any)['temple'] = { count: 2, on: 2 };
+
+    const baseMoney = gameTick(base).state.resource['Money'].amount;
+    const templeMoney = gameTick(withTemples).state.resource['Money'].amount;
+
+    expect(templeMoney / baseMoney).toBeCloseTo(1.05, 3);
   });
 });
 
