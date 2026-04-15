@@ -18,6 +18,8 @@ export {
   assignWorker,
   removeWorker,
   setTaxRate,
+  assignSmelter,
+  removeSmelter,
 } from './actions';
 export { RESOURCE_VALUES, TRADE_RATIOS, CRAFT_COSTS, type CraftRecipe } from './resources';
 export { BASE_JOBS, type JobDefinition } from './jobs';
@@ -46,13 +48,8 @@ export {
 } from './traits';
 export { gameTick, factoryTick } from './tick';
 export { saveGame, loadGame, exportSave, importSave } from './save';
-export {
-  getBankVault,
-  getCasinoVault,
-  getCasinoIncomePerActive,
-  getTourismFoodDemand,
-  getTourismIncome,
-} from './commerce';
+export * from './commerce';
+export * from './espionage';
 export {
   manualCraft,
   craftingTick,

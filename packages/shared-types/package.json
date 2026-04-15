@@ -1,6 +1,6 @@
 {
   "name": "@evozen/shared-types",
-  "version": "0.7.8",
+  "version": "0.8.0",
   "description": "EvoZen shared TypeScript type definitions",
   "type": "module",
   "main": "./src/index.ts",

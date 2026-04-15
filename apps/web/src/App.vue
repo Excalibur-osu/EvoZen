@@ -13,6 +13,7 @@ import BuildPanel from './components/BuildPanel.vue'
 import TechPanel from './components/TechPanel.vue'
 import JobPanel from './components/JobPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
+import SmelterPanel from './components/SmelterPanel.vue'
 import TradePanel from './components/TradePanel.vue'
 import GovernmentPanel from './components/GovernmentPanel.vue'
 import StoragePanel from './components/StoragePanel.vue'
@@ -167,7 +168,10 @@ const cityTabLabel = computed(() => {
             </template>
             <ArpaPanel v-if="activeTab === 'arpa'" />
             <SpacePanel v-if="activeTab === 'space'" />
-            <CraftPanel v-if="activeTab === 'industry'" />
+            <template v-if="activeTab === 'industry'">
+              <SmelterPanel />
+              <CraftPanel />
+            </template>
             <TradePanel v-if="activeTab === 'market'" />
             <StoragePanel v-if="activeTab === 'storage'" />
           </template>

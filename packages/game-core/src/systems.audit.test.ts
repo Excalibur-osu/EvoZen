@@ -794,7 +794,7 @@ describe('system audit scenarios', () => {
     state.city.coal_mine = { count: 1, on: 1 };
     state.city.metal_refinery = { count: 1, on: 1 };
     state.city.oil_well = { count: 2 };
-    state.city.smelter = { count: 1 };
+    state.city.smelter = { count: 1, on: 1, Wood: 0, Coal: 1, Oil: 0, Inferno: 0, Iron: 0, Steel: 1, Iridium: 0 };
     state.city.library = { count: 1 };
     state.city.university = { count: 1 };
     state.city.factory = { count: 2, on: 2, Alloy: 1, Polymer: 1, Lux: 0, Furs: 0 };
@@ -840,7 +840,7 @@ describe('system audit scenarios', () => {
         stone: 200,
         copper: 97.3676,
         iron: 92.4559,
-        coal: 50,
+        coal: 45.555,
         oil: 79.7112,
         aluminium: 45.7298,
         steel: 50,

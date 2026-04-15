@@ -15,6 +15,7 @@ import type {
   CalendarState,
   GarrisonState,
   FactoryState,
+  SmelterState,
 } from '@evozen/shared-types';
 
 /** 默认设置 */
@@ -131,6 +132,9 @@ export function createNewGame(): GameState {
       Oil: { ...makeResource('石油', 0, 1), value: 0 },
       Titanium: { ...makeResource('钛', 50, 1), value: 0 },
       Uranium: { ...makeResource('铀', 250, 0), value: 0 },
+      // 太空特有资源（前置 0 最大值以临时隐藏）
+      Iridium: { ...makeResource('铱', 0, 0), value: 0 },
+      Helium_3: { ...makeResource('氦-3', 0, 0), value: 0 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },
       Brick: { ...makeResource('砖', -1, 0), value: 0 },
@@ -158,6 +162,8 @@ export function createNewGame(): GameState {
       foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0 },
       // 工厂产线分配（需要 high_tech:3 科技）
       factory: { count: 0, on: 0, Alloy: 0, Polymer: 0, Lux: 0, Furs: 0 } as FactoryState,
+      // 熔炉多燃料生产状态
+      smelter: { count: 0, on: 0, Wood: 0, Coal: 0, Oil: 0, Inferno: 0, Iron: 0, Steel: 0, Iridium: 0 } as SmelterState,
       // 自动贸易路线
       trade_routes: [],
     } as CityState,

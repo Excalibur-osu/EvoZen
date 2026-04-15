@@ -26,6 +26,7 @@ import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
 import { tickEvents } from './events';
+import { resolveSpyActionTick } from './espionage';
 import { applyDerivedStateInPlace } from './derived-state';
 import {
   hasPlanetTrait,
@@ -428,51 +429,104 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 9a. 冶金系统 (Metallurgy) — 对标 legacy main.js L4842-5146
   // ============================================================
-  const smelters = structCount('smelter');
-  if (smelters > 0) {
-    // 原版 L5007: iron_smelter *= smelting >= 3 ? 1.2 : 1
-    // 原版 L5015-5018: smelting >= 7: iron *= 1.25
+  const smelterState = state.city.smelter;
+  if (smelterState && smelterState.count > 0) {
+    let woodFuel = smelterState.Wood ?? 0;
+    let coalFuel = smelterState.Coal ?? 0;
+    let oilFuel = smelterState.Oil ?? 0;
+
+    let ironSmelter = smelterState.Iron ?? 0;
+    let steelSmelter = smelterState.Steel ?? 0;
+    let iridiumSmelter = smelterState.Iridium ?? 0;
+
+    const availableLumber = (state.resource['Lumber']?.amount ?? 0) / TIME_MULTIPLIER;
+    const availableCoal = (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER;
+    const availableOil = (state.resource['Oil']?.amount ?? 0) / TIME_MULTIPLIER;
+
+    const lumberCost = 3;
+    const coalCost = 1;
+    const oilCost = 1;
+
+    // 处理实际能够工作的燃料槽
+    let maxWoodOperable = Math.max(0, Math.floor(availableLumber / lumberCost));
+    if (maxWoodOperable < woodFuel) {
+      woodFuel = maxWoodOperable;
+    }
+    let maxCoalOperable = Math.max(0, Math.floor(availableCoal / coalCost));
+    if (maxCoalOperable < coalFuel) {
+      coalFuel = maxCoalOperable;
+    }
+    let maxOilOperable = Math.max(0, Math.floor(availableOil / oilCost));
+    if (maxOilOperable < oilFuel) {
+      oilFuel = maxOilOperable;
+    }
+
+    const totalFuel = woodFuel + coalFuel + oilFuel;
+
+    // 当配置产出 > 实际提供的燃料数时做自动降级（优先降铁，后降铱，最后降钢）
+    let overage = ironSmelter + steelSmelter + iridiumSmelter - totalFuel;
+    if (overage > 0) {
+      if (ironSmelter >= overage) {
+        ironSmelter -= overage;
+      } else {
+        overage -= ironSmelter;
+        ironSmelter = 0;
+        if (iridiumSmelter >= overage) {
+          iridiumSmelter -= overage;
+        } else {
+          overage -= iridiumSmelter;
+          iridiumSmelter = 0;
+          steelSmelter = Math.max(0, steelSmelter - overage);
+        }
+      }
+    } else if (overage < 0) {
+      // 原版默认会将多余的所有燃料强行塞入产铁
+      ironSmelter += Math.abs(overage);
+    }
+
+    // 扣除燃料
+    deltas['Lumber'] = (deltas['Lumber'] ?? 0) - woodFuel * lumberCost;
+    deltas['Coal'] = (deltas['Coal'] ?? 0) - coalFuel * coalCost;
+    deltas['Oil'] = (deltas['Oil'] ?? 0) - oilFuel * oilCost;
+
+    // 产出铁 (不受全员效率影响，定额产出)
     const ironBlast = techLevel('smelting') >= 3 ? 1.2 : 1;
     const ironAdvanced = techLevel('smelting') >= 7 ? 1.25 : 1;
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironSmelter * ironBlast * ironAdvanced;
 
-    if (techLevel('smelting') >= 2) {
-      // ---- 钢铁生产模式 ----
-      // 原版 L5068-5069: iron_consume = steel_smelter * 2, coal_consume = steel_smelter * 0.25
-      const ironCost = 2;
-      const coalCost = 0.25;
-      const availableIron = state.resource['Iron']?.amount ?? 0;
-      const availableCoal = state.resource['Coal']?.amount ?? 0;
-      const maxByIron = Math.floor(availableIron / ironCost);
-      const maxByCoal = Math.floor(availableCoal / coalCost);
-      const effectiveSmelters = Math.min(smelters, Math.min(maxByIron, maxByCoal));
+    // 产出钢
+    if (techLevel('smelting') >= 2 && steelSmelter > 0) {
+      let ironConsume = steelSmelter * 2;
+      let coalConsume = steelSmelter * 0.25;
 
-      // 原版 L5081-5096: steel_base = 1, smelting 4/5/6 各 ×1.2, smelting 7 ×1.25
+      const availIron = (state.resource['Iron']?.amount ?? 0) / TIME_MULTIPLIER;
+      const availCoal = (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER;
+
+      // 验证库存，削减无效配额
+      while ((ironConsume > availIron && ironConsume > 0) || (coalConsume > availCoal && coalConsume > 0)) {
+        ironConsume -= 2;
+        coalConsume -= 0.25;
+        steelSmelter--;
+      }
+
+      deltas['Iron'] = (deltas['Iron'] ?? 0) - ironConsume;
+      deltas['Coal'] = (deltas['Coal'] ?? 0) - coalConsume;
+
       let steelBase = 1;
       for (let i = 4; i <= 6; i++) {
         if (techLevel('smelting') >= i) steelBase *= 1.2;
       }
       if (techLevel('smelting') >= 7) steelBase *= 1.25;
 
-      // 原版 L5117: smelter_output = steel_smelter * steel_base
-      const steelOutput = effectiveSmelters * steelBase;
+      // 原版：钢的合成受全局效率 (effectiveProdMult) 加成
+      const steelOutput = steelSmelter * steelBase * effectiveProdMult;
       deltas['Steel'] = (deltas['Steel'] ?? 0) + steelOutput;
-      deltas['Iron'] = (deltas['Iron'] ?? 0) - effectiveSmelters * ironCost;
-      deltas['Coal'] = (deltas['Coal'] ?? 0) - effectiveSmelters * coalCost;
 
-      // 钛副产物 — 原版 L5130-5144
+      // 钛副产物
       if (techLevel('titanium') >= 1) {
         const titaniumDivisor = techLevel('titanium') >= 3 ? 10 : 25;
         deltas['Titanium'] = (deltas['Titanium'] ?? 0) + steelOutput / titaniumDivisor;
       }
-    } else {
-      // ---- 初期铁生产模式 ----
-      // 原版 L4929: consume_wood = smelter.Wood * l_cost (l_cost=3)
-      const lumberCost = 3;
-      const availableLumber = state.resource['Lumber']?.amount ?? 0;
-      const effectiveSmelters = Math.min(smelters, Math.floor(availableLumber / lumberCost));
-      // 原版 L4932+L5007: iron_smelter = count × (smelting≥3 ? 1.2 : 1) × (smelting≥7 ? 1.25 : 1)
-      deltas['Iron'] = (deltas['Iron'] ?? 0) + effectiveSmelters * ironBlast * ironAdvanced;
-      deltas['Lumber'] = (deltas['Lumber'] ?? 0) - effectiveSmelters * lumberCost;
     }
   }
 
@@ -804,6 +858,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       newState.civic.garrison.fatigue = Math.max(0, newState.civic.garrison.fatigue - 0.25 * TIME_MULTIPLIER);
     }
   }
+
+  // ============================================================
+  // 14e. 间谍外交通信 tick
+  // ============================================================
+  [0, 1, 2, 3, 4].forEach(govIndex => {
+    if (newState.civic.foreign[`gov${govIndex}` as keyof typeof newState.civic.foreign]) {
+      const spyMessages = resolveSpyActionTick(newState, govIndex, TIME_MULTIPLIER);
+      for (const msg of spyMessages) {
+        messages.push(msg);
+      }
+    }
+  });
 
   // ============================================================
   // 15. 工厂产线 tick

@@ -4,7 +4,7 @@
   对标 legacy/src/civics.js garrison UI。
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useGameStore } from '../stores/game'
 
 const game = useGameStore()
@@ -59,7 +59,7 @@ const foreignGovs = computed(() => {
   const names = ['莫鲁尼亚', '巴尔卡尼亚', '卡什米利亚']
   return [0, 1, 2].map(i => {
     const gov = game.state.civic.foreign[`gov${i}` as keyof typeof game.state.civic.foreign] as {
-      hstl: number; mil: number; eco: number; occ: boolean; anx: boolean; buy: boolean
+      hstl: number; mil: number; eco: number; unrest: number; spy: number; trn: number; sab: number; occ: boolean; anx: boolean; buy: boolean
     }
     return {
       index: i,
@@ -67,6 +67,10 @@ const foreignGovs = computed(() => {
       hstl: gov.hstl,
       mil: gov.mil || 75,
       eco: gov.eco || 75,
+      unrest: gov.unrest || 0,
+      spy: gov.spy || 0,
+      trn: gov.trn || 0,
+      sab: gov.sab || 0,
       occ: gov.occ,
       anx: gov.anx,
       buy: gov.buy,
@@ -74,6 +78,11 @@ const foreignGovs = computed(() => {
     }
   })
 })
+
+const isSpyUnlocked = computed(() => (game.state.tech['spy'] ?? 0) >= 1)
+const canSabotage = computed(() => (game.state.tech['spy'] ?? 0) >= 2)
+
+const showEspionageModal = ref<number | null>(null)
 
 function adjustRaid(delta: number) {
   game.setRaid((garrison.value?.raid ?? 0) + delta)
@@ -156,7 +165,8 @@ function adjustRaid(delta: number) {
     <div class="campaign-section">
       <h4 class="sub-title">🌍 外交</h4>
       <div class="gov-list">
-        <div v-for="gov in foreignGovs" :key="gov.index" class="gov-row">
+        <template v-for="gov in foreignGovs" :key="gov.index">
+        <div class="gov-row">
           <div class="gov-info">
             <span class="gov-name">{{ gov.name }}</span>
             <span class="gov-status" :class="{ 'occ': gov.occ, 'anx': gov.anx }">{{ gov.status }}</span>
@@ -164,15 +174,71 @@ function adjustRaid(delta: number) {
           <div class="gov-stats text-xs font-mono">
             <span title="敌意">😤 {{ gov.hstl }}</span>
             <span title="军力">⚔️ {{ gov.mil }}</span>
+            <span title="动荡" v-if="isSpyUnlocked">🔥 {{ gov.unrest }}</span>
           </div>
-          <button
-            class="campaign-btn"
-            @click="game.doWarCampaign(gov.index)"
-            :disabled="garrison!.raid <= 0"
-          >
-            {{ gov.occ ? '撤军' : gov.anx || gov.buy ? '解除' : '进攻' }}
-          </button>
+          <div class="campaign-actions">
+            <button
+              class="campaign-btn"
+              @click="game.doWarCampaign(gov.index)"
+              :disabled="garrison!.raid <= 0"
+            >
+              {{ gov.occ ? '撤军' : gov.anx || gov.buy ? '解除' : '进攻' }}
+            </button>
+            <button
+              v-if="isSpyUnlocked && !gov.occ && !gov.anx && !gov.buy"
+              class="spy-btn"
+              title="训练间谍 (花费随参数指数增加)"
+              @click="game.trainSpy(gov.index)"
+              :disabled="gov.trn > 0"
+            >
+              🕵️ <span v-if="gov.trn > 0">{{ gov.trn }}...</span>
+              <span v-else>{{ gov.spy }}</span>
+            </button>
+            <button
+              v-if="canSabotage && !gov.occ && !gov.anx && !gov.buy && gov.spy >= 1"
+              class="spy-btn action-btn"
+              @click="showEspionageModal = showEspionageModal === gov.index ? null : gov.index"
+              :disabled="gov.sab > 0"
+            >
+              <span v-if="gov.sab > 0">潜伏 {{ gov.sab }}...</span>
+              <span v-else>行动</span>
+            </button>
+          </div>
         </div>
+        
+        <!-- 间谍行动面板（折叠） -->
+        <div class="espionage-modal" v-if="showEspionageModal === gov.index">
+          <div class="esp-header">
+            <span>针对 {{ gov.name }} 的间谍密谋</span>
+            <button class="close-btn" @click="showEspionageModal = null">✖</button>
+          </div>
+          <div class="esp-actions">
+            <button class="esp-action-btn" @click="game.startEspionage(gov.index, 'influence')">
+              🗣️ 影响力 (降敌意)
+            </button>
+            <button class="esp-action-btn" @click="game.startEspionage(gov.index, 'sabotage')">
+              💥 搞破坏 (削军力)
+            </button>
+            <button class="esp-action-btn inc" @click="game.startEspionage(gov.index, 'incite')">
+              🔥 煽动叛乱 (增动荡)
+            </button>
+            <button 
+              class="esp-action-btn anx" 
+              v-if="gov.unrest >= 50 && gov.hstl <= 50" 
+              @click="game.startEspionage(gov.index, 'annex')"
+            >
+              👑 颠覆兼并
+            </button>
+            <button 
+              class="esp-action-btn buy" 
+              v-if="gov.spy >= 3" 
+              @click="game.startEspionage(gov.index, 'purchase')"
+            >
+              💰 金元收购
+            </button>
+          </div>
+        </div>
+      </template>
       </div>
     </div>
 
@@ -438,16 +504,22 @@ function adjustRaid(delta: number) {
   gap: 8px;
   color: var(--text-muted);
 }
-.campaign-btn {
-  padding: 4px 12px;
+.campaign-actions {
+  display: flex;
+  gap: 4px;
+}
+.campaign-btn, .spy-btn {
+  padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
   cursor: pointer;
   transition: all 0.15s;
+}
+.campaign-btn {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
 }
 .campaign-btn:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.2);
@@ -457,6 +529,68 @@ function adjustRaid(delta: number) {
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+.spy-btn {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+.spy-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+.spy-btn.action-btn {
+  color: #a855f7;
+  border-color: rgba(168, 85, 247, 0.3);
+  background: rgba(168, 85, 247, 0.1);
+}
+.spy-btn.action-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: #a855f7;
+}
+
+/* Espionage Modal */
+.espionage-modal {
+  margin-top: 2px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  background: var(--bg-sidebar);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+}
+.esp-header {
+  font-size: 12px;
+  color: #a855f7;
+  margin-bottom: 6px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+}
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.close-btn:hover { color: #f87171; }
+.esp-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.esp-action-btn {
+  padding: 4px 6px;
+  font-size: 11px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.esp-action-btn.inc { color: #f97316; }
+.esp-action-btn.anx { color: #3b82f6; border-color: rgba(59,130,246,0.3); }
+.esp-action-btn.buy { color: #eab308; border-color: rgba(234,179,8,0.3); }
+.esp-action-btn:hover { background: var(--bg-card-hover); }
 
 /* 佣兵 */
 .merc-section {

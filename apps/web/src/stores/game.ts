@@ -27,6 +27,8 @@ import {
   manualCraft,
   assignCraftsman as coreAssignCraftsman,
   removeCraftsman as coreRemoveCraftsman,
+  assignSmelter as coreAssignSmelter,
+  removeSmelter as coreRemoveSmelter,
   type CraftableId,
   buyResource as coreBuyResource,
   sellResource as coreSellResource,
@@ -89,8 +91,31 @@ import {
   MONUMENT_NAMES,
   type MonumentType,
 } from '@evozen/game-core'
+import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
 export const useGameStore = defineStore('game', () => {
+  // ---- 间谍外交操作 ----
+  
+  function trainSpy(govIndex: number) {
+    const { success, messages } = coreTrainSpy(state.value, govIndex);
+    for (const msg of messages) {
+      addMessage(msg.text, msg.type, msg.category);
+    }
+    if (!success) {
+      addMessage('金钱不足以训练间谍或条件不符。', 'warning', 'spy');
+    }
+  }
+
+  function startEspionage(govIndex: number, action: string) {
+    const { success, messages } = coreStartSpyAction(state.value, govIndex, action);
+    for (const msg of messages) {
+      addMessage(msg.text, msg.type, msg.category);
+    }
+    if (!success) {
+      addMessage('发起行动失败：间谍不足或国家尚存未结算的行动。', 'warning', 'spy');
+    }
+  }
+
   // ---- 核心状态 ----
   const state = ref<GameState>(createNewGame())
   const messages = ref<GameMessage[]>([])
@@ -517,6 +542,21 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  // ---- 熔炉操作 ----
+  function assignSmelter(category: 'fuel' | 'output', type: string) {
+    const result = coreAssignSmelter(state.value, category, type)
+    if (result) {
+      state.value = result
+    }
+  }
+
+  function removeSmelter(category: 'fuel' | 'output', type: string) {
+    const result = coreRemoveSmelter(state.value, category, type)
+    if (result) {
+      state.value = result
+    }
+  }
+
   // ---- 贸易操作 ----
 
   /** 手动买入资源 */
@@ -766,6 +806,9 @@ export const useGameStore = defineStore('game', () => {
     doCraft,
     assignCraftLine,
     removeCraftLine,
+    // 熔炉系统
+    assignSmelter,
+    removeSmelter,
     // 贸易系统
     tradeBuy,
     tradeSell,
@@ -810,6 +853,9 @@ export const useGameStore = defineStore('game', () => {
     getArmyRating,
     getGarrisonSize,
     TACTIC_NAMES,
+    // 间谍外科系统
+    trainSpy,
+    startEspionage,
     // ARPA 系统
     startArpa,
     stopArpa,

@@ -5,6 +5,8 @@
  * 每项科技的 reqs、grant、costs 均从原版源码逐行核对。
  */
 
+import type { GameState } from '@evozen/shared-types';
+
 export interface TechDefinition {
   id: string;
   name: string;
@@ -13,6 +15,8 @@ export interface TechDefinition {
   era: string;
   /** 前置科技要求 */
   reqs: Record<string, number>;
+  /** 自定义额外前置判断条件 */
+  condition?: (state: GameState) => boolean;
   /** 解锁授予的科技: [key, level] */
   grant: [string, number];
   /** 费用 */
@@ -1289,7 +1293,8 @@ export const BASIC_TECHS: TechDefinition[] = [
     description: '通过代议制与法治重塑国家财政体系。',
     category: 'government',
     era: '发现',
-    reqs: { govern: 1, trade: 2 },
+    reqs: { govern: 1 },
+    condition: (state) => (state.tech['trade'] ?? 0) >= 2 || state.race.terrifying !== undefined,
     grant: ['govern', 2],
     costs: { Knowledge: 17000 },
     effect: '解锁共和国。银行家收益 +25%，基础士气 +20。',
@@ -1300,7 +1305,8 @@ export const BASIC_TECHS: TechDefinition[] = [
     description: '强调统一调配与集体化经济组织。',
     category: 'government',
     era: '发现',
-    reqs: { govern: 1, trade: 2 },
+    reqs: { govern: 1 },
+    condition: (state) => (state.tech['trade'] ?? 0) >= 2 || state.race.terrifying !== undefined,
     grant: ['gov_soc', 1],
     costs: { Knowledge: 17000 },
     effect: '解锁社会主义。工厂效率 +10%，但金钱类收入 -20%。',
@@ -1460,6 +1466,28 @@ export const BASIC_TECHS: TechDefinition[] = [
     grant: ['gambling', 2],
     costs: { Knowledge: 125000 },
     effect: '赌场收入提升 50%。',
+  },
+  {
+    id: 'casino_vault',
+    name: '赌场金库',
+    description: '将赌场作为资金运转的中枢之一。',
+    category: 'banking',
+    era: '早期太空',
+    reqs: { gambling: 2, space_explore: 3 },
+    grant: ['gambling', 3],
+    costs: { Knowledge: 145000, Iridium: 2500 },
+    effect: '每个赌场提供更高的资金上限。',
+  },
+  {
+    id: 'otb',
+    name: '场外投注',
+    description: '建立不受单一地理位置限制的投注网格体系。',
+    category: 'banking',
+    era: '深空',
+    reqs: { gambling: 3, banking: 10, high_tech: 10 },
+    grant: ['gambling', 4],
+    costs: { Knowledge: 390000 },
+    effect: '进一步巨幅提升每个赌场提供的资金上限。',
   },
 
   // legacy tech.js L3539: wharf → wharf:1 → 解锁 wharf 建筑
@@ -1693,8 +1721,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     era: '早期太空',
     reqs: { space_explore: 2 },
     grant: ['space_explore', 3],
-    // legacy 使用 Iridium/Helium_3；当前太空资源未接入，临时换成已实装工业资源
-    costs: { Knowledge: 168000, Steel: 100000, Titanium: 5000, Uranium: 2250, Alloy: 3500 },
+    costs: { Knowledge: 168000, Steel: 100000, Iridium: 5000, Helium_3: 15000 },
     effect: '推进太空探索到 Lv.3，建立火星航道入口骨架。',
   },
   {

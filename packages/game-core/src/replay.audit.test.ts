@@ -228,7 +228,7 @@ describe('deterministic replay audit', () => {
     state.city['coal_mine'] = { count: 1, on: 1 };
     state.city['metal_refinery'] = { count: 1, on: 1 };
     state.city['oil_well'] = { count: 2 };
-    state.city['smelter'] = { count: 1 };
+    state.city['smelter'] = { count: 1, on: 1, Wood: 0, Coal: 1, Oil: 0, Inferno: 0, Iron: 0, Steel: 1, Iridium: 0 };
     state.city['library'] = { count: 1 };
     state.city['university'] = { count: 1 };
     state.city['factory'] = { count: 2, on: 2, Alloy: 1, Polymer: 1, Lux: 0, Furs: 0 };
@@ -255,7 +255,7 @@ describe('deterministic replay audit', () => {
         Stone: 200,
         Copper: 92.1718,
         Iron: 76.4882,
-        Coal: 50,
+        Coal: 36.1319,
         Knowledge: 171.9262,
         Faith: 0,
         Money: 545.6944,

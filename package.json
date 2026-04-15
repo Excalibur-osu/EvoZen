@@ -1,6 +1,6 @@
 {
   "name": "evozen",
-  "version": "0.7.8",
+  "version": "0.8.0",
   "description": "EvoZen",
   "private": true,
   "workspaces": [

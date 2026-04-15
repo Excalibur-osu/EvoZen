@@ -29,6 +29,8 @@ export const RESOURCE_NAMES: Record<string, string> = {
   RNA: 'RNA',
   DNA: 'DNA',
   Crystal: '水晶',
+  Iridium: '铱',
+  Helium_3: '氦-3',
 }
 
 /** 获取资源中文名 */

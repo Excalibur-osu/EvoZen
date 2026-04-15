@@ -127,6 +127,8 @@ export function isTechAvailable(state: GameState, techId: string): boolean {
     if ((state.tech[reqKey] ?? 0) < reqLvl) return false;
   }
 
+  if (def.condition && !def.condition(state)) return false;
+
   return true;
 }
 
@@ -259,3 +261,51 @@ export function setTaxRate(state: GameState, rate: number): GameState {
   next.civic.taxes.tax_rate = clamped;
   return next;
 }
+
+export function assignSmelter(state: GameState, category: 'fuel' | 'output', type: string): GameState | null {
+  const next = cloneState(state);
+  const smelter = next.city.smelter;
+  if (!smelter) return null;
+
+  if (category === 'fuel') {
+    const totalFuelOptions = (smelter.Wood ?? 0) + (smelter.Coal ?? 0) + (smelter.Oil ?? 0) + (smelter.Inferno ?? 0);
+    // Can't assign more fuel options than built smelters
+    if (totalFuelOptions >= smelter.count) return null;
+    (smelter as Record<string, any>)[type] = ((smelter as Record<string, any>)[type] ?? 0) + 1;
+  } else if (category === 'output') {
+    const totalOutputs = (smelter.Iron ?? 0) + (smelter.Steel ?? 0) + (smelter.Iridium ?? 0);
+    const totalFuelOptions = (smelter.Wood ?? 0) + (smelter.Coal ?? 0) + (smelter.Oil ?? 0) + (smelter.Inferno ?? 0);
+    // Can't assign more output options than assigned fuel options
+    if (totalOutputs >= totalFuelOptions) return null;
+    (smelter as Record<string, any>)[type] = ((smelter as Record<string, any>)[type] ?? 0) + 1;
+  }
+
+  return next;
+}
+
+export function removeSmelter(state: GameState, category: 'fuel' | 'output', type: string): GameState | null {
+  const next = cloneState(state);
+  const smelter = next.city.smelter;
+  if (!smelter) return null;
+
+  if ((smelter as Record<string, any>)[type] > 0) {
+    (smelter as Record<string, any>)[type]--;
+
+    // Auto-balance outputs if reducing fuels makes total fuels < total outputs
+    if (category === 'fuel') {
+      const totalFuelOptions = (smelter.Wood ?? 0) + (smelter.Coal ?? 0) + (smelter.Oil ?? 0) + (smelter.Inferno ?? 0);
+      let totalOutputs = (smelter.Iron ?? 0) + (smelter.Steel ?? 0) + (smelter.Iridium ?? 0);
+      
+      while (totalOutputs > totalFuelOptions) {
+        if ((smelter.Iron ?? 0) > 0) smelter.Iron--;
+        else if ((smelter.Steel ?? 0) > 0) smelter.Steel--;
+        else if ((smelter.Iridium ?? 0) > 0) smelter.Iridium--;
+        totalOutputs--;
+      }
+    }
+    return next;
+  }
+
+  return null;
+}
+

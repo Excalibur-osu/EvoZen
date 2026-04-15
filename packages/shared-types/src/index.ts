@@ -38,7 +38,10 @@ export type BasicResourceId =
 /** 特殊/进化阶段资源 */
 export type EvoResourceId = 'RNA' | 'DNA';
 
-export type ResourceId = BasicResourceId | EvoResourceId | string;
+/** 空间阶段关键资源 */
+export type SpaceResourceId = 'Iridium' | 'Helium_3';
+
+export type ResourceId = BasicResourceId | EvoResourceId | SpaceResourceId | string;
 
 /** 单个资源的状态 */
 export interface ResourceState {
@@ -259,6 +262,25 @@ export interface FactoryState {
 }
 
 // ============================================================
+// 熔炉 (Smelter)
+// ============================================================
+
+/** 熔炉燃料分配与产出分配状态 — 对标 legacy global.city.smelter */
+export interface SmelterState {
+  count: number;
+  on: number;
+  // 燃料分配槽位 (Fuel allocations)
+  Wood: number;
+  Coal: number;
+  Oil: number;
+  Inferno: number;
+  // 产出分配槽位 (Production allocations)
+  Iron: number;
+  Steel: number;
+  Iridium: number;
+}
+
+// ============================================================
 // 种族 (Race)
 // ============================================================
 
@@ -421,8 +443,9 @@ export interface CityState {
   market: { active: boolean; qty?: number };
   morale?: MoraleState;
   power?: PowerState;
+  smelter?: SmelterState;
   /** 建筑 */
-  [structureId: string]: StructureState | CalendarState | MoraleState | PowerState | string | Record<string, number> | unknown;
+  [structureId: string]: StructureState | CalendarState | MoraleState | PowerState | SmelterState | string | Record<string, number> | unknown;
 }
 
 // ============================================================
