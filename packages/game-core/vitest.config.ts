@@ -6,11 +6,18 @@ export default defineConfig({
     environment: 'node',
     // 测试文件匹配模式
     include: ['src/**/*.test.ts'],
-    // 覆盖率（可选）
+    // 覆盖率下限用于防止后续迭代把现有验证面悄悄削掉。
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/index.ts'],
+      reporter: ['text', 'json-summary'],
+      thresholds: {
+        statements: 70,
+        branches: 55,
+        functions: 68,
+        lines: 73,
+      },
     },
   },
 });

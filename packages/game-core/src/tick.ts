@@ -224,7 +224,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const sawmills = structCount('sawmill');
   const activeSawmills = poweredOn['sawmill'] ?? 0;
   const sawmillBonus = techLevel('saw') >= 2 ? 0.08 : 0.05;
-  let lumberMult = 1 + lumberYards * 0.02 + sawmills * sawmillBonus;
+  // legacy 这里是分段相乘，不是把 lumber_yard 与 sawmill 直接加到同一个线性项里
+  let lumberMult = (1 + lumberYards * 0.02) * (1 + sawmills * sawmillBonus);
   if (activeSawmills > 0) {
     lumberMult *= 1 + activeSawmills * 0.04;
   }

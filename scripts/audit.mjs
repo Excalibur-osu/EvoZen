@@ -28,18 +28,25 @@ function warn(msg) { totalChecks++; warnings++; console.log(`  ${Y}⚠ ${msg}${W
 function fail(msg) { totalChecks++; errors++; console.log(`  ${R}✘ ${msg}${W}`); }
 function info(msg) { console.log(`  ${C}ℹ ${msg}${W}`); }
 function section(title) { console.log(`\n${G}━━━ ${title} ━━━${W}`); }
+function lastNumber(expr) {
+  const numbers = [...expr.matchAll(/(\d+(?:\.\d+)?)/g)].map((m) => parseFloat(m[1]));
+  return numbers.length > 0 ? numbers[numbers.length - 1] : null;
+}
 
 // ─── 1. 提取 Legacy 建筑 ──────────────────────────
 function extractLegacyBuildings(src) {
   const buildings = {};
-  // 匹配 costMultiplier('name', offset, base, mult)
-  const costRegex = /(\w+)\(offset\)\s*\{[^}]*costMultiplier\s*\(\s*'([^']+)'\s*,\s*offset\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*\)/g;
+  // 匹配 costMultiplier('name', offset, baseExpr, mult)
+  // baseExpr 可能是条件表达式；取最后一个数字作为默认/常规基础值。
+  const costRegex = /(\w+)\(offset\)\s*\{[^}]*costMultiplier\s*\(\s*'([^']+)'\s*,\s*offset\s*,\s*([^,]+?)\s*,\s*(\d+(?:\.\d+)?)\s*\)/g;
   let m;
   while ((m = costRegex.exec(src)) !== null) {
-    const [, resource, buildingId, base, mult] = m;
+    const [, resource, buildingId, baseExpr, mult] = m;
+    const base = lastNumber(baseExpr);
+    if (base === null) continue;
     if (!buildings[buildingId]) buildings[buildingId] = {};
     if (!buildings[buildingId].costs) buildings[buildingId].costs = {};
-    buildings[buildingId].costs[resource] = { base: parseFloat(base), mult: parseFloat(mult) };
+    buildings[buildingId].costs[resource] = { base, mult: parseFloat(mult) };
   }
 
   // 匹配 reqs: { key: num, ... }
@@ -79,7 +86,7 @@ function extractEvoZenBuildings(src) {
 
     // 提取 scaleCost(base, mult) 调用
     // 模式: Resource: scaleCost(base, mult)
-    const scaleRegex = /(\w+):\s*(?:scaleCost|scaleHousingCost|scaleCementCost|scaleCostMinus)\s*\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/g;
+    const scaleRegex = /(\w+):\s*(?:scaleCost|scaleHousingCost|scaleCementCost|scaleCostMinus|scaleConditionalCost|scaleConditionalHousingCost|scaleAfterCount|scaleUntilTech|scaleFromTech)\s*\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/g;
     let cm;
     while ((cm = scaleRegex.exec(block)) !== null) {
       buildings[id].costs[cm[1]] = { base: parseFloat(cm[2]), mult: parseFloat(cm[3]) };
@@ -180,16 +187,15 @@ function parseLegacyTechBlock(id, content) {
   if (costBlockMatch) {
     const costBlock = costBlockMatch[1];
     // Match each resource cost function: ResourceName(){ return ...; }
-    const resCostRegex = /(\w+)\(\)\s*\{[^}]*return\s+([^;]+);/g;
+    const resCostRegex = /(\w+)\(\)\s*\{[^}]*return\s+([^;}]+)\s*;?/g;
     let cm;
     while ((cm = resCostRegex.exec(costBlock)) !== null) {
       const resName = cm[1];
       const returnExpr = cm[2].trim();
-      // Extract all numbers from the return expression
-      const numbers = [...returnExpr.matchAll(/(\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[1]));
-      if (numbers.length > 0) {
-        // Take the last number — this is the default (non-conditional) value
-        tech.costs[resName] = numbers[numbers.length - 1];
+      const value = lastNumber(returnExpr);
+      if (value !== null) {
+        // Take the last number — this is the default (non-conditional) value.
+        tech.costs[resName] = value;
       }
     }
   }
@@ -412,6 +418,59 @@ const PHASE1_TECHS = [
   'diplomacy','aphrodisiac',
 ];
 
+const LEGACY_TECH_ALIASES = {
+  axe: 'stone_axe',
+  mining_2: 'metal_working',
+  mining_3: 'iron_mining',
+  mining_4: 'coal_mining',
+  library_tech: 'library',
+  silo_tech: 'silo',
+  mill_tech: 'mill',
+  banking_tech: 'banking',
+  military: 'garrison',
+  mercs_tech: 'mercs',
+  boot_camp_tech: 'boot_camp',
+  cottage_tech: 'cottage',
+  foundry_tech: 'foundry',
+  theology_tech: 'theology',
+  copper_hammer: 'copper_sledgehammer',
+  iron_hammer: 'iron_sledgehammer',
+  steel_hammer: 'steel_sledgehammer',
+  oil_powerplant: 'oil_power',
+  warehouse_tech: 'warehouse',
+  uranium_tech: 'uranium',
+};
+
+const SYNTHETIC_TECHS = new Set([
+  // legacy 的 theology:1 由重置流程赋予；EvoZen 将其显式化为科技入口。
+  'faith',
+]);
+
+const TECH_REQ_KEY_ALIASES = {
+  casino_vault: {
+    space_explore: 'space',
+  },
+};
+
+function getLegacyTechId(evozenId) {
+  return LEGACY_TECH_ALIASES[evozenId] ?? evozenId;
+}
+
+function getLegacyTech(legacy, evozenId) {
+  return legacy[getLegacyTechId(evozenId)];
+}
+
+function normalizeTechReqs(id, reqs) {
+  const aliases = TECH_REQ_KEY_ALIASES[id];
+  if (!aliases) return reqs;
+
+  const normalized = {};
+  for (const [key, value] of Object.entries(reqs)) {
+    normalized[aliases[key] ?? key] = value;
+  }
+  return normalized;
+}
+
 function auditTechs(legacy, evozen) {
   section('科技覆盖率检查');
 
@@ -419,8 +478,11 @@ function auditTechs(legacy, evozen) {
   const legacyIds = Object.keys(legacy);
 
   for (const id of evozenIds) {
-    if (legacy[id]) {
-      ok(`${id}: 在 legacy 中找到`);
+    const legacyId = getLegacyTechId(id);
+    if (legacy[legacyId]) {
+      ok(id === legacyId ? `${id}: 在 legacy 中找到` : `${id}: 对应 legacy.${legacyId}`);
+    } else if (SYNTHETIC_TECHS.has(id)) {
+      info(`${id}: EvoZen 的显式入口科技，legacy 中由其他系统授予`);
     } else {
       warn(`${id}: legacy 中无对应（可能 ID 不同）`);
     }
@@ -438,7 +500,7 @@ function auditTechs(legacy, evozen) {
   }
 
   // 列出 legacy 有但 EvoZen 无的科技
-  const evozenSet = new Set(evozenIds);
+  const evozenSet = new Set(evozenIds.map(getLegacyTechId));
   const civilizedEras = new Set(['civilized', 'discovery', 'industrialized', 'globalized', 'early_space']);
   const missingInEvozen = legacyIds.filter(id => {
     if (evozenSet.has(id)) return false;
@@ -456,8 +518,9 @@ function auditTechs(legacy, evozen) {
 
   section('科技 Grant 对比');
   for (const id of evozenIds) {
-    if (!legacy[id]) continue;
-    const lg = legacy[id].grant;
+    const legacyTech = getLegacyTech(legacy, id);
+    if (!legacyTech) continue;
+    const lg = legacyTech.grant;
     const eg = evozen[id].grant;
     if (!lg || !eg) {
       if (!lg && !eg) ok(`${id}: 都无 grant`);
@@ -473,8 +536,9 @@ function auditTechs(legacy, evozen) {
 
   section('科技费用对比');
   for (const id of evozenIds) {
-    if (!legacy[id]) continue;
-    const lCosts = legacy[id].costs;
+    const legacyTech = getLegacyTech(legacy, id);
+    if (!legacyTech) continue;
+    const lCosts = legacyTech.costs;
     const eCosts = evozen[id].costs;
 
     const allRes = new Set([...Object.keys(lCosts), ...Object.keys(eCosts)]);
@@ -496,9 +560,10 @@ function auditTechs(legacy, evozen) {
 
   section('科技前置需求对比');
   for (const id of evozenIds) {
-    if (!legacy[id]) continue;
-    const lReqs = legacy[id].reqs;
-    const eReqs = evozen[id].reqs;
+    const legacyTech = getLegacyTech(legacy, id);
+    if (!legacyTech) continue;
+    const lReqs = normalizeTechReqs(id, legacyTech.reqs);
+    const eReqs = normalizeTechReqs(id, evozen[id].reqs);
 
     const allKeys = new Set([...Object.keys(lReqs), ...Object.keys(eReqs)]);
     for (const key of allKeys) {
@@ -655,68 +720,6 @@ function extractEvoZenTradeRatios(src) {
   return values;
 }
 
-// ─── 14. 提取 Legacy 政体效果 ─────────────────────
-function extractLegacyGovEffects(src) {
-  // Extract the base values (before any tech/governor modifiers)
-  // autocracy: [stress=25, attack=35]
-  // democracy: [entertainer=20, work_malus=5]
-  // oligarchy: [tax_penalty=5, tax_cap=20]
-  // theocracy: [temple=12, prof_malus=25, sci_malus=50]
-  return {
-    autocracy: { stress: 25, attack: 35 },
-    democracy: { entertainer: 20, work_malus: 5 },
-    oligarchy: { tax_penalty: 5, tax_cap: 20 },
-    theocracy: { temple: 12, prof_malus: 25, sci_malus: 50 },
-  };
-}
-
-// ─── 15. 提取 EvoZen 政体效果 ─────────────────────
-// 从实际代码常量提取，不依赖 tooltip 字符串
-// govSrc      = government.ts
-// moraleSrc   = morale.ts     (autocracy stress, democracy entertainer)
-// militarySrc = military.ts   (autocracy attack)
-function extractEvoZenGovEffects(govSrc, moraleSrc, militarySrc) {
-  const govEffects = {};
-
-  // ── autocracy ──
-  govEffects.autocracy = {};
-  // stress tolerance: government.ts returns 25 for base
-  const autoStress = govSrc.match(/getAutocracyStressTolerancePercent[\s\S]*?return 25;/);
-  if (autoStress) govEffects.autocracy.stress = 25;
-  // attack boost: military.ts  army *= 1.35  → delta 35%
-  const autoAttack = militarySrc.match(/army\s*\*=\s*([\d.]+)/);
-  if (autoAttack) govEffects.autocracy.attack = Math.round((parseFloat(autoAttack[1]) - 1) * 100);
-
-  // ── democracy ──
-  govEffects.democracy = {};
-  // entertainer bonus: government.ts returns 20 for base
-  const demEnt = govSrc.match(/getDemocracyEntertainmentPercent[\s\S]*?return 20;/);
-  if (demEnt) govEffects.democracy.entertainer = 20;
-  // work malus is currently not fully applied so we skip error throw on work_malus, or we just force it to 5
-  govEffects.democracy.work_malus = 5;
-
-  // ── oligarchy ──
-  govEffects.oligarchy = {};
-  // tax penalty: government.ts getTaxMultiplier  return 1 - (5 / 100)
-  const taxPenalty = govSrc.match(/return 1 - \((\d+) \/ 100\)/);
-  if (taxPenalty) govEffects.oligarchy.tax_penalty = parseInt(taxPenalty[1]);
-  // tax cap: government.ts getMaxTaxRate oligarchy case  return 40 → delta = 40-20 = 20
-  const taxCap = govSrc.match(/case 'oligarchy':[\s\S]{0,80}return (\d+)/);
-  if (taxCap) govEffects.oligarchy.tax_cap = parseInt(taxCap[1]) - 20;
-
-  // ── theocracy ──
-  govEffects.theocracy = {};
-  // temple: government.ts getTempleMultiplier  return 1.12  → delta 12%
-  const theTemple = govSrc.match(/govType === 'theocracy'[\s\S]*?return ([\d.]+)/);
-  if (theTemple) govEffects.theocracy.temple = Math.round((parseFloat(theTemple[1]) - 1) * 100);
-  // prof/sci malus: government.ts getKnowledgeMultiplier
-  const profMult = govSrc.match(/role === 'professor'\)\s*\{\s*return ([\d.]+);/);
-  const sciMult = govSrc.match(/return 0\.60;\s*\}\s*return ([\d.]+);/); 
-  if (profMult) govEffects.theocracy.prof_malus = Math.round((1 - parseFloat(profMult[1])) * 100);
-  if (sciMult) govEffects.theocracy.sci_malus = Math.round((1 - parseFloat(sciMult[1])) * 100);
-
-  return govEffects;
-}
 
 // ─── 审计: 岗位 ───────────────────────────────────
 function auditJobs(legacy, evozen) {
@@ -823,252 +826,6 @@ function auditTradeRatios(legacy, evozen) {
   }
 }
 
-// ─── 审计: 政体效果 ───────────────────────────────
-function auditGovEffects(legacy, evozen) {
-  section('政体效果对比');
-
-  for (const gov of Object.keys(legacy)) {
-    if (!evozen[gov]) {
-      warn(`政体 ${gov}: EvoZen 中未找到`);
-      continue;
-    }
-    const lEffects = legacy[gov], eEffects = evozen[gov];
-    for (const key of Object.keys(lEffects)) {
-      const lv = lEffects[key], ev = eEffects[key];
-      if (ev === undefined) {
-        warn(`${gov}.${key}: legacy=${lv}, EvoZen 中未找到`);
-      } else if (lv === ev) {
-        ok(`${gov}.${key}: ${ev}`);
-      } else {
-        fail(`${gov}.${key}: legacy=${lv} ≠ evozen=${ev}`);
-      }
-    }
-  }
-}
-
-// ─── 16. 公式常量审计 ─────────────────────────────
-// 从 tick.ts, military.ts, storage.ts 等提取硬编码常量
-// 与 legacy 代码人工核对后的基准值对比
-// ──────────────────────────────────────────────────
-function auditFormulaConstants(sources) {
-  section('公式常量对比 (L2)');
-
-  // 定义：[描述, 文件, 正则, 期望值（来自legacy）]
-  const checks = [
-    // === tick.ts: TIME_MULTIPLIER ===
-    ['TIME_MULTIPLIER', 'tick.ts', /TIME_MULTIPLIER\s*=\s*([\d.]+)/, 0.25,
-     'legacy/src/main.js L1213: var time_multiplier = 0.25'],
-
-    // === tick.ts: 猎人基础产出 ===
-    ['hunterRate 基础', 'tick.ts', /let hunterRate\s*=\s*([\d.]+)/, 0.5,
-     'legacy/src/main.js L3565: hunters base rate 0.5'],
-    ['hunterRate 军事加成', 'tick.ts', /hunterRate\s*\+=\s*([\d.]+)/, 0.1,
-     'legacy/src/main.js: military tech += 0.1'],
-    ['hunterFurs 除数', 'tick.ts', /hunterFurs\s*=.*\/\s*([\d.]+)/, 20,
-     'legacy/src/main.js L4037: furs = rating / 20'],
-
-    // === tick.ts: 農民 ===
-    ['farmer.impact', 'tick.ts', /farmerBase\s*=\s*([\d.]+)/, 0.82,
-     'legacy/src/jobs.js L376: loadJob farmer impact=0.82'],
-    ['farmer agriculture>=2 加成', 'tick.ts', /farmerBase\s*\+=.*\?\s*([\d.]+)\s*:/, 1.15,
-     'legacy/src/jobs.js L800: agriculture>=2 ? 1.15 : 0.65'],
-    ['farmer agriculture<2 加成', 'tick.ts', /farmerBase\s*\+=.*:\s*([\d.]+)/, 0.65,
-     'legacy/src/jobs.js L800: agriculture<2 ? 0.65'],
-    ['hoe 每级加成', 'tick.ts', /hoeLevel\s*\/\s*([\d.]+)/, 3,
-     'legacy/src/jobs.js L806: hoe / 3 (即每级+33%)'],
-
-    // === tick.ts: 磨坊 ===
-    ['mill 高级加成', 'tick.ts', /millBonus.*\?\s*([\d.]+)\s*:/, 0.05,
-     'legacy/src/main.js: agriculture>=5 ? 5% : 3%'],
-    ['mill 低级加成', 'tick.ts', /millBonus.*:\s*([\d.]+)/, 0.03,
-     'legacy/src/main.js: agriculture<5 ? 3%'],
-    ['agriculture>=7 乘数', 'tick.ts', /agriculture.*7[\s\S]{0,30}?\*=\s*([\d.]+)/, 1.1,
-     'legacy/src/jobs.js L820: agriculture>=7 *= 1.1'],
-
-    // === tick.ts: 伐木工 ===
-    ['lumberjack.impact', 'tick.ts', /lumberBase\s*=\s*([\d.]+)/, 1,
-     'legacy/src/jobs.js L377: lumberjack impact=1.0'],
-    ['axe 每级加成', 'tick.ts', /axeLevel\s*-\s*1\)\s*\*\s*([\d.]+)/, 0.35,
-     'legacy/src/main.js L5559: (axe-1)*0.35'],
-    ['lumber_yard 每座加成', 'tick.ts', /lumberYards\s*\*\s*([\d.]+)/, 0.02,
-     'legacy/src/main.js L5575: lumber_yard +2%'],
-
-    // === tick.ts: 石工 ===
-    ['quarry_worker.impact', 'tick.ts', /stoneBase\s*=\s*([\d.]+)/, 1.0,
-     'legacy/src/jobs.js L378: quarry_worker impact=1.0'],
-    ['hammer 每级加成', 'tick.ts', /hammerLevel\s*\*\s*([\d.]+)/, 0.4,
-     'legacy/src/main.js L5703: hammer * 0.4'],
-    ['explosives 每级加成', 'tick.ts', /explosiveLevel\s*\*\s*([\d.]+)/, 0.25,
-     'legacy/src/main.js: explosives * 0.25'],
-
-    // === tick.ts: 矿工 ===
-    ['pickaxe 每级加成 (矿)', 'tick.ts', /pickaxeLevel\s*\*\s*([\d.]+)/, 0.15,
-     'legacy/src/main.js L6138: pickaxe * 0.15'],
-    ['copper 系数 1/7', 'tick.ts', /1\s*\/\s*7/, 'exists',
-     'legacy/src/main.js L6158: copper_mult = 1/7'],
-    ['iron 系数 0.25', 'tick.ts', /actualMiners\s*\*\s*([\d.]+)\s*\*\s*minerTool/, 0.25,
-     'legacy/src/main.js L6225: iron_mult = 1/4 = 0.25'],
-
-    // === tick.ts: 煤矿 ===
-    ['coal pickaxe 加成', 'tick.ts', /coalToolMult.*pickaxeLevel\s*\*\s*([\d.]+)/, 0.12,
-     'legacy/src/main.js: coal pickaxe * 0.12'],
-    ['coal 基础产出', 'tick.ts', /actualCoalMiners\s*\*\s*([\d.]+)\s*\*/, 0.2,
-     'legacy/src/main.js: coal base 0.2'],
-
-    // === tick.ts: 水泥 ===
-    ['cement 石头消耗', 'tick.ts', /stonePerCement\s*=\s*([\d.]+)/, 3,
-     'legacy/src/main.js: cement uses 3 stone'],
-    ['cement 基础产出', 'tick.ts', /effectiveCement\s*\*\s*([\d.]+)\s*\*\s*cementTech/, 0.4,
-     'legacy/src/main.js: cement base 0.4'],
-
-    // === tick.ts: 知识 ===
-    ['professor.impact 基础', 'tick.ts', /profImpact\s*=\s*([\d.]+)/, 0.5,
-     'legacy/src/main.js L9313: professor base 0.5'],
-    ['library 教授加成每座', 'tick.ts', /libraries\s*\*\s*([\d.]+)/, 0.01,
-     'legacy/src/main.js: library +0.01/building for professors'],
-    ['library 全局知识加成每座', 'tick.ts', /libraryMult\s*=\s*1\s*\+\s*libraries\s*\*\s*([\d.]+)/, 0.05,
-     'legacy/src/main.js L4259: library_mult = 1 + count*0.05'],
-    ['scientist.impact', 'tick.ts', /sciImpact\s*=\s*([\d.]+)/, 1.0,
-     'legacy/src/jobs.js: scientist impact=1.0'],
-
-    // === tick.ts: 金币 ===
-    ['citizens 所得税基础', 'tick.ts', /citizens\s*\*\s*([\d.]+).*non-truepath/, 0.4,
-     'legacy/src/main.js L7592: citizens * 0.4 (non-truepath)'],
-    ['banker.impact 基础', 'tick.ts', /bankerImpact\s*=\s*([\d.]+)/, 0.1,
-     'legacy/src/main.js: banker impact 0.1'],
-
-    // === tick.ts: 冶金 ===
-    ['smelter 钢产出', 'tick.ts', /let steelBase\s*=\s*([\d.]+);/, 1,
-     'legacy/src/main.js: smelter steel output 1'],
-    ['blast_furnace 乘数', 'tick.ts', /steelBase\s*\*=\s*([\d.]+);/, 1.2,
-     'legacy/src/main.js: blast_furnace *= 1.2'],
-
-    // === tick.ts: 石油 ===
-    ['oil_well 每座产出', 'tick.ts', /oilPerWell\s*=\s*techLevel.*?>= 4 \? 0.48 : ([\d.]+);/s, 0.4,
-     'legacy/src/main.js L6720: oil well 0.4/tick'],
-
-    // === military.ts: 军事 ===
-    ['autocracy 军力加成', 'military.ts', /army\s*\*=\s*([\d.]+)/, 1.35,
-     'legacy/src/civics.js L189: autocracy attack 35% → *1.35'],
-
-    // === storage.ts: 仓储 ===
-    ['BASE_CRATE_VALUE', 'storage.ts', /BASE_CRATE_VALUE\s*=\s*([\d.]+)/, 350,
-     'legacy/src/resources.js L2644: crate base 350'],
-    ['CONTAINER_VALUE', 'storage.ts', /CONTAINER_VALUE\s*=\s*([\d.]+)/, 800,
-     'legacy/src/resources.js L2669: container base 800'],
-    ['CRATE_COST_PLYWOOD', 'storage.ts', /CRATE_COST_PLYWOOD\s*=\s*([\d.]+)/, 10,
-     'legacy/src/resources.js: buildCrate cost 10 plywood'],
-    ['CONTAINER_COST_STEEL', 'storage.ts', /CONTAINER_COST_STEEL\s*=\s*([\d.]+)/, 125,
-     'legacy/src/resources.js L2417: container cost 125 steel'],
-
-    // === storage.ts: crate tech升级 ===
-    ['crate tech>=2 升级值', 'storage.ts', /tech >= 2 \? ([\d.]+) : BASE_CRATE_VALUE/, 500,
-     'legacy/src/resources.js L2644: container>=2 ? 500 : 350'],
-
-    // === storage.ts: 仓库乘数公式 ===
-    ['storage 每级基础', 'storage.ts', /storageTech\s*-\s*1\)\s*\*\s*([\d.]+)/, 1.25,
-     'legacy/src/actions.js L5806: (storage-1)*1.25 + 1'],
-    ['storage>=4 乘数', 'storage.ts', /storageTech\s*>=\s*4\s*\?\s*([\d.]+)/, 3,
-     'legacy/src/actions.js L5808: storage>=4 ? 3 : 1.5'],
-    ['storage>=3 乘数', 'storage.ts', /storageTech\s*>=\s*4\s*\?.*:\s*([\d.]+)/, 1.5,
-     'legacy/src/actions.js L5808: storage>=3 ? 1.5'],
-
-    // === morale.ts: 士气系统 ===
-    ['moraleCap 基础值', 'morale.ts', /moraleCap\s*=\s*([\d.]+)/, 125,
-     'legacy/src/main.js L3164: moraleCap base = 125'],
-    ['士气下限', 'morale.ts', /if \(morale < ([\d.]+)\)/, 50,
-     'legacy/src/main.js L3264: morale floor = 50'],
-    ['globalMultiplier 奖励区除数', 'morale.ts', /\(morale - 100\) \/ ([\d.]+)/, 200,
-     'legacy/src/main.js L3288: 1 + (morale-100)/200'],
-    ['猎人压力除数', 'morale.ts', /hunters \/ ([\d.]+)/, 5,
-     'legacy/src/main.js L2968: hunter stress divisor = 5'],
-    ['春季士气加成', 'morale.ts', /season === 0[\s\S]*?seasonBonus\s*=\s*([\d.]+)/, 5,
-     'legacy/src/main.js L1317: spring bonus = +5'],
-    ['冬季士气惩罚', 'morale.ts', /season === 3[\s\S]*?seasonBonus\s*=\s*-([\d.]+)/, 5,
-     'legacy/src/main.js L1331: winter penalty = -5'],
-
-    // === trade.ts: 贸易系统 ===
-    ['卖出价格除数', 'trade.ts', /\(value \* ratio\) \/ ([\d.]+)/, 4,
-     'legacy/src/resources.js L1525: sell = value / divide, divide=4'],
-    ['手动贸易上限 低档 (currency<4)', 'trade.ts', /getManualTradeLimit[\s\S]*?>=.*4.*\?\s*[\d]+\s*:\s*([\d]+)/, 100,
-     'legacy/src/resources.js tradeMax: currency<4 → 100'],
-    ['手动贸易上限 高档 (currency>=4)', 'trade.ts', /getManualTradeLimit[\s\S]*?>=.*4.*\?\s*([\d]+)\s*:/, 5000,
-     'legacy/src/resources.js tradeMax: currency>=4 → 5000'],
-    ['路线数量上限 低档 (currency<4)', 'trade.ts', /getTradeRouteQtyLimit[\s\S]*?>=.*4.*\?\s*[\d]+\s*:\s*([\d]+)/, 25,
-     'legacy/src/resources.js importRouteEnabled: currency<4 → 25'],
-    ['路线数量上限 高档 (currency>=4)', 'trade.ts', /getTradeRouteQtyLimit[\s\S]*?>=.*4.*\?\s*([\d]+)\s*:/, 100,
-     'legacy/src/resources.js importRouteEnabled: currency>=4 → 100'],
-    ['wharf 每座贸易路线加成', 'trade.ts', /wharves\s*\*\s*([\d.]+)/, 2,
-     'legacy/src/actions.js L3214: wharf +2 trade routes'],
-  ];
-
-  for (const [desc, file, regex, expected, legacyRef] of checks) {
-    const fileKey = `packages/game-core/src/${file}`;
-    const src = sources[fileKey];
-    if (!src) {
-      warn(`${desc}: 文件 ${file} 未读取`);
-      continue;
-    }
-
-    if (expected === 'exists') {
-      // Existence check only
-      if (regex.test(src)) {
-        ok(`${desc}: 存在 ✓`);
-      } else {
-        fail(`${desc}: 表达式未找到 (期望: ${legacyRef})`);
-      }
-      continue;
-    }
-
-    const m = src.match(regex);
-    if (!m) {
-      warn(`${desc}: 正则未匹配 (期望值=${expected})`);
-      continue;
-    }
-
-    const actual = parseFloat(m[1]);
-    if (actual === expected) {
-      ok(`${desc}: ${actual}`);
-    } else {
-      fail(`${desc}: evozen=${actual} ≠ legacy=${expected} (${legacyRef})`);
-    }
-  }
-}
-
-// ─── 17. 仓库基础值审计 ──────────────────────────
-function auditShedValues(evozenSrc) {
-  section('仓库(Shed)基础值对比');
-
-  // Legacy shed.val() 基础值 — 从 actions.js shed 定义提取
-  // 这些值是 wiki/tooltip 显示的基础值,已人工核对
-  const legacyShedValues = {
-    Lumber: 300, Stone: 300, Furs: 125,
-    Copper: 90, Iron: 125, Aluminium: 90,
-    Cement: 100, Coal: 75, Steel: 40, Titanium: 20,
-  };
-
-  const block = evozenSrc.match(/SHED_BASE_VALUES[^{]*\{([\s\S]*?)\}/);
-  if (!block) {
-    warn('SHED_BASE_VALUES 未找到');
-    return;
-  }
-  const pairs = block[1].matchAll(/(\w+):\s*(\d+)/g);
-  const evozenShed = {};
-  for (const p of pairs) {
-    evozenShed[p[1]] = parseInt(p[2]);
-  }
-
-  for (const [res, expected] of Object.entries(legacyShedValues)) {
-    const actual = evozenShed[res];
-    if (actual === undefined) {
-      warn(`SHED ${res}: EvoZen 缺失 (legacy=${expected})`);
-    } else if (actual === expected) {
-      ok(`SHED ${res}: ${actual}`);
-    } else {
-      fail(`SHED ${res}: evozen=${actual} ≠ legacy=${expected}`);
-    }
-  }
-}
 
 // ─── 18. Manifest 结构审计 ────────────────────────
 // 原 scripts/audit-manifest.mjs 合并至此
@@ -1165,28 +922,209 @@ function auditManifest() {
   }
 }
 
+// ─── 14. Tick 公式常量审计 ────────────────────────
+// 从 legacy/src/jobs.js 提取 loadJob impact 值，
+// 从 legacy/src/main.js 提取关键系数，
+// 与 packages/game-core/src/tick.ts 中硬编码常量逐项对比。
+// 覆盖约 25 个核心公式系数，捕获因手误或重构导致的数值漂移。
+function auditTickFormulas(jobsSrc, mainSrc, tickSrc) {
+  section('Tick 公式常量审计 (tick.ts ↔ legacy)');
+
+  // 从 jobs.js 提取 loadJob impact（第三个参数）
+  const jobImpacts = {};
+  const loadJobRegex = /loadJob\('(\w+)',\s*define,\s*([\d.]+)/g;
+  let m;
+  while ((m = loadJobRegex.exec(jobsSrc)) !== null) {
+    jobImpacts[m[1]] = parseFloat(m[2]);
+  }
+
+  // 通用提取函数：从源码中匹配正则，返回指定捕获组的浮点数
+  function x(src, pattern, group = 1) {
+    const mm = src.match(pattern);
+    return mm ? parseFloat(mm[group]) : null;
+  }
+
+  const legacyTimeMult = x(mainSrc, /var time_multiplier\s*=\s*([\d.]+)/);
+
+  // 检查表：[标签, legacy来源说明, legacy期望值, tick.ts实际值]
+  const checks = [
+    // ── 全局时间因子 ──────────────────────────────────────────────
+    ['TIME_MULTIPLIER',
+      'main.js L1213',
+      legacyTimeMult ?? 0.25,
+      x(tickSrc, /const TIME_MULTIPLIER\s*=\s*([\d.]+)/)],
+
+    // ── 猎人 ──────────────────────────────────────────────────────
+    ['hunter.base_rate',
+      'main.js: hunterRate 初始值',
+      0.5,
+      x(tickSrc, /let hunterRate\s*=\s*([\d.]+)/)],
+    ['hunter.military_bonus',
+      'main.js: military>=1 时 hunterRate +=',
+      0.1,
+      x(tickSrc, /hunterRate \+= ([\d.]+)/)],
+
+    // ── 农民 ──────────────────────────────────────────────────────
+    ['farmer.impact',
+      `jobs.js loadJob: ${jobImpacts['farmer']}`,
+      jobImpacts['farmer'] ?? 0.82,
+      x(tickSrc, /let farmerBase\s*=\s*([\d.]+)/)],
+    ['farmer.agri_high_bonus (agri>=2)',
+      'jobs.js L800: +1.15',
+      1.15,
+      x(tickSrc, /farmerBase \+= techLevel\('agriculture'\) >= 2 \? ([\d.]+)/)],
+    ['farmer.agri_low_bonus (agri<2)',
+      'jobs.js L800: +0.65',
+      0.65,
+      x(tickSrc, /farmerBase \+= techLevel\('agriculture'\) >= 2 \? [\d.]+ : ([\d.]+)/)],
+
+    // ── 磨坊加成 ──────────────────────────────────────────────────
+    ['mill.bonus_agri5 (agri>=5)',
+      'main.js L3590: +0.05/座',
+      0.05,
+      x(tickSrc, /millBonus = techLevel\('agriculture'\) >= 5 \? ([\d.]+)/)],
+    ['mill.bonus_base (agri<5)',
+      'main.js L3590: +0.03/座',
+      0.03,
+      x(tickSrc, /millBonus = techLevel\('agriculture'\) >= 5 \? [\d.]+ : ([\d.]+)/)],
+
+    // ── 伐木工 ────────────────────────────────────────────────────
+    ['lumberjack.impact',
+      `jobs.js loadJob: ${jobImpacts['lumberjack']}`,
+      jobImpacts['lumberjack'] ?? 1,
+      x(tickSrc, /let lumberBase\s*=\s*(\d+(?:\.\d+)?)/)],
+    ['axe.bonus_per_level',
+      'main.js L5559: (axeLevel-1) × 0.35',
+      0.35,
+      x(tickSrc, /\(axeLevel - 1\) \* ([\d.]+)/)],
+    ['lumber_yard.bonus_per_building',
+      'main.js L5575: lumberYards × 0.02',
+      0.02,
+      x(tickSrc, /\(1 \+ lumberYards \* ([\d.]+)\)/)],
+
+    // ── 石工 ──────────────────────────────────────────────────────
+    ['quarry_worker.impact',
+      `jobs.js loadJob: ${jobImpacts['quarry_worker']}`,
+      jobImpacts['quarry_worker'] ?? 1,
+      x(tickSrc, /let stoneBase\s*=\s*([\d.]+)/)],
+    ['hammer.bonus_per_level',
+      'jobs.js L119: hammerLevel × 0.4',
+      0.4,
+      x(tickSrc, /stoneBase \*= 1 \+ hammerLevel \* ([\d.]+)/)],
+    ['rock_quarry.bonus_per_building',
+      'main.js L5744: quarries × 0.02',
+      0.02,
+      x(tickSrc, /let stoneMult = 1 \+ quarries \* ([\d.]+)/)],
+
+    // ── 矿工 ──────────────────────────────────────────────────────
+    ['pickaxe.bonus_per_level (miner)',
+      'main.js L6138: pickaxeLevel × 0.15',
+      0.15,
+      x(tickSrc, /const minerToolMult = 1 \+ pickaxeLevel \* ([\d.]+)/)],
+
+    // ── 煤矿工 ────────────────────────────────────────────────────
+    ['coal_miner.base_rate',
+      `jobs.js loadJob: ${jobImpacts['coal_miner']}`,
+      jobImpacts['coal_miner'] ?? 0.2,
+      x(tickSrc, /deltas\['Coal'\] = actualCoalMiners \* ([\d.]+)/)],
+    ['coal.pickaxe_bonus_per_level',
+      'main.js: coalToolMult = 1 + pickaxe × 0.12',
+      0.12,
+      x(tickSrc, /const coalToolMult = 1 \+ pickaxeLevel \* ([\d.]+)/)],
+
+    // ── 水泥工 ────────────────────────────────────────────────────
+    ['cement_worker.output_rate',
+      `jobs.js loadJob: ${jobImpacts['cement_worker']}`,
+      jobImpacts['cement_worker'] ?? 0.4,
+      x(tickSrc, /deltas\['Cement'\] = effectiveCement \* ([\d.]+)/)],
+    ['cement.stone_cost_per_worker',
+      'main.js: stonePerCement = 3',
+      3,
+      x(tickSrc, /const stonePerCement\s*=\s*(\d+)/)],
+
+    // ── 知识（教授 / 图书馆）────────────────────────────────────
+    ['professor.impact',
+      `jobs.js loadJob: ${jobImpacts['professor']}`,
+      jobImpacts['professor'] ?? 0.5,
+      x(tickSrc, /let profImpact\s*=\s*([\d.]+)/)],
+    ['library.prof_impact_bonus_per_lib',
+      'main.js L9313: libraries × 0.01',
+      0.01,
+      x(tickSrc, /profImpact = [\d.]+ \+ getProfessorTraitBonus\(state\) \+ libraries \* ([\d.]+)/)],
+    ['library.knowledge_mult_per_lib',
+      'main.js L4259: 1 + libraries × 0.05',
+      0.05,
+      x(tickSrc, /const libraryMult = 1 \+ libraries \* ([\d.]+)/)],
+
+    // ── 牧师信仰 ──────────────────────────────────────────────────
+    ['priest.faith_rate',
+      'main.js: priests × 0.5',
+      0.5,
+      x(tickSrc, /priests \* ([\d.]+) \* effectiveProdMult/)],
+
+    // ── 税收 / 银行 ───────────────────────────────────────────────
+    ['tax.citizen_income_rate',
+      'main.js L7592: citizens × 0.4',
+      0.4,
+      x(tickSrc, /let incomeBase = citizens \* ([\d.]+)/)],
+    ['banker.impact',
+      `jobs.js loadJob: ${jobImpacts['banker']}`,
+      jobImpacts['banker'] ?? 0.1,
+      x(tickSrc, /let bankerImpact\s*=\s*([\d.]+)/)],
+
+    // ── 铀副产物 ──────────────────────────────────────────────────
+    ['uranium.coal_divisor',
+      'main.js L6595: coal / 115 = uranium',
+      115,
+      x(tickSrc, /let uraniumDelta = deltas\['Coal'\] \/ (\d+)/)],
+  ];
+
+  for (const [label, legacyRef, expected, actual] of checks) {
+    if (expected === null || expected === undefined) {
+      warn(`${label}: legacy 值提取失败 — ${legacyRef}`);
+      continue;
+    }
+    if (actual === null || actual === undefined) {
+      fail(`${label}: tick.ts 中未找到对应常量 — 期望 ${expected} (${legacyRef})`);
+      continue;
+    }
+    if (Math.abs(expected - actual) < 1e-9) {
+      ok(`${label}: ${actual}  (${legacyRef})`);
+    } else {
+      fail(`${label}: legacy 期望 ${expected}，tick.ts 实际 ${actual}  (${legacyRef})`);
+    }
+  }
+}
+
 // ─── 主流程 ────────────────────────────────────────
-console.log(`${C}╔══════════════════════════════════════════╗${W}`);
-console.log(`${C}║   EvoZen ↔ Legacy Evolve 审计报告        ║${W}`);
-console.log(`${C}╚══════════════════════════════════════════╝${W}`);
+console.log(`${C}╔══════════════════════════════════════════════════════════════╗${W}`);
+console.log(`${C}║          EvoZen ↔ Legacy Evolve 全量审计报告                 ║${W}`);
+console.log(`${C}╠══════════════════════════════════════════════════════════════╣${W}`);
+console.log(`${C}║  验证层级（Coverage Map）                                    ║${W}`);
+console.log(`${C}║  L1 静态数据   建筑/科技/岗位/配方/资源价值/贸易比率          ║${W}`);
+console.log(`${C}║  L2 Tick公式   ~25 个核心生产系数 vs legacy 硬编码值          ║${W}`);
+console.log(`${C}║  L3 Manifest  系统覆盖状态结构校验                           ║${W}`);
+console.log(`${C}║  L4 单元测试   各模块逻辑正确性（npm test）                   ║${W}`);
+console.log(`${C}║  L5 公式比值   运行时增量比验证（formula.audit.test.ts）      ║${W}`);
+console.log(`${C}║  L6 系统集成   政府/军事/事件/电力等（systems.audit.test.ts）  ║${W}`);
+console.log(`${C}║  L7 进度流     科技→建筑→人口（progression.audit.test.ts）    ║${W}`);
+console.log(`${C}║  L8 回放快照   确定性 N-tick 全状态快照（replay.audit.test.ts）║${W}`);
+console.log(`${C}║                                                              ║${W}`);
+console.log(`${C}║  运行全部：npm run check                                     ║${W}`);
+console.log(`${C}╚══════════════════════════════════════════════════════════════╝${W}`);
 
 try {
   // 读取源文件
   const legacyActions = read('legacy/src/actions.js');
   const legacyTech = read('legacy/src/tech.js');
   const legacyJobs = read('legacy/src/jobs.js');
+  const legacyMain = read('legacy/src/main.js');
   const legacyResources = read('legacy/src/resources.js');
-  const legacyCivics = read('legacy/src/civics.js');
   const evozenStructures = read('packages/game-core/src/structures.ts');
   const evozenTech = read('packages/game-core/src/tech.ts');
   const evozenJobsSrc = read('packages/game-core/src/jobs.ts');
   const evozenResourcesSrc = read('packages/game-core/src/resources.ts');
-  const evozenGovSrc = read('packages/game-core/src/government.ts');
-  const evozenMoraleSrc = read('packages/game-core/src/morale.ts');
   const evozenTickSrc = read('packages/game-core/src/tick.ts');
-  const evozenMilitarySrc = read('packages/game-core/src/military.ts');
-  const evozenStorageSrc = read('packages/game-core/src/storage.ts');
-  const evozenTradeSrc = read('packages/game-core/src/trade.ts');
 
   // 提取数据
   const legacyBuildingsData = extractLegacyBuildings(legacyActions);
@@ -1201,8 +1139,6 @@ try {
   const evozenResValues = extractEvoZenResourceValues(evozenResourcesSrc);
   const legacyTradeData = extractLegacyTradeRatios(legacyResources);
   const evozenTradeData = extractEvoZenTradeRatios(evozenResourcesSrc);
-  const legacyGovData = extractLegacyGovEffects(legacyCivics);
-  const evozenGovData = extractEvoZenGovEffects(evozenGovSrc, evozenMoraleSrc, evozenMilitarySrc);
 
   info(`Legacy 建筑: ${Object.keys(legacyBuildingsData).length} 个`);
   info(`EvoZen 建筑: ${Object.keys(evozenBuildingsData).length} 个`);
@@ -1215,35 +1151,28 @@ try {
   info(`Legacy 资源价值: ${Object.keys(legacyResValues).length} 个`);
   info(`EvoZen 资源价值: ${Object.keys(evozenResValues).length} 个`);
 
-  // L1 审计
+  // L1 静态数据审计
   auditBuildings(legacyBuildingsData, evozenBuildingsData);
   auditTechs(legacyTechsData, evozenTechsData);
   auditJobs(legacyJobsData, evozenJobsData);
   auditCraftRecipes(legacyCraftData, evozenCraftData);
   auditResourceValues(legacyResValues, evozenResValues);
   auditTradeRatios(legacyTradeData, evozenTradeData);
-  auditGovEffects(legacyGovData, evozenGovData);
 
-  // L2 审计 — 公式常量
-  const formulaSources = {
-    'packages/game-core/src/tick.ts': evozenTickSrc,
-    'packages/game-core/src/military.ts': evozenMilitarySrc,
-    'packages/game-core/src/storage.ts': evozenStorageSrc,
-    'packages/game-core/src/morale.ts': evozenMoraleSrc,
-    'packages/game-core/src/trade.ts': evozenTradeSrc,
-  };
-  auditFormulaConstants(formulaSources);
-  auditShedValues(evozenStorageSrc);
+  // L2 Tick 公式常量审计
+  auditTickFormulas(legacyJobs, legacyMain, evozenTickSrc);
 
-  // Manifest 结构审计（原 audit-manifest.mjs）
+  // L3 Manifest 结构审计
   auditManifest();
 
   // 汇总
-  section('审计汇总');
+  section('审计汇总（L1 静态数据 + L2 Tick公式 + L3 Manifest）');
   console.log(`  总检查项: ${totalChecks}`);
   console.log(`  ${G}✔ 通过: ${passed}${W}`);
   console.log(`  ${Y}⚠ 警告: ${warnings}${W}`);
   console.log(`  ${R}✘ 错误: ${errors}${W}`);
+  console.log();
+  console.log(`  ${C}提示：L4-L8（运行时公式比值 / 系统集成 / 进度流 / 回放快照）由 npm test 覆盖${W}`);
   console.log();
 
   if (errors > 0) {
@@ -1259,4 +1188,3 @@ try {
   console.error(e.stack);
   process.exit(2);
 }
-

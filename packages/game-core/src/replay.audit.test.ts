@@ -106,6 +106,142 @@ function expectPopulationConsistency(state: GameState, species: string): void {
 }
 
 describe('deterministic replay audit', () => {
+  it('civilized storage and power slice remains stable across a day rollover', () => {
+    const state = createNewGame();
+    bootstrapCivilization(state, 'human', 8, 12);
+
+    state.resource['Food'].amount = 260;
+    state.resource['Lumber'].amount = 280;
+    state.resource['Stone'].amount = 180;
+    state.resource['Copper'].amount = 40;
+    state.resource['Iron'].amount = 20;
+    state.resource['Money'].amount = 180;
+    state.resource['Oil'].amount = 60;
+    state.resource['Crates'].amount = 5;
+    state.resource['Containers'].amount = 4;
+    state.resource['Lumber'].crates = 1;
+    state.resource['Iron'].containers = 1;
+
+    state.tech['primitive'] = 3;
+    state.tech['agriculture'] = 4;
+    state.tech['hoe'] = 1;
+    state.tech['axe'] = 2;
+    state.tech['saw'] = 2;
+    state.tech['mining'] = 3;
+    state.tech['pickaxe'] = 2;
+    state.tech['currency'] = 1;
+    state.tech['storage'] = 3;
+    state.tech['container'] = 3;
+    state.tech['steel_container'] = 2;
+    state.tech['theatre'] = 2;
+
+    state.city['basic_housing'] = { count: 6 };
+    state.city['cottage'] = { count: 1 };
+    state.city['farm'] = { count: 2 };
+    state.city['mill'] = { count: 1 };
+    state.city['lumber_yard'] = { count: 1 };
+    state.city['sawmill'] = { count: 1, on: 1 };
+    state.city['mine'] = { count: 1, on: 1 };
+    state.city['oil_power'] = { count: 1, on: 1 };
+    state.city['shed'] = { count: 2 };
+    state.city['storage_yard'] = { count: 1 };
+    state.city['warehouse'] = { count: 1 };
+    state.city['wharf'] = { count: 1 };
+    state.city['amphitheatre'] = { count: 1 };
+
+    state.city.calendar.weather = 2;
+    state.city.calendar.temp = 1;
+    state.city.calendar.wind = 0;
+    state.city.calendar.season = 0;
+    state.city.calendar.year = 1;
+    state.city.calendar.dayTick = 0;
+
+    (state.civic['unemployed'] as { workers: number }).workers = 1;
+    (state.civic['hunter'] as { workers: number }).workers = 1;
+    (state.civic['farmer'] as { workers: number }).workers = 2;
+    (state.civic['lumberjack'] as { workers: number }).workers = 2;
+    (state.civic['miner'] as { workers: number }).workers = 1;
+    (state.civic['entertainer'] as { workers: number }).workers = 1;
+
+    const result = simulateTicks(state, 24, { random: createDeterministicRandom(1) });
+    expectPopulationConsistency(result.state, 'human');
+
+    expect({
+      calendar: {
+        day: result.state.city.calendar.day,
+        year: result.state.city.calendar.year,
+        season: result.state.city.calendar.season,
+        weather: result.state.city.calendar.weather,
+        temp: result.state.city.calendar.temp,
+        wind: result.state.city.calendar.wind,
+        dayTick: result.state.city.calendar.dayTick,
+      },
+      morale: {
+        current: round(result.state.city.morale?.current),
+        cap: round(result.state.city.morale?.cap),
+        stress: round(result.state.city.morale?.stress),
+        entertain: round(result.state.city.morale?.entertain),
+        season: round(result.state.city.morale?.season),
+        weather: round(result.state.city.morale?.weather),
+        unemployed: round(result.state.city.morale?.unemployed),
+      },
+      power: {
+        generated: round(result.state.city.power?.generated),
+        consumed: round(result.state.city.power?.consumed),
+        surplus: round(result.state.city.power?.surplus),
+      },
+      resources: {
+        human: round(result.state.resource['human']?.amount),
+        Food: round(result.state.resource['Food']?.amount),
+        Lumber: round(result.state.resource['Lumber']?.amount),
+        Stone: round(result.state.resource['Stone']?.amount),
+        Copper: round(result.state.resource['Copper']?.amount),
+        Iron: round(result.state.resource['Iron']?.amount),
+        Money: round(result.state.resource['Money']?.amount),
+        Oil: round(result.state.resource['Oil']?.amount),
+        Crates: round(result.state.resource['Crates']?.amount),
+        Containers: round(result.state.resource['Containers']?.amount),
+      },
+      caps: {
+        Lumber: result.state.resource['Lumber']?.max,
+        Iron: result.state.resource['Iron']?.max,
+        Crates: result.state.resource['Crates']?.max,
+        Containers: result.state.resource['Containers']?.max,
+      },
+      jobs: {
+        unemployed: (result.state.civic['unemployed'] as { workers?: number } | undefined)?.workers ?? 0,
+        hunter: (result.state.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0,
+        farmer: (result.state.civic['farmer'] as { workers?: number } | undefined)?.workers ?? 0,
+        lumberjack: (result.state.civic['lumberjack'] as { workers?: number } | undefined)?.workers ?? 0,
+        miner: (result.state.civic['miner'] as { workers?: number } | undefined)?.workers ?? 0,
+        entertainer: (result.state.civic['entertainer'] as { workers?: number } | undefined)?.workers ?? 0,
+      },
+      stats: {
+        days: result.state.stats.days,
+        died: result.state.stats.died,
+      },
+    }).toEqual({
+      calendar: { day: 1, year: 1, season: 0, weather: 0, temp: 1, wind: 1, dayTick: 4 },
+      morale: { current: 99.7, cap: 101, stress: -1.4, entertain: 2, season: 5, weather: -5, unemployed: -1 },
+      power: { generated: 6, consumed: 2, surplus: 4 },
+      resources: {
+        human: 8,
+        Food: 256.3117,
+        Lumber: 298.6263,
+        Stone: 180,
+        Copper: 41.1742,
+        Iron: 22.0548,
+        Money: 196.8602,
+        Oil: 56.1,
+        Crates: 5,
+        Containers: 4,
+      },
+      caps: { Lumber: 4150, Iron: 2213, Crates: 29, Containers: 29 },
+      jobs: { unemployed: 1, hunter: 1, farmer: 2, lumberjack: 2, miner: 1, entertainer: 1 },
+      stats: { days: 1, died: 0 },
+    });
+  });
+
   it('economy slice remains stable across 40 ticks', () => {
     const state = createNewGame();
     bootstrapCivilization(state, 'human', 10, 12);

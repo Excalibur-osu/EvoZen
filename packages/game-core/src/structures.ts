@@ -54,6 +54,38 @@ function scaleConditionalCost(
   };
 }
 
+function scaleConditionalHousingCost(
+  base: number,
+  mult: number,
+  predicate: (state: GameState, count: number) => boolean
+): CostFunction {
+  return (state, count) => {
+    if (!predicate(state, count)) return 0;
+    return scaleHousingCost(base, mult)(state, count);
+  };
+}
+
+function scaleAfterCount(base: number, mult: number, minCount: number): CostFunction {
+  return (_state, count) => {
+    if (count < minCount) return 0;
+    return Math.round(base * Math.pow(mult, count));
+  };
+}
+
+function scaleUntilTech(base: number, mult: number, techId: string, untilLevel: number): CostFunction {
+  return (state, count) => {
+    if ((state.tech[techId] ?? 0) >= untilLevel) return 0;
+    return scaleCost(base, mult)(state, count);
+  };
+}
+
+function scaleFromTech(base: number, mult: number, techId: string, fromLevel: number): CostFunction {
+  return (state, count) => {
+    if ((state.tech[techId] ?? 0) < fromLevel) return 0;
+    return scaleCost(base, mult)(state, count);
+  };
+}
+
 // 原版 functions.js costMultiplier():
 // housing_reduction 会让 basic_housing / cottage 的成本蠕变每级 -0.02
 function scaleHousingCost(base: number, mult: number): CostFunction {
@@ -91,11 +123,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'housing',
     reqs: { housing: 1 },
     costs: {
-      Money: (_state, count) => {
-        if (count >= 5) return Math.round(20 * Math.pow(1.17, count));
-        return 0;
-      },
-      Lumber: scaleHousingCost(10, 1.23),
+      Money: scaleAfterCount(20, 1.17, 5),
+      Lumber: scaleConditionalHousingCost(10, 1.23, (state) => !state.race['kindling_kindred'] && !state.race['smoldering']),
+      Stone: scaleConditionalHousingCost(10, 1.23, (state) => Boolean(state.race['kindling_kindred'])),
+      Chrysotile: scaleConditionalHousingCost(10, 1.23, (state) => Boolean(state.race['smoldering'])),
     },
     effect: '市民上限 +1',
   },
@@ -112,7 +143,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Plywood: scaleHousingCost(25, 1.25),
       Brick: scaleHousingCost(20, 1.25),
       Wrought_Iron: scaleHousingCost(15, 1.25),
-      Iron: scaleConditionalCost(5, 1.25, (state) => hasCityTrait(state, 'unstable')),
+      Iron: scaleConditionalHousingCost(5, 1.25, (state) => hasCityTrait(state, 'unstable')),
     },
     effect: '市民上限 +2',
   },
@@ -126,10 +157,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'food',
     reqs: { agriculture: 1 },
     costs: {
-      Money: (_state, count) => {
-        if (count >= 3) return Math.round(50 * Math.pow(1.32, count));
-        return 0;
-      },
+      Money: scaleAfterCount(50, 1.32, 3),
       Lumber: scaleCost(20, 1.36),
       Stone: scaleCost(10, 1.36),
     },
@@ -160,10 +188,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { axe: 1 },
     costs: {
-      Money: (_state, count) => {
-        if (count >= 5) return Math.round(5 * Math.pow(1.85, count));
-        return 0;
-      },
+      Money: scaleAfterCount(5, 1.85, 5),
       Lumber: scaleCost(6, 1.9),
       Stone: scaleCost(2, 1.95),
     },
@@ -177,10 +202,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'resource',
     reqs: { mining: 1 },
     costs: {
-      Money: (_state, count) => {
-        if (count >= 2) return Math.round(20 * Math.pow(1.45, count));
-        return 0;
-      },
+      Money: scaleAfterCount(20, 1.45, 2),
       Lumber: scaleCost(50, 1.36),
       Stone: scaleCost(10, 1.36),
     },
@@ -231,6 +253,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(3000, 1.5),
       Lumber: scaleCost(1800, 1.36),
       Stone: scaleCost(2000, 1.32),
+      Iron: scaleConditionalCost(275, 1.32, (state) => hasCityTrait(state, 'unstable')),
     },
     effect: '解锁水泥工人岗位（每座+2工人位）。',
     powered: true,
@@ -280,26 +303,10 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { storage: 1 },
     costs: {
       Money: scaleCost(75, 1.22),
-      Lumber: (state, count) => {
-        if (state.tech['storage'] && state.tech['storage'] >= 4) return 0;
-        return scaleCost(55, 1.32)(state, count);
-      },
-      Stone: (state, count) => {
-        if (state.tech['storage'] && state.tech['storage'] >= 3) return 0;
-        return scaleCost(45, 1.32)(state, count);
-      },
-      Iron: (state, count) => {
-        if (state.tech['storage'] && state.tech['storage'] >= 4) {
-          return scaleCost(22, 1.32)(state, count);
-        }
-        return 0;
-      },
-      Cement: (state, count) => {
-        if (state.tech['storage'] && state.tech['storage'] >= 3) {
-          return scaleCementCost(18, 1.32)(state, count);
-        }
-        return 0;
-      },
+      Lumber: scaleUntilTech(55, 1.32, 'storage', 4),
+      Stone: scaleUntilTech(45, 1.32, 'storage', 3),
+      Iron: scaleFromTech(22, 1.32, 'storage', 4),
+      Cement: scaleConditionalCost(18, 1.32, (state) => (state.tech['storage'] ?? 0) >= 3),
     },
     effect: '木材/石头等上限增加，提供板条箱位。',
   },
@@ -350,6 +357,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCostMinus(900, 1.5, 500),
       Lumber: scaleCostMinus(500, 1.36, 200),
       Stone: scaleCostMinus(750, 1.36, 350),
+      Crystal: scaleConditionalCost(5, 1.36, (state) => state.race.universe === 'magic'),
       Iron: scaleConditionalCost(25, 1.36, (state, count) => hasCityTrait(state, 'unstable') && count >= 3),
     },
     effect: '知识上限 +500，教授上限 +1。',
@@ -364,6 +372,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { science: 2 },
     costs: {
       Money: scaleCost(45, 1.2),
+      Crystal: scaleConditionalCost(2, 1.2, (state) => state.race.universe === 'magic'),
       Iron: scaleConditionalCost(4, 1.2, (state) => hasCityTrait(state, 'unstable')),
       Furs: scaleCost(22, 1.2),
       Plywood: scaleCost(20, 1.2),
@@ -381,9 +390,12 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(5000, 1.22),
       Knowledge: scaleCost(1000, 1.22),
+      Crystal: scaleConditionalCost(100, 1.22, (state) => state.race.universe === 'magic'),
       Copper: scaleCost(500, 1.22),
+      Iron: scaleConditionalCost(75, 1.22, (state) => hasCityTrait(state, 'unstable')),
       Cement: scaleCementCost(350, 1.22),
       Sheet_Metal: scaleCost(125, 1.2),
+      Nanite: scaleConditionalCost(50, 1.18, (state) => Boolean(state.race['deconstructor'])),
     },
     effect: '科学家上限 +1，知识上限 +1000。',
   },
@@ -414,6 +426,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(240, 1.5),
       Stone: scaleCost(260, 1.46),
+      Iron: scaleConditionalCost(50, 1.4, (state, count) => hasCityTrait(state, 'unstable') && count >= 4),
     },
     effect: '每座兵营 +2 最大士兵（军事科技 ≥5 后 +3）。',
   },
@@ -427,6 +440,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(50000, 1.32),
       Lumber: scaleCost(21500, 1.32),
+      Iron: scaleConditionalCost(300, 1.32, (state) => hasCityTrait(state, 'unstable')),
       Aluminium: scaleCost(12000, 1.32),
       Brick: scaleCost(1400, 1.32),
     },
@@ -679,6 +693,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Money: scaleCost(25000, 1.3),
       Knowledge: scaleCost(5000, 1.3),
       Copper: scaleCost(1250, 1.3),
+      Iron: scaleConditionalCost(160, 1.3, (state) => hasCityTrait(state, 'unstable')),
       Alloy: scaleCost(350, 1.3),
     },
     effect: '每座通电时提供 +3000 知识容量上限。',
@@ -716,6 +731,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(62000, 1.32),
       Lumber: scaleCost(44000, 1.32),
+      Iron: scaleConditionalCost(200, 1.32, (state) => hasCityTrait(state, 'unstable')),
       Cement: scaleCost(3000, 1.32),
       Oil: scaleCost(750, 1.32),
     },
@@ -733,6 +749,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(100000, 1.36),
       Stone: scaleCost(25000, 1.36),
+      Iron: scaleConditionalCost(1000, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Furs: scaleCost(7500, 1.36),
       Plywood: scaleCost(5000, 1.36),
     },
@@ -751,6 +768,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     costs: {
       Money: scaleCost(250000, 1.36),
       Copper: scaleCost(13500, 1.36),
+      Iron: scaleConditionalCost(1750, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Cement: scaleCementCost(10800, 1.36),
       Titanium: scaleCost(7500, 1.36),
     },

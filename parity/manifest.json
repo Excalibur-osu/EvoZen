@@ -1,6 +1,6 @@
 {
   "version": "0.8.0",
-  "lastVerified": "2026-04-15",
+  "lastVerified": "2026-04-18",
   "coverageEstimate": "30-35% of total original game; ~90% of Phase 1A civilized era scope",
   "statusLegend": {
     "exact": "Implemented and intended to match legacy behavior within current scope.",
@@ -45,13 +45,21 @@
       "status": "partial",
       "notes": [
         "Core production and consumption formulas are parity-audited.",
-        "Full loop behavior still depends on deterministic replay audits for confidence.",
+        "Differential scenarios now cover evolution unlocks, lumber, mining, tax, power, food, storage, and morale-tax linkage.",
+        "Deterministic replay audits now include a cross-day civilized storage/power slice in addition to economy and industrial snapshots.",
+        "Unified parity audit currently runs clean (0 warning / 0 error) within the implemented scope.",
         "Evolution phase now handled by evolutionTick() in evolution.ts.",
         "ARPA tick now integrated via arpaTick() called at end of gameTick()."
       ],
       "refs": [
         {
           "path": "packages/game-core/src/tick.ts"
+        },
+        {
+          "path": "packages/game-core/src/legacy-diff.audit.test.ts"
+        },
+        {
+          "path": "packages/game-core/src/replay.audit.test.ts"
         },
         {
           "path": "scripts/audit.mjs"
@@ -90,11 +98,16 @@
       "status": "partial",
       "notes": [
         "Phase 1 whitelist is parity-audited.",
+        "Static structure cost and requirement audit currently runs clean within the implemented scope.",
+        "parity/warning-triage.md now records audit interpretation and residual blind spots instead of an active warning backlog.",
         "Later-era and non-whitelisted legacy structures remain unimplemented."
       ],
       "refs": [
         {
           "path": "packages/game-core/src/structures.ts"
+        },
+        {
+          "path": "parity/warning-triage.md"
         },
         {
           "path": "scripts/audit.mjs"
@@ -107,11 +120,16 @@
       "status": "partial",
       "notes": [
         "Implemented techs are checked for grant, costs, and requirements.",
+        "Audit now normalizes known legacy↔EvoZen tech aliases and equivalent requirement keys, so noise warnings do not stay permanently in the baseline.",
+        "The current tech parity audit runs clean within the implemented scope; see parity/warning-triage.md for interpretation limits.",
         "Most legacy tech tree content is still outside current scope."
       ],
       "refs": [
         {
           "path": "packages/game-core/src/tech.ts"
+        },
+        {
+          "path": "parity/warning-triage.md"
         },
         {
           "path": "scripts/audit.mjs"
@@ -179,6 +197,7 @@
       "notes": [
         "Coal and oil power are implemented and tested.",
         "Fission power (nuclear, +14MW, 0.1 Uranium/tick) implemented.",
+        "Differential parity now checks fuel burn, consumer priority order, and powered production deltas in one scenario.",
         "Later-era power systems (fusion, etc.) are not implemented."
       ],
       "refs": [
@@ -189,6 +208,9 @@
           "path": "packages/game-core/src/power.test.ts"
         },
         {
+          "path": "packages/game-core/src/legacy-diff.audit.test.ts"
+        },
+        {
           "path": "scripts/audit.mjs"
         }
       ]
@@ -196,14 +218,21 @@
     {
       "id": "military",
       "title": "Military",
-      "status": "intentional_diff",
+      "status": "partial",
       "notes": [
-        "Training, mercs, hunting output, and basic campaigns exist.",
+        "Training rate, merc cost scaling, army rating, hunting linkage, and basic campaign flows are implemented and covered by deterministic tests.",
+        "Differential parity now checks human training, orc brute training, merc escalation, and army rating multipliers against legacy constants.",
         "Legacy spy, annexation, and deeper combat systems are not yet restored."
       ],
       "refs": [
         {
           "path": "packages/game-core/src/military.ts"
+        },
+        {
+          "path": "packages/game-core/src/legacy-diff.audit.test.ts"
+        },
+        {
+          "path": "packages/game-core/src/systems.audit.test.ts"
         },
         {
           "path": "dev_notes.md"

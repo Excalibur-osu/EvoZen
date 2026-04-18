@@ -1721,7 +1721,7 @@ export const BASIC_TECHS: TechDefinition[] = [
     era: '早期太空',
     reqs: { space_explore: 2 },
     grant: ['space_explore', 3],
-    costs: { Knowledge: 168000, Steel: 100000, Iridium: 5000, Helium_3: 15000 },
+    costs: { Knowledge: 168000, Steel: 100000, Iridium: 5000, Uranium: 2250, Helium_3: 3500 },
     effect: '推进太空探索到 Lv.3，建立火星航道入口骨架。',
   },
   {

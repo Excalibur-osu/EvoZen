@@ -41,6 +41,7 @@ export function canBuildStructure(state: GameState, structureId: string): boolea
 
   const costs = getBuildCost(state, structureId);
   for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
     if ((state.resource[resId]?.amount ?? 0) < cost) return false;
   }
 
@@ -56,6 +57,8 @@ export function buildStructure(state: GameState, structureId: string): GameState
   const next = cloneState(state);
   const costs = getBuildCost(next, structureId);
   for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
+    if (!next.resource[resId]) return null;
     next.resource[resId].amount -= cost;
   }
 
@@ -143,6 +146,7 @@ export function canResearchTech(state: GameState, techId: string): boolean {
 
   const costs = getResearchCost(state, techId);
   for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
     if ((state.resource[resId]?.amount ?? 0) < cost) return false;
   }
 
@@ -158,6 +162,8 @@ export function researchTech(state: GameState, techId: string): GameState | null
   const next = cloneState(state);
   const costs = getResearchCost(next, techId);
   for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
+    if (!next.resource[resId]) return null;
     next.resource[resId].amount -= cost;
   }
 
