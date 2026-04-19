@@ -34,11 +34,15 @@ import {
   getMinerPlanetMultiplier,
   getFarmPlanetMultiplier,
   magneticVars,
+  permafrostVars,
   rageVars,
 } from './planet-traits';
 import { evolutionTick } from './evolution';
 import { arpaTick } from './arpa';
-import { getSatelliteScientistImpactMultiplier } from './space';
+import {
+  getSatelliteScientistImpactMultiplier,
+  getObservatoryKnowledgeCapBonus,
+} from './space';
 import { resolveSpaceSupport } from './space-support';
 import {
   getCasinoIncomePerActive,
@@ -132,6 +136,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (heliumSupported > 0) {
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + heliumSupported * 0.18;
   }
+  const observatorySupported = spaceSupport.supportOn['observatory'] ?? 0;
 
   // ============================================================
   // 0. 士气 & 全局乘数
@@ -375,6 +380,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 卫星加成——原版 main.js L4197-4199:
   // if (global.space['satellite']) scientist_base *= 1 + (satellite.count * 0.01)
   sciImpact *= getSatelliteScientistImpactMultiplier(state);
+  // cataclysm 分支下，月球观测站还会放大科学家产出。
+  if (state.race['cataclysm'] && observatorySupported > 0) {
+    sciImpact *= 1 + observatorySupported * 0.25;
+  }
   // 神权政体惩罚——原版 main.js L4200-4201:
   // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
   const sciGovMult = getKnowledgeMultiplier(state, 'scientist');
@@ -821,6 +830,26 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 让排队建造完成后的上限、岗位、显示状态在当前 tick 就保持一致
   // ============================================================
   applyDerivedStateInPlace(newState);
+  if (observatorySupported > 0 && newState.resource['Knowledge']) {
+    newState.resource['Knowledge'].max += getObservatoryKnowledgeCapBonus(newState, observatorySupported);
+
+    if (newState.race['cataclysm']) {
+      const professor = newState.civic['professor'] as { max?: number } | undefined;
+      if (professor) {
+        professor.max = (professor.max ?? 0) + observatorySupported;
+      }
+    } else {
+      const universities =
+        (newState.city['university'] as { count?: number } | undefined)?.count ?? 0;
+      if (universities > 0) {
+        let universityBase = (newState.tech['science'] ?? 0) >= 8 ? 700 : 500;
+        if (hasPlanetTrait(newState, 'permafrost')) {
+          universityBase += permafrostVars()[1];
+        }
+        newState.resource['Knowledge'].max += universities * universityBase * observatorySupported * 0.05;
+      }
+    }
+  }
   const activeBiolabs = powerResult.activeConsumers['biolab'] ?? 0;
   if (activeBiolabs > 0 && newState.resource['Knowledge']) {
     newState.resource['Knowledge'].max += activeBiolabs * 3000;
@@ -911,7 +940,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   const arpaDone = arpaTick(newState, TIME_MULTIPLIER);
   for (const projId of arpaDone) {
-    const names: Record<string, string> = { monument: '纪念碑', stock_exchange: '证券交易所' };
+    const names: Record<string, string> = {
+      launch_facility: '发射设施',
+      monument: '纪念碑',
+      stock_exchange: '证券交易所',
+    };
     messages.push({
       text: `🏛️ ARPA 完成：${names[projId] ?? projId}！`,
       type: 'special',

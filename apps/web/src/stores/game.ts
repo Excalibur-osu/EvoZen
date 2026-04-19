@@ -90,6 +90,10 @@ import {
   ARPA_PROJECTS,
   MONUMENT_NAMES,
   type MonumentType,
+  SPACE_ACTIONS,
+  getSpaceActionCost as coreGetSpaceActionCost,
+  canRunSpaceAction as coreCanRunSpaceAction,
+  runSpaceAction as coreRunSpaceAction,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
@@ -755,6 +759,41 @@ export const useGameStore = defineStore('game', () => {
     state.value = coreSetMonumentType(state.value, mType)
   }
 
+  function getSpaceActionCost(actionId: string): Record<string, number> {
+    return coreGetSpaceActionCost(state.value, actionId)
+  }
+
+  function canRunSpaceAction(actionId: string): boolean {
+    return coreCanRunSpaceAction(state.value, actionId)
+  }
+
+  function runSpaceAction(actionId: string) {
+    const result = coreRunSpaceAction(state.value, actionId)
+    if (!result) {
+      addMessage('太空任务条件未满足或资源不足。', 'warning', 'progress')
+      return
+    }
+
+    state.value = result
+
+    if (actionId === 'test_launch') {
+      addMessage('🚀 试验发射成功，轨道工程正式进入建造阶段。', 'special', 'progress')
+      return
+    }
+
+    if (actionId === 'moon_mission') {
+      addMessage('🌕 月球任务完成，月面采矿窗口已建立。', 'special', 'progress')
+      return
+    }
+
+    if (actionId === 'red_mission') {
+      addMessage('🔴 火星任务完成，红色行星前线已纳入太空主线。', 'special', 'progress')
+      return
+    }
+
+    addMessage(`🚀 太空任务 ${actionId} 已完成。`, 'special', 'progress')
+  }
+
   return {
     state,
     messages,
@@ -867,5 +906,10 @@ export const useGameStore = defineStore('game', () => {
     isArpaAvailable: (id: string) => isArpaAvailable(state.value, id),
     ARPA_PROJECTS,
     MONUMENT_NAMES,
+    // 太空动作
+    SPACE_ACTIONS,
+    getSpaceActionCost,
+    canRunSpaceAction,
+    runSpaceAction,
   }
 })

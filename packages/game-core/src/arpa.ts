@@ -13,7 +13,8 @@
  * 分段付款：每次 tick 付 cost/100（即把总费用分 100 份）
  *   legacy L1688: global['resource'][res].amount -= costs[res]() / 100
  *
- * Phase 1A 范围（不依赖太空/魔法的项目）：
+ * 当前范围：
+ *   launch_facility  reqs: {high_tech:7} → grant launch_facility，并建立 space:1
  *   monument        reqs: {monument:1}  → grant monuments，士气上限 +2/座
  *   stock_exchange  reqs: {banking:9}   → grant stock_exchange，银行+10%
  */
@@ -37,6 +38,7 @@ export interface ArpaState {
   /** 纪念碑类型（Obelisk/Statue/Sculpture/Monolith/Pillar） */
   m_type: MonumentType;
   /** 各项目状态 */
+  launch_facility: ArpaProjectState;
   monument: ArpaProjectState;
   stock_exchange: ArpaProjectState;
   [key: string]: ArpaProjectState | MonumentType;
@@ -59,6 +61,8 @@ export interface ArpaProjectDef {
   desc: string;
   /** 解锁所需 tech 等级 */
   reqs: Record<string, number>;
+  /** 额外可用性判断 */
+  condition?: (state: GameState) => boolean;
   /** 完成后在 tech 中设置的字段 */
   grantKey: string;
   /** 效果描述（静态） */
@@ -67,6 +71,8 @@ export interface ArpaProjectDef {
   baseCost: (mType?: MonumentType) => Record<string, number>;
   /** 费用递增系数 */
   mult: number;
+  /** 完成次数上限；未设置表示可重复 */
+  maxRank?: number;
 }
 
 export const MONUMENT_NAMES: Record<MonumentType, string> = {
@@ -89,6 +95,25 @@ function monumentBaseCost(mType: MonumentType): Record<string, number> {
 }
 
 export const ARPA_PROJECTS: ArpaProjectDef[] = [
+  {
+    id: 'launch_facility',
+    name: '发射设施',
+    desc: '建造大型航天发射设施，为后续轨道发射与月面任务建立正式入口。',
+    reqs: { high_tech: 7 },
+    condition: (state) => !state.race['cataclysm'] && !state.race['lone_survivor'] && !state.race['warlord'],
+    grantKey: 'launch_facility',
+    effectText: '完成后建立 space:1，为试验发射与后续太空任务解锁正式入口。',
+    baseCost: () => ({
+      Money: 2_000_000,
+      Knowledge: 500_000,
+      Cement: 150_000,
+      Oil: 20_000,
+      Sheet_Metal: 15_000,
+      Alloy: 25_000,
+    }),
+    mult: 1.1,
+    maxRank: 1,
+  },
   {
     id: 'monument',
     name: '纪念碑',
@@ -130,11 +155,16 @@ function getArpaState(state: GameState): ArpaState {
   if (!state.arpa) {
     state.arpa = {
       m_type: 'Obelisk',
+      launch_facility: { rank: 0, progress: 0, active: false },
       monument: { rank: 0, progress: 0, active: false },
       stock_exchange: { rank: 0, progress: 0, active: false },
     };
   }
-  return state.arpa as ArpaState;
+  const arpa = state.arpa as ArpaState;
+  arpa.launch_facility = arpa.launch_facility ?? { rank: 0, progress: 0, active: false };
+  arpa.monument = arpa.monument ?? { rank: 0, progress: 0, active: false };
+  arpa.stock_exchange = arpa.stock_exchange ?? { rank: 0, progress: 0, active: false };
+  return arpa;
 }
 
 /**
@@ -179,6 +209,11 @@ export function isArpaAvailable(state: GameState, projectId: string): boolean {
   if (!def) return false;
   for (const [tech, lvl] of Object.entries(def.reqs)) {
     if (techLevel(state, tech) < lvl) return false;
+  }
+  if (def.condition && !def.condition(state)) return false;
+  if (def.maxRank !== undefined) {
+    const proj = getArpaState(state)[projectId] as ArpaProjectState | undefined;
+    if ((proj?.rank ?? 0) >= def.maxRank) return false;
   }
   return true;
 }
@@ -268,6 +303,11 @@ export function arpaTick(state: GameState, _timeMul: number): string[] {
       // 授予 tech grant
       const currentGrant = techLevel(state, def.grantKey);
       state.tech[def.grantKey] = currentGrant + 1;
+
+      if (def.id === 'launch_facility') {
+        state.tech['space'] = Math.max(state.tech['space'] ?? 0, 1);
+        state.settings.showSpace = true;
+      }
 
       completed.push(def.id);
     }

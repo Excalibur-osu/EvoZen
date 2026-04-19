@@ -4,7 +4,8 @@
  * 对标 legacy/src/space.js。
  * 当前 sprint 覆盖：
  *   - spc_home: satellite / propellant_depot / gps / nav_beacon
- *   - spc_moon: moon_base / iridium_mine / helium_mine
+ *   - spc_moon: moon_base / iridium_mine / helium_mine / observatory
+ *   - spc_red: spaceport
  *
  * 所有成本与加成系数逐行对标 legacy；EvoZen 当前不执行 fuel_adjust / spatialReasoning
  * （truepath / world_control / 种族修饰尚未进入当前 scope）。
@@ -14,8 +15,8 @@ import type { GameState } from '@evozen/shared-types';
 
 export type SpaceCostFunction = (state: GameState, count: number) => number;
 
-/** 支援池标识。单独抽象方便未来新增 red/belt/alpha 等。 */
-export type SupportPool = 'moon';
+/** 支援池标识。单独抽象方便未来新增 belt/alpha 等。 */
+export type SupportPool = 'moon' | 'red';
 
 export interface SpaceStructureDefinition {
   /** 建筑 ID，与 state.space[id] 对应 */
@@ -200,6 +201,47 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     // 对标 legacy/src/space.js L388: support(){ return -1; }
     support: { pool: 'moon', amount: -1 },
   },
+  {
+    id: 'observatory',
+    region: 'spc_moon',
+    name: '月球观测站',
+    description: '利用月表无大气干扰的条件建立深空观测站，扩张知识容量并补强研究链。',
+    // 对标 legacy/src/space.js L411
+    reqs: { science: 9, luna: 1 },
+    // 对标 legacy/src/space.js L412-416
+    costs: {
+      Money: spaceCost(200000, 1.28),
+      Knowledge: spaceCost(69000, 1.28),
+      Stone: spaceCost(125000, 1.28),
+      Iron: spaceCost(65000, 1.28),
+      Iridium: spaceCost(1250, 1.28),
+    },
+    effect: '每座消耗 1 月球支援；知识上限 +5000，并提高大学知识上限贡献。',
+    // 对标 legacy/src/space.js L429-430
+    support: { pool: 'moon', amount: -1 },
+  },
+  {
+    id: 'spaceport',
+    region: 'spc_red',
+    name: '太空港',
+    description: '为红色行星建立支援枢纽，承担前线物流、停靠和后续殖民扩张入口。',
+    // 对标 legacy/src/space.js L494
+    reqs: { space: 4 },
+    // 对标 legacy/src/space.js L496-499
+    costs: {
+      Money: spaceCost(47500, 1.32),
+      Iridium: spaceCost(1750, 1.32),
+      Mythril: spaceCost(25, 1.32),
+      Titanium: spaceCost(22500, 1.32),
+    },
+    effect: '每座需要 5MW 电力与 1.25 氦-3/tick；每座 on 提供 3 红星支援，并建立 mars:1 入口。',
+    // 对标 legacy/src/space.js L514
+    powerCost: 5,
+    // 对标 legacy/src/space.js L510-513（baseline 3；特殊种族修饰后续补）
+    support: { pool: 'red', amount: 3 },
+    // 对标 legacy/src/space.js L515
+    supportFuel: { resource: 'Helium_3', amountPerTick: 1.25 },
+  },
 ];
 
 // ============================================================
@@ -358,6 +400,27 @@ export function getMoonBaseIridiumCapBonus(state: GameState): number {
  */
 export function getHeliumMineHeliumCapBonus(state: GameState): number {
   return getSpaceCount(state, 'helium_mine') * 100;
+}
+
+export function getObservatoryCount(state: GameState): number {
+  return getSpaceCount(state, 'observatory');
+}
+
+/**
+ * observatory 对知识上限的直接贡献（对标 legacy main.js L9372-9380）：
+ *   gain = support_on['observatory'] * 5000
+ *   cataclysm 时再乘 1 + satellite.count * 0.25
+ */
+export function getObservatoryKnowledgeCapBonus(
+  state: GameState,
+  supportedCount: number,
+): number {
+  if (supportedCount <= 0) return 0;
+  let gain = supportedCount * 5000;
+  if (state.race['cataclysm']) {
+    gain *= 1 + getSatelliteCount(state) * 0.25;
+  }
+  return gain;
 }
 
 // --- 供支援 / 燃料 / tick 查询的公共访问器 ---

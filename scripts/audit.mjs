@@ -826,102 +826,6 @@ function auditTradeRatios(legacy, evozen) {
   }
 }
 
-
-// ─── 18. Manifest 结构审计 ────────────────────────
-// 原 scripts/audit-manifest.mjs 合并至此
-// ──────────────────────────────────────────────────
-function auditManifest() {
-  section('Parity Manifest 结构校验');
-
-  const MANIFEST_PATH = resolve(ROOT, 'parity/manifest.json');
-  const VALID_STATUSES = new Set(['exact', 'partial', 'intentional_diff', 'not_started']);
-
-  let manifest;
-  try {
-    manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
-  } catch (e) {
-    fail(`无法读取 manifest.json: ${e.message}`);
-    return;
-  }
-
-  if (!manifest.version) {
-    fail('manifest.version 缺失');
-  } else {
-    ok(`manifest.version: ${manifest.version}`);
-  }
-
-  if (!Array.isArray(manifest.systems) || manifest.systems.length === 0) {
-    fail('manifest.systems 必须是非空数组');
-  } else {
-    const seenIds = new Set();
-    for (const system of manifest.systems) {
-      if (!system.id || typeof system.id !== 'string') {
-        fail('system 条目缺少有效 id');
-        continue;
-      }
-      if (seenIds.has(system.id)) {
-        fail(`system id 重复: ${system.id}`);
-      }
-      seenIds.add(system.id);
-
-      if (!VALID_STATUSES.has(system.status)) {
-        fail(`system ${system.id} 状态无效: ${system.status}`);
-      } else {
-        ok(`system ${system.id}: status=${system.status}`);
-      }
-
-      // 检查引用路径是否存在
-      for (const ref of system.refs ?? []) {
-        if (!ref.path || typeof ref.path !== 'string') {
-          fail(`system ${system.id} 有无效的 ref.path`);
-          continue;
-        }
-        const fullPath = resolve(ROOT, ref.path);
-        if (!existsSync(fullPath)) {
-          fail(`system ${system.id} 引用了不存在的路径: ${ref.path}`);
-        } else {
-          ok(`system ${system.id} ref: ${ref.path}`);
-        }
-      }
-    }
-  }
-
-  if (!Array.isArray(manifest.intentionalDiffs)) {
-    fail('manifest.intentionalDiffs 必须是数组');
-  } else {
-    const seenIds = new Set();
-    for (const diff of manifest.intentionalDiffs) {
-      if (!diff.id || typeof diff.id !== 'string') {
-        fail('intentionalDiff 条目缺少有效 id');
-        continue;
-      }
-      if (seenIds.has(diff.id)) {
-        fail(`intentionalDiff id 重复: ${diff.id}`);
-      }
-      seenIds.add(diff.id);
-
-      if (diff.status !== 'intentional_diff') {
-        fail(`intentionalDiff ${diff.id} 状态必须为 "intentional_diff"`);
-      } else {
-        ok(`intentionalDiff ${diff.id}: status valid`);
-      }
-
-      for (const ref of diff.refs ?? []) {
-        if (!ref.path || typeof ref.path !== 'string') {
-          fail(`intentionalDiff ${diff.id} 有无效的 ref.path`);
-          continue;
-        }
-        const fullPath = resolve(ROOT, ref.path);
-        if (!existsSync(fullPath)) {
-          fail(`intentionalDiff ${diff.id} 引用了不存在的路径: ${ref.path}`);
-        } else {
-          ok(`intentionalDiff ${diff.id} ref: ${ref.path}`);
-        }
-      }
-    }
-  }
-}
-
 // ─── 14. Tick 公式常量审计 ────────────────────────
 // 从 legacy/src/jobs.js 提取 loadJob impact 值，
 // 从 legacy/src/main.js 提取关键系数，
@@ -1103,12 +1007,11 @@ console.log(`${C}╠════════════════════
 console.log(`${C}║  验证层级（Coverage Map）                                    ║${W}`);
 console.log(`${C}║  L1 静态数据   建筑/科技/岗位/配方/资源价值/贸易比率          ║${W}`);
 console.log(`${C}║  L2 Tick公式   ~25 个核心生产系数 vs legacy 硬编码值          ║${W}`);
-console.log(`${C}║  L3 Manifest  系统覆盖状态结构校验                           ║${W}`);
-console.log(`${C}║  L4 单元测试   各模块逻辑正确性（npm test）                   ║${W}`);
-console.log(`${C}║  L5 公式比值   运行时增量比验证（formula.audit.test.ts）      ║${W}`);
-console.log(`${C}║  L6 系统集成   政府/军事/事件/电力等（systems.audit.test.ts）  ║${W}`);
-console.log(`${C}║  L7 进度流     科技→建筑→人口（progression.audit.test.ts）    ║${W}`);
-console.log(`${C}║  L8 回放快照   确定性 N-tick 全状态快照（replay.audit.test.ts）║${W}`);
+console.log(`${C}║  L3 单元测试   各模块逻辑正确性（npm test）                   ║${W}`);
+console.log(`${C}║  L4 公式比值   运行时增量比验证（formula.audit.test.ts）      ║${W}`);
+console.log(`${C}║  L5 系统集成   政府/军事/事件/电力等（systems.audit.test.ts）  ║${W}`);
+console.log(`${C}║  L6 进度流     科技→建筑→人口（progression.audit.test.ts）    ║${W}`);
+console.log(`${C}║  L7 回放快照   确定性 N-tick 全状态快照（replay.audit.test.ts）║${W}`);
 console.log(`${C}║                                                              ║${W}`);
 console.log(`${C}║  运行全部：npm run check                                     ║${W}`);
 console.log(`${C}╚══════════════════════════════════════════════════════════════╝${W}`);
@@ -1162,11 +1065,8 @@ try {
   // L2 Tick 公式常量审计
   auditTickFormulas(legacyJobs, legacyMain, evozenTickSrc);
 
-  // L3 Manifest 结构审计
-  auditManifest();
-
   // 汇总
-  section('审计汇总（L1 静态数据 + L2 Tick公式 + L3 Manifest）');
+  section('审计汇总（L1 静态数据 + L2 Tick公式）');
   console.log(`  总检查项: ${totalChecks}`);
   console.log(`  ${G}✔ 通过: ${passed}${W}`);
   console.log(`  ${Y}⚠ 警告: ${warnings}${W}`);

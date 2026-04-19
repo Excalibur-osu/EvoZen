@@ -1,6 +1,6 @@
 /**
  * sync-version.mjs
- * 将 root package.json 的版本号同步到 workspace package.json 与 parity/manifest.json。
+ * 将 root package.json 的版本号同步到 workspace package.json。
  * 在 npm version 或 npm run version:sync 时调用。
  */
 
@@ -16,7 +16,6 @@ const targets = [
   resolve(root, 'apps', 'web', 'package.json'),
   resolve(root, 'packages', 'game-core', 'package.json'),
   resolve(root, 'packages', 'shared-types', 'package.json'),
-  resolve(root, 'parity', 'manifest.json'),
 ];
 
 function readJson(path) {

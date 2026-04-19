@@ -38,10 +38,19 @@ export {
   getMoonBaseCount,
   getMoonBaseIridiumCapBonus,
   getHeliumMineHeliumCapBonus,
+  getObservatoryCount,
+  getObservatoryKnowledgeCapBonus,
   type SpaceStructureDefinition,
   type SpaceCostFunction,
   type SupportPool,
 } from './space';
+export {
+  SPACE_ACTIONS,
+  getSpaceActionCost,
+  canRunSpaceAction,
+  runSpaceAction,
+  type SpaceActionDefinition,
+} from './space-actions';
 export {
   resolveSpaceSupport,
   listSpacePowerConsumers,

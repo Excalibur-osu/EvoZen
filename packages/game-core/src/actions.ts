@@ -135,6 +135,10 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
     building.on++;
   }
 
+  if (structureId === 'spaceport') {
+    next.tech['mars'] = Math.max(next.tech['mars'] ?? 0, 1);
+  }
+
   applyDerivedStateInPlace(next);
   return next;
 }
@@ -237,22 +241,20 @@ export function researchTech(state: GameState, techId: string): GameState | null
   // 后续补建筑/产线时无需再迁移旧存档。
   switch (techId) {
     case 'rocketry':
-      // legacy 中 space:2 由 test_launch 给予；当前用火箭学作为最小桥接入口
-      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 2);
+      // 对齐到更接近 legacy 的阶段入口：
+      // rocketry 只建立 space:1，真正推进到 space:2 由 test_launch 完成。
+      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 1);
       break;
     case 'astrophysics':
       ensureSpaceStructure(next, 'propellant_depot');
       break;
     case 'rover':
-      // legacy 中月球前哨阶段会推进到 space:3，并建立 luna 入口
-      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 3);
-      next.tech['luna'] = Math.max(next.tech['luna'] ?? 0, 1);
-      ensureSpaceStructure(next, 'moon_base');
+      // legacy 中真正推进到 space:3 / luna:1 的是 moon_mission。
+      // rover 只解锁任务前置，不再直接抬阶段。
       break;
     case 'probes':
-      // legacy 中月球任务/火星任务会推进到 space:4，并建立 mars 入口
-      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 4);
-      next.tech['mars'] = Math.max(next.tech['mars'] ?? 0, 1);
+      // legacy 中 probes 只建立火星支线入口与 spaceport 槽位，
+      // 真正推进到 space:4 的是 red_mission，mars:1 的来源是首座 spaceport。
       ensureSpaceStructure(next, 'spaceport');
       break;
     case 'observatory':

@@ -1,6 +1,4 @@
 import type { GameState, GameMessage, ForeignGovState } from '@evozen/shared-types';
-import { applyDerivedStateInPlace } from './derived-state';
-import { hasPlanetTrait } from './planet-traits';
 
 export function getSpyCost(state: GameState, govIndex: number): number {
   const gov = getForeignGov(state, govIndex);

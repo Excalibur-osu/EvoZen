@@ -22,6 +22,8 @@ import {
   getMoonBaseCount,
   getMoonBaseIridiumCapBonus,
   getHeliumMineHeliumCapBonus,
+  getObservatoryCount,
+  getObservatoryKnowledgeCapBonus,
 } from './space';
 import { resolveSpaceSupport } from './space-support';
 import { buildSpaceStructure } from './actions';
@@ -36,7 +38,7 @@ function makeState(): GameState {
   // 确保主要资源已 display，避免 createNewGame 默认分支差异
   for (const r of [
     'Money', 'Knowledge', 'Oil', 'Alloy', 'Aluminium', 'Copper', 'Titanium',
-    'Cement', 'Polymer', 'Lumber', 'Steel', 'Iridium',
+    'Cement', 'Polymer', 'Lumber', 'Steel', 'Iridium', 'Stone', 'Iron', 'Helium_3', 'Mythril',
   ]) {
     if (!s.resource[r]) {
       s.resource[r] = {
@@ -58,7 +60,7 @@ function makeState(): GameState {
 }
 
 describe('space.ts — 定义与成本公式', () => {
-  it('SPACE_STRUCTURES 包含 spc_home 四座 + spc_moon 三座', () => {
+  it('SPACE_STRUCTURES 包含 spc_home 四座 + spc_moon 四座 + spc_red 一座', () => {
     expect(SPACE_STRUCTURES.map((d) => d.id)).toEqual([
       'satellite',
       'propellant_depot',
@@ -67,11 +69,15 @@ describe('space.ts — 定义与成本公式', () => {
       'moon_base',
       'iridium_mine',
       'helium_mine',
+      'observatory',
+      'spaceport',
     ]);
     const homeIds = SPACE_STRUCTURES.filter((d) => d.region === 'spc_home').map((d) => d.id);
     const moonIds = SPACE_STRUCTURES.filter((d) => d.region === 'spc_moon').map((d) => d.id);
+    const redIds = SPACE_STRUCTURES.filter((d) => d.region === 'spc_red').map((d) => d.id);
     expect(homeIds).toEqual(['satellite', 'propellant_depot', 'gps', 'nav_beacon']);
-    expect(moonIds).toEqual(['moon_base', 'iridium_mine', 'helium_mine']);
+    expect(moonIds).toEqual(['moon_base', 'iridium_mine', 'helium_mine', 'observatory']);
+    expect(redIds).toEqual(['spaceport']);
   });
 
   it('satellite 首座成本与 legacy space.js L63-68 一致', () => {
@@ -441,6 +447,86 @@ describe('iridium_mine / helium_mine — 定义', () => {
   });
 });
 
+describe('observatory — 定义与效果入口', () => {
+  it('首座成本与 legacy space.js L412-416 一致', () => {
+    const s = makeState();
+    s.tech['science'] = 9;
+    s.tech['luna'] = 1;
+    expect(getSpaceBuildCost(s, 'observatory')).toEqual({
+      Money: 200000,
+      Knowledge: 69000,
+      Stone: 125000,
+      Iron: 65000,
+      Iridium: 1250,
+    });
+  });
+
+  it('需要 science:9 + luna:1', () => {
+    const s = makeState();
+    s.tech['science'] = 8;
+    s.tech['luna'] = 1;
+    expect(canBuildSpaceStructure(s, 'observatory')).toBe(false);
+
+    s.tech['science'] = 9;
+    expect(canBuildSpaceStructure(s, 'observatory')).toBe(true);
+  });
+
+  it('建造后初始化 count/on，并占用月球支援槽而非供给槽', () => {
+    const s = makeState();
+    s.tech['science'] = 9;
+    s.tech['luna'] = 1;
+    const next = buildSpaceStructure(s, 'observatory');
+    expect(next).not.toBeNull();
+    const obs = (next as GameState).space['observatory'] as Record<string, number | undefined>;
+    expect(obs.count).toBe(1);
+    expect(obs.on).toBe(1);
+    expect(obs.support).toBeUndefined();
+    expect(obs.s_max).toBeUndefined();
+    expect(getObservatoryCount(next as GameState)).toBe(1);
+  });
+
+  it('cataclysm 下直接知识上限会被 satellite 放大', () => {
+    const s = makeState();
+    s.race['cataclysm'] = true;
+    (s.space as any)['satellite'] = { count: 2 };
+    expect(getObservatoryKnowledgeCapBonus(s, 1)).toBe(7500);
+  });
+});
+
+describe('spaceport — 定义与火星入口', () => {
+  it('首座成本与 legacy space.js L496-499 一致', () => {
+    const s = makeState();
+    s.tech['space'] = 4;
+    expect(getSpaceBuildCost(s, 'spaceport')).toEqual({
+      Money: 47500,
+      Iridium: 1750,
+      Mythril: 25,
+      Titanium: 22500,
+    });
+  });
+
+  it('需要 space:4', () => {
+    const s = makeState();
+    s.tech['space'] = 3;
+    expect(canBuildSpaceStructure(s, 'spaceport')).toBe(false);
+    s.tech['space'] = 4;
+    expect(canBuildSpaceStructure(s, 'spaceport')).toBe(true);
+  });
+
+  it('建造首座后初始化支援字段并建立 mars:1', () => {
+    const s = makeState();
+    s.tech['space'] = 4;
+    const next = buildSpaceStructure(s, 'spaceport');
+    expect(next).not.toBeNull();
+    const port = (next as GameState).space['spaceport'] as Record<string, number>;
+    expect(port.count).toBe(1);
+    expect(port.on).toBe(1);
+    expect(port.support).toBe(0);
+    expect(port.s_max).toBe(0);
+    expect((next as GameState).tech['mars']).toBe(1);
+  });
+});
+
 describe('nav_beacon — 跨区支援贡献', () => {
   it('前置 luna:2', () => {
     const s = makeState();
@@ -479,9 +565,9 @@ describe('resolveSpaceSupport — moon 池', () => {
   it('无任何太空建筑 → 0 支援 / 0 produce', () => {
     const s = moonReady();
     const r = resolveSpaceSupport(s, {});
-    expect(r.supportOn).toEqual({ iridium_mine: 0, helium_mine: 0 });
+    expect(r.supportOn).toEqual({ iridium_mine: 0, helium_mine: 0, observatory: 0 });
     expect(r.fuelDrain).toEqual({});
-    expect(r.supplierEffectiveOn).toEqual({ nav_beacon: 0, moon_base: 0 });
+    expect(r.supplierEffectiveOn).toEqual({ nav_beacon: 0, moon_base: 0, spaceport: 0 });
   });
 
   it('1 座 moon_base on 且 Oil 足够 → s_max=2, drain=2 Oil/tick', () => {
@@ -550,5 +636,49 @@ describe('resolveSpaceSupport — moon 池', () => {
     const r = resolveSpaceSupport(s, { moon_base: 1, nav_beacon: 0 });
     expect((s.space as any).moon_base.s_max).toBe(2);
     expect(r.supplierEffectiveOn['nav_beacon']).toBe(0);
+  });
+
+  it('observatory 在月矿之后分配支援，支援不足时不会抢占前序建筑', () => {
+    const s = moonReady();
+    s.tech['science'] = 9;
+    (s.space as any)['moon_base'] = { count: 1, on: 1, support: 0, s_max: 0 };
+    (s.space as any)['iridium_mine'] = { count: 1, on: 1 };
+    (s.space as any)['helium_mine'] = { count: 1, on: 1 };
+    (s.space as any)['observatory'] = { count: 1, on: 1 };
+    s.resource['Oil'].amount = 1000;
+
+    const r = resolveSpaceSupport(s, { moon_base: 1 });
+    expect(r.supportOn['iridium_mine']).toBe(1);
+    expect(r.supportOn['helium_mine']).toBe(1);
+    expect(r.supportOn['observatory']).toBe(0);
+    expect((s.space as any).moon_base.support).toBe(2);
+  });
+});
+
+describe('resolveSpaceSupport — red 池', () => {
+  function redReady(): GameState {
+    const s = makeState();
+    s.tech['space'] = 4;
+    s.resource['Helium_3'].amount = 1000;
+    return s;
+  }
+
+  it('spaceport 通电且氦-3 充足时提供 3 支援并消耗 1.25 氦-3/tick', () => {
+    const s = redReady();
+    (s.space as any)['spaceport'] = { count: 1, on: 1, support: 0, s_max: 0 };
+    const r = resolveSpaceSupport(s, { spaceport: 1 });
+    expect(r.supplierEffectiveOn['spaceport']).toBe(1);
+    expect(r.fuelDrain['Helium_3']).toBe(1.25);
+    expect((s.space as any).spaceport.s_max).toBe(3);
+    expect((s.space as any).spaceport.support).toBe(0);
+  });
+
+  it('spaceport 未通电时不提供支援也不消耗氦-3', () => {
+    const s = redReady();
+    (s.space as any)['spaceport'] = { count: 1, on: 1, support: 0, s_max: 0 };
+    const r = resolveSpaceSupport(s, { spaceport: 0 });
+    expect(r.supplierEffectiveOn['spaceport']).toBe(0);
+    expect(r.fuelDrain['Helium_3']).toBeUndefined();
+    expect((s.space as any).spaceport.s_max).toBe(0);
   });
 });

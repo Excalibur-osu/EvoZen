@@ -1,8 +1,8 @@
 /**
- * 太空支援池解算（Phase 1C MVP: spc_moon）
+ * 太空支援池解算（Phase 1C MVP: spc_moon / spc_red）
  *
  * 对标 legacy/src/main.js L2256-2381 的 "Moon Bases, Spaceports, Etc" 循环块，
- * 只实装 `moon` 池（spc_moon）。其他池（red/belt/...）留给后续 sprint。
+ * 当前实装 `moon` / `red` 两个池。其他池（belt/alpha/...）留给后续 sprint。
  *
  * 支援池的语义：
  *   1. 某一池有一个 "区域供给者"（legacy: info.support 指向的建筑；此处为 moon_base）。
@@ -85,11 +85,15 @@ function resolvePool(
 ): void {
   // --- (1) 计算供给者 on 数（powered + 燃料双重裁剪） ---
   const supplyDefs = getSpaceSupplyDefs(pool);
-  // 区分"本池主供给者"（与 region 名约定对应：pool 'moon' 主供给者在 region 'spc_moon'）
+  // 区分"本池主供给者"（与 region 名约定对应：pool 'moon' -> spc_moon, 'red' -> spc_red）
   // 以及"跨区供给者"（例如 nav_beacon 在 spc_home 向 moon 池 +1 s_max）。
   // 两者在 legacy 的差异只在于：主供给者会消耗 supportFuel 并按 p_on 计算 s_max；跨区供给者
   // 只贡献 s_max，不自带燃料。
-  const primaryRegion = pool === 'moon' ? 'spc_moon' : null;
+  const PRIMARY_REGIONS: Record<SupportPool, string> = {
+    moon: 'spc_moon',
+    red: 'spc_red',
+  };
+  const primaryRegion = PRIMARY_REGIONS[pool];
 
   let sMax = 0;
 
@@ -170,7 +174,7 @@ function resolvePool(
 
 /**
  * 一次性解算所有支援池。tick.ts 在电力分配之后调用。
- * 当前只处理 `moon` 池。
+ * 当前处理 `moon` / `red` 两个池。
  *
  * @param state - 当前游戏状态（主供给者的 s_max / support 会被直接回写）
  * @param powerOn - powerTick 产出的 activeConsumers（太空建筑仅当 powerCost>0 时读这里）
@@ -185,6 +189,7 @@ export function resolveSpaceSupport(
     supplierEffectiveOn: {},
   };
   resolvePool(state, 'moon', powerOn, result);
+  resolvePool(state, 'red', powerOn, result);
   return result;
 }
 

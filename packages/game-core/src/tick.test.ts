@@ -476,6 +476,59 @@ describe('Knowledge 产出', () => {
     // professor impact: (0.5 + 4*0.01) * (1 + 4*0.05) = 0.648
     expect(deltaWithLib / deltaNoLib).toBeCloseTo(1.296, 3);
   });
+
+  it('supported observatory 会提供 +5000 知识上限，并额外放大学校知识上限贡献', () => {
+    const base = makeCivState();
+    base.tech['primitive'] = 3;
+    base.tech['science'] = 9;
+    base.tech['space'] = 3;
+    base.tech['luna'] = 1;
+    base.resource['Knowledge'].display = true;
+    base.resource['Coal'].display = true;
+    base.resource['Coal'].amount = 100;
+    base.resource['Oil'].display = true;
+    base.resource['Oil'].amount = 100;
+    (base.city as any)['coal_power'] = { count: 1, on: 1 };
+    (base.city as any)['university'] = { count: 2, on: 2 };
+    (base.space as any)['moon_base'] = { count: 1, on: 1, support: 0, s_max: 0 };
+
+    const withObs = JSON.parse(JSON.stringify(base)) as GameState;
+    (withObs.space as any)['observatory'] = { count: 1, on: 1 };
+
+    const baseTick = gameTick(base).state;
+    const obsTick = gameTick(withObs).state;
+
+    // 直接 +5000；另有大学 2 座 * 700 * 5% = +70
+    expect(obsTick.resource['Knowledge'].max - baseTick.resource['Knowledge'].max).toBe(5070);
+  });
+
+  it('cataclysm 下 observatory 会被 satellite 放大，并额外提供教授岗位上限', () => {
+    const base = makeCivState();
+    base.tech['primitive'] = 3;
+    base.tech['science'] = 9;
+    base.tech['space'] = 3;
+    base.tech['luna'] = 1;
+    base.resource['Knowledge'].display = true;
+    base.resource['Coal'].display = true;
+    base.resource['Coal'].amount = 100;
+    base.resource['Oil'].display = true;
+    base.resource['Oil'].amount = 100;
+    base.race['cataclysm'] = true;
+    (base.city as any)['coal_power'] = { count: 1, on: 1 };
+    (base.space as any)['moon_base'] = { count: 1, on: 1, support: 0, s_max: 0 };
+    (base.space as any)['satellite'] = { count: 2 };
+
+    const withObs = JSON.parse(JSON.stringify(base)) as GameState;
+    (withObs.space as any)['observatory'] = { count: 1, on: 1 };
+
+    const baseTick = gameTick(base).state;
+    const obsTick = gameTick(withObs).state;
+    const baseProfessorMax = (baseTick.civic['professor'] as { max?: number } | undefined)?.max ?? 0;
+    const obsProfessorMax = (obsTick.civic['professor'] as { max?: number } | undefined)?.max ?? 0;
+
+    expect(obsTick.resource['Knowledge'].max - baseTick.resource['Knowledge'].max).toBe(7500);
+    expect(obsProfessorMax - baseProfessorMax).toBe(1);
+  });
 });
 
 // ============================================================

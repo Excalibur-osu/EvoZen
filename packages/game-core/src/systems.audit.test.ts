@@ -741,6 +741,7 @@ describe('system audit scenarios', () => {
           casino: 0,
           moon_base: 0,
           nav_beacon: 0,
+          spaceport: 0,
         },
         totalGenerated: 6,
         totalConsumed: 5,

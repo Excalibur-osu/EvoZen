@@ -39,7 +39,7 @@ export type BasicResourceId =
 export type EvoResourceId = 'RNA' | 'DNA';
 
 /** 空间阶段关键资源 */
-export type SpaceResourceId = 'Iridium' | 'Helium_3';
+export type SpaceResourceId = 'Iridium' | 'Helium_3' | 'Mythril';
 
 export type ResourceId = BasicResourceId | EvoResourceId | SpaceResourceId | string;
 
