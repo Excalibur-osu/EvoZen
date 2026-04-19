@@ -11,6 +11,14 @@ import { getLibraryKnowledgeCapMultiplier } from './traits';
 import { getMaxTradeRoutes } from './trade';
 import { getBankVault, getCasinoVault } from './commerce';
 import { hasPlanetTrait, magneticVars, permafrostVars } from './planet-traits';
+import {
+  getSatelliteKnowledgeCapBonus,
+  getSatelliteWardenclyffeMultiplier,
+  getPropellantDepotOilCapBonus,
+  getPropellantDepotHeliumCapBonus,
+  getMoonBaseIridiumCapBonus,
+  getHeliumMineHeliumCapBonus,
+} from './space';
 
 export function applyDerivedStateInPlace(state: GameState): void {
   if (state.race.species === 'protoplasm') return;
@@ -108,9 +116,33 @@ export function applyDerivedStateInPlace(state: GameState): void {
   let oilMax = 0;
   oilMax += oilWells * 500;
   oilMax += oilDepots * 1000;
+  // 对标 legacy space.js L159：推进剂储备站 Oil.max +1250/座
+  oilMax += getPropellantDepotOilCapBonus(s);
   s.resource['Oil'].max = oilMax;
   if ((s.tech['oil'] ?? 0) >= 1) {
     s.resource['Oil'].display = true;
+  }
+  // 对标 legacy space.js L160-162 + L373：
+  //   Helium_3.max = propellant_depot * 1000 (需 display)  +  helium_mine * 100
+  // derived-state 会被重复调用，必须直接赋值而非 +=。
+  if (s.resource['Helium_3']) {
+    const heliumMineBonus = getHeliumMineHeliumCapBonus(s);
+    s.resource['Helium_3'].max = getPropellantDepotHeliumCapBonus(s) + heliumMineBonus;
+    // 建成首座 helium_mine 后解锁 Helium_3（legacy space.js L392）
+    if (heliumMineBonus > 0) {
+      s.resource['Helium_3'].display = true;
+    }
+  }
+
+  // 对标 legacy space.js L262：moon_base 每座 Iridium.max +500（baseline 0）
+  if (s.resource['Iridium']) {
+    const iridiumBonus = getMoonBaseIridiumCapBonus(s);
+    s.resource['Iridium'].max = iridiumBonus;
+    // 建成首座 moon_base 后解锁 Iridium（legacy space.js L344 同时在 iridium_mine 建造时触发；
+    // 此处归一到 moon_base.max 写入后立即开启 display，简化链路）
+    if (iridiumBonus > 0) {
+      s.resource['Iridium'].display = true;
+    }
   }
 
   let titaniumMax = 50;
@@ -161,8 +193,13 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const wardenclyffePlanetBonus = hasPlanetTrait(s, 'magnetic') ? magneticVars()[1] : 0;
   const wardenclyffeBase = 1000 + wardenclyffePlanetBonus;
   const wardenclyffePoweredBonus = (s.tech['science'] ?? 0) >= 7 ? 1500 : 1000;
-  knowledgeMax += wardenclyffes * wardenclyffeBase;
-  knowledgeMax += wardenclyffeOn * wardenclyffePoweredBonus;
+  // 对标 legacy main.js L9315-9331：沃登克里夫贡献的 caps['Knowledge'] 在加入总和前会被
+  // satellite 倍率整体缩放；必须先算 wardenclyffe 小计，再乘 satellite 修饰，最后并入 knowledgeMax。
+  let wardenclyffeKnowledge = wardenclyffes * wardenclyffeBase + wardenclyffeOn * wardenclyffePoweredBonus;
+  wardenclyffeKnowledge *= getSatelliteWardenclyffeMultiplier(s);
+  knowledgeMax += wardenclyffeKnowledge;
+  // 对标 legacy main.js L9363-9370：satellite 直接向 caps['Knowledge'] 贡献 750/座（非 cataclysm/orbit_decayed 情形）
+  knowledgeMax += getSatelliteKnowledgeCapBonus(s);
   s.resource['Knowledge'].max = knowledgeMax;
 
   let moneyMax = 1000;

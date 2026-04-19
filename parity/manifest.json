@@ -1,7 +1,7 @@
 {
-  "version": "0.8.0",
-  "lastVerified": "2026-04-18",
-  "coverageEstimate": "30-35% of total original game; ~90% of Phase 1A civilized era scope",
+  "version": "0.8.1",
+  "lastVerified": "2026-04-19",
+  "coverageEstimate": "30-35% of total original game; ~97% of Phase 1A+1B civilized/globalized era scope + Phase 1C spc_home 4/4 + spc_moon 3/4 (observatory pending)",
   "statusLegend": {
     "exact": "Implemented and intended to match legacy behavior within current scope.",
     "partial": "Implemented in part, but known gaps remain.",
@@ -67,6 +67,50 @@
       ]
     },
     {
+      "id": "space_phase1",
+      "title": "Space Phase 1C — spc_home + spc_moon 首条闭环",
+      "status": "partial",
+      "notes": [
+        "spc_home：satellite / propellant_depot / gps / nav_beacon 全部落地，走 buildSpaceStructure → derived-state/tick 闭环。",
+        "spc_moon：moon_base / iridium_mine / helium_mine 落地；接入新 space-support.ts 模块统一解算支援池。",
+        "satellite（space:2）成本 72000/28000/3200/8000 × 1.22^n（legacy space.js L63-68），Knowledge.max +750/座，wardenclyffe 知识上限 ×(1+count·0.04)，scientist impact ×(1+count·0.01)。",
+        "propellant_depot（space_explore:1）成本 55000/22000/5500 × 1.35^n（L143-147），Oil.max +1250/座（L159），Helium_3.max +1000/座（仅 display 时，L160-162）。",
+        "gps（spaceReqs satellite:1 + not_trait terrifying）成本 75000/50000/6500/3500/8000 × 1.18^n（L108-113），count≥4 时 trade routes += count·2（main.js L9885-9889）。",
+        "nav_beacon（luna:2）成本 75000/38000/44000/12500/1200 × 1.32^n（L179-185），每座 2MW，on 后跨区向 moon 池 +1 s_max（main.js L2306）。",
+        "moon_base（space:3）成本 22000/18000/7800/12500 × 1.32^n（L255-260），每座 4MW + 2 Oil/tick，on 后提供 2 moon 支援，Iridium.max +500/座且自动解锁 Iridium.display。",
+        "iridium_mine / helium_mine（space:3, luna:1）成本 42000/9000/17500 和 38000/9000/17500，mult=1.35（L318-322, L367-371）。每座消耗 1 月球支援，产出 0.035 Iridium/tick 与 0.18 Helium_3/tick（对标 legacy prod.js L67, L85）；helium_mine 同时 Helium_3.max +100/座。",
+        "SpaceStructureDefinition 新增通用字段：powerCost（接入 power.ts）、support: { pool, amount }（正数供给 / 负数消耗）、supportFuel: { resource, amountPerTick }。space-support.ts 的 resolveSpaceSupport() 先按 powerTick 的 activeConsumers 过滤供给者，再按 supportFuel 进一步裁剪 p_on，最后按声明顺序把 s_max 分配给消耗者。",
+        "power.ts 现枚举 city+space 两类消费者（city 在前，space 在后）；getAllConsumers() 由 listSpacePowerConsumers() 动态构成。",
+        "仍未实装：observatory（moon 第四座）；moon_mission / test_launch 等动作入口（当前通过研究 rover/rocketry 直接推 space/luna 等级）；geology / govRelationFactor / hunger 对月矿产出的修饰；spc_red 整个区；cataclysm/orbit_decayed 情形。"
+      ],
+      "refs": [
+        {
+          "path": "packages/game-core/src/space.ts"
+        },
+        {
+          "path": "packages/game-core/src/space-support.ts"
+        },
+        {
+          "path": "packages/game-core/src/space.test.ts"
+        },
+        {
+          "path": "packages/game-core/src/power.ts"
+        },
+        {
+          "path": "legacy/src/space.js",
+          "lines": "18-447"
+        },
+        {
+          "path": "legacy/src/main.js",
+          "lines": "2256-2381,4197-4199,9329-9331,9363-9370,9885-9889"
+        },
+        {
+          "path": "legacy/src/prod.js",
+          "lines": "62-92"
+        }
+      ]
+    },
+    {
       "id": "arpa_phase1",
       "title": "ARPA Long-term Research (Phase 1A)",
       "status": "partial",
@@ -99,15 +143,12 @@
       "notes": [
         "Phase 1 whitelist is parity-audited.",
         "Static structure cost and requirement audit currently runs clean within the implemented scope.",
-        "parity/warning-triage.md now records audit interpretation and residual blind spots instead of an active warning backlog.",
+        "Audit interpretation and residual blind spots are captured inline in these notes (no separate triage doc).",
         "Later-era and non-whitelisted legacy structures remain unimplemented."
       ],
       "refs": [
         {
           "path": "packages/game-core/src/structures.ts"
-        },
-        {
-          "path": "parity/warning-triage.md"
         },
         {
           "path": "scripts/audit.mjs"
@@ -121,15 +162,12 @@
       "notes": [
         "Implemented techs are checked for grant, costs, and requirements.",
         "Audit now normalizes known legacy↔EvoZen tech aliases and equivalent requirement keys, so noise warnings do not stay permanently in the baseline.",
-        "The current tech parity audit runs clean within the implemented scope; see parity/warning-triage.md for interpretation limits.",
+        "The current tech parity audit runs clean within the implemented scope; interpretation limits are documented inline here.",
         "Most legacy tech tree content is still outside current scope."
       ],
       "refs": [
         {
           "path": "packages/game-core/src/tech.ts"
-        },
-        {
-          "path": "parity/warning-triage.md"
         },
         {
           "path": "scripts/audit.mjs"

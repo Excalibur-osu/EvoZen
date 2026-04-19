@@ -38,6 +38,8 @@ import {
 } from './planet-traits';
 import { evolutionTick } from './evolution';
 import { arpaTick } from './arpa';
+import { getSatelliteScientistImpactMultiplier } from './space';
+import { resolveSpaceSupport } from './space-support';
 import {
   getCasinoIncomePerActive,
   getTourismFoodDemand,
@@ -105,8 +107,31 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, delta] of Object.entries(powerResult.fuelDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
   }
-  // 用电建筑实际开启数
+  // 用电建筑实际开启数（含 city + space）
   const poweredOn = powerResult.activeConsumers;
+
+  // 太空支援池解算（当前仅 moon 池）。
+  // 对标 legacy/src/main.js L2256-2381 的 "Moon Bases, Spaceports, Etc" 块：
+  // 在电力分配之后，燃料预扣 + 支援分配 → 得到 support_on 与燃料 delta。
+  const spaceSupport = resolveSpaceSupport(state, poweredOn);
+  // fuelDrain 是 pre-TIME_MULTIPLIER 的"每 tick 总量"，与 power 的 fuelDeltas 语义一致；
+  // tick.ts 在后面对所有 deltas 统一乘 TIME_MULTIPLIER。
+  for (const [resId, drain] of Object.entries(spaceSupport.fuelDrain)) {
+    deltas[resId] = (deltas[resId] ?? 0) - drain;
+  }
+
+  // 月球采矿产出（对标 legacy prod.js L62-92 + main.js L6796-6884）：
+  // - iridium_mine: 每座获得支援的建筑产出 0.035 Iridium/tick
+  // - helium_mine: 每座获得支援的建筑产出 0.18 Helium_3/tick
+  // EvoZen 当前不施加 geology / govRelationFactor / hunger 修饰；后续 sprint 再补。
+  const iridiumSupported = spaceSupport.supportOn['iridium_mine'] ?? 0;
+  if (iridiumSupported > 0) {
+    deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumSupported * 0.035;
+  }
+  const heliumSupported = spaceSupport.supportOn['helium_mine'] ?? 0;
+  if (heliumSupported > 0) {
+    deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + heliumSupported * 0.18;
+  }
 
   // ============================================================
   // 0. 士气 & 全局乘数
@@ -347,6 +372,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (techLevel('science') >= 6 && wardenclyffes > 0) {
     sciImpact *= 1 + professors * wardenclyffes * 0.01;
   }
+  // 卫星加成——原版 main.js L4197-4199:
+  // if (global.space['satellite']) scientist_base *= 1 + (satellite.count * 0.01)
+  sciImpact *= getSatelliteScientistImpactMultiplier(state);
   // 神权政体惩罚——原版 main.js L4200-4201:
   // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
   const sciGovMult = getKnowledgeMultiplier(state, 'scientist');

@@ -12,6 +12,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { RESOURCE_VALUES, TRADE_RATIOS } from './resources';
 import { getTradeBuyPriceMultiplier, getTradeSellPriceMultiplier } from './traits';
+import { getGpsTradeRouteBonus } from './space';
 
 // ============================================================
 // 贸易路线数据结构
@@ -276,6 +277,9 @@ export function getMaxTradeRoutes(state: GameState): number {
   // 对标 actions.js L3214: wharf 每座 +2 贸易路线（无需通电）
   const wharves = (state.city['wharf'] as { count: number } | undefined)?.count ?? 0;
   totalRoutes += wharves * 2;
+
+  // 对标 main.js L9885-9889: GPS >=4 座时每座 +2 贸易路线
+  totalRoutes += getGpsTradeRouteBonus(state);
 
   return totalRoutes;
 }

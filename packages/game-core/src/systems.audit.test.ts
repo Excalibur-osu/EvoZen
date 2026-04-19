@@ -739,6 +739,8 @@ describe('system audit scenarios', () => {
           biolab: 0,
           factory: 0,
           casino: 0,
+          moon_base: 0,
+          nav_beacon: 0,
         },
         totalGenerated: 6,
         totalConsumed: 5,

@@ -8,6 +8,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { listSpacePowerConsumers } from './space-support';
 
 const TIME_MULTIPLIER = 0.25;
 
@@ -40,9 +41,14 @@ interface ConsumerDef {
   id: string;
   /** 每座耗电 (MW) */
   powerCost: number;
+  /**
+   * 建筑所在集合。'city' 读取 state.city，'space' 读取 state.space。
+   * 未指定时视为 'city'，保证原有 city 消费者枚举不变。
+   */
+  location?: 'city' | 'space';
 }
 
-const CONSUMERS: ConsumerDef[] = [
+const CITY_CONSUMERS: ConsumerDef[] = [
   { id: 'sawmill', powerCost: 1 },
   { id: 'rock_quarry', powerCost: 1 },
   { id: 'mine', powerCost: 1 },
@@ -54,6 +60,20 @@ const CONSUMERS: ConsumerDef[] = [
   { id: 'factory', powerCost: 3 },
   { id: 'casino', powerCost: 3 },
 ];
+
+/**
+ * 太空消费者按 SPACE_STRUCTURES 声明顺序、由 listSpacePowerConsumers() 动态列出。
+ * 排在 city 消费者之后（legacy 风格：太空核心设施通电等级较低，晚于轻工与科研）。
+ * 当前 scope：moon_base (4MW), nav_beacon (2MW)。
+ */
+function getAllConsumers(): ConsumerDef[] {
+  const spaceConsumers: ConsumerDef[] = listSpacePowerConsumers().map((d) => ({
+    id: d.id,
+    powerCost: d.powerCost ?? 0,
+    location: 'space' as const,
+  }));
+  return [...CITY_CONSUMERS, ...spaceConsumers];
+}
 
 export interface PowerTickResult {
   /** 各资源的燃料消耗 delta（负值）*/
@@ -113,8 +133,10 @@ export function powerTick(state: GameState): PowerTickResult {
   let remainingPower = totalGenerated;
   let totalConsumed = 0;
 
-  for (const consumer of CONSUMERS) {
-    const struct = state.city[consumer.id] as { count: number; on?: number } | undefined;
+  for (const consumer of getAllConsumers()) {
+    const bucket: Record<string, unknown> =
+      consumer.location === 'space' ? state.space : state.city;
+    const struct = bucket[consumer.id] as { count: number; on?: number } | undefined;
     if (!struct || struct.count === 0) {
       activeConsumers[consumer.id] = 0;
       continue;
@@ -153,5 +175,5 @@ export function powerTick(state: GameState): PowerTickResult {
  * 检查某个建筑是否需要电力
  */
 export function isPoweredBuilding(id: string): boolean {
-  return CONSUMERS.some(c => c.id === id);
+  return getAllConsumers().some(c => c.id === id);
 }

@@ -9,6 +9,7 @@ export {
   getBuildCost,
   canBuildStructure,
   buildStructure,
+  buildSpaceStructure,
   enqueueStructure,
   dequeueStructure,
   isTechAvailable,
@@ -21,6 +22,31 @@ export {
   assignSmelter,
   removeSmelter,
 } from './actions';
+export {
+  SPACE_STRUCTURES,
+  canBuildSpaceStructure,
+  getSpaceBuildCost,
+  getSatelliteCount,
+  getSatelliteKnowledgeCapBonus,
+  getSatelliteScientistImpactMultiplier,
+  getSatelliteWardenclyffeMultiplier,
+  getPropellantDepotCount,
+  getPropellantDepotOilCapBonus,
+  getPropellantDepotHeliumCapBonus,
+  getGpsCount,
+  getGpsTradeRouteBonus,
+  getMoonBaseCount,
+  getMoonBaseIridiumCapBonus,
+  getHeliumMineHeliumCapBonus,
+  type SpaceStructureDefinition,
+  type SpaceCostFunction,
+  type SupportPool,
+} from './space';
+export {
+  resolveSpaceSupport,
+  listSpacePowerConsumers,
+  type SpaceSupportResult,
+} from './space-support';
 export { RESOURCE_VALUES, TRADE_RATIOS, CRAFT_COSTS, type CraftRecipe } from './resources';
 export { BASE_JOBS, type JobDefinition } from './jobs';
 export { BASIC_TECHS, type TechDefinition } from './tech';

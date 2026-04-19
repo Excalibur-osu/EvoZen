@@ -6,6 +6,11 @@ import { getModifiedTechCosts } from './traits';
 import { canEnqueue } from './queue';
 import { getMaxTaxRate } from './government';
 import { applyDerivedStateInPlace } from './derived-state';
+import {
+  SPACE_STRUCTURES,
+  canBuildSpaceStructure,
+  getSpaceBuildCost,
+} from './space';
 
 const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal'] as const;
 
@@ -69,6 +74,64 @@ export function buildStructure(state: GameState, structureId: string): GameState
   const building = next.city[structureId] as { count: number; on?: number };
   building.count++;
   if (building.on !== undefined) {
+    building.on++;
+  }
+
+  applyDerivedStateInPlace(next);
+  return next;
+}
+
+// ============================================================
+// 太空建筑建造
+// ============================================================
+
+/**
+ * 建造一座太空建筑。
+ *
+ * 初始化规则（对标 legacy space.js 的 struct()）：
+ *   - 所有建筑：{ count, on }
+ *   - 支援供给者（support.amount > 0）：追加 { support, s_max }
+ *
+ * 建成后 on 始终递增（与 city 建筑一致）。通电/燃料等实际"有效 on" 由
+ * powerTick 与 resolveSpaceSupport 每 tick 重算，不直接修改 on。
+ */
+export function buildSpaceStructure(state: GameState, structureId: string): GameState | null {
+  if (!canBuildSpaceStructure(state, structureId)) return null;
+
+  const def = SPACE_STRUCTURES.find((structure) => structure.id === structureId);
+  if (!def) return null;
+
+  const next = cloneState(state);
+  const costs = getSpaceBuildCost(next, structureId);
+  for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
+    if (!next.resource[resId]) return null;
+    next.resource[resId].amount -= cost;
+  }
+
+  ensureSpaceStructure(next, structureId);
+  const building = next.space[structureId] as {
+    count: number;
+    on?: number;
+    support?: number;
+    s_max?: number;
+  };
+  building.count++;
+
+  // 有电力/支援/燃料需求的建筑一律维护 on 字段；其他保持 satellite 一类的"纯 count"形态。
+  const needsOnTracking =
+    (def.powerCost ?? 0) > 0 ||
+    def.support !== undefined ||
+    def.supportFuel !== undefined;
+  if (needsOnTracking) {
+    building.on = (building.on ?? 0) + 1;
+    // 支援供给者：初始化 support / s_max，供 UI 与解算读取
+    if (def.support && def.support.amount > 0) {
+      building.support = building.support ?? 0;
+      building.s_max = building.s_max ?? 0;
+    }
+  } else if (building.on !== undefined) {
+    // 兼容历史：若已有 on 字段则继续自增
     building.on++;
   }
 
