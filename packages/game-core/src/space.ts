@@ -5,7 +5,7 @@
  * 当前 sprint 覆盖：
  *   - spc_home: satellite / propellant_depot / gps / nav_beacon
  *   - spc_moon: moon_base / iridium_mine / helium_mine / observatory
- *   - spc_red: spaceport
+ *   - spc_red: spaceport / living_quarters / garage / red_mine / fabrication
  *
  * 所有成本与加成系数逐行对标 legacy；EvoZen 当前不执行 fuel_adjust / spatialReasoning
  * （truepath / world_control / 种族修饰尚未进入当前 scope）。
@@ -242,6 +242,81 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     // 对标 legacy/src/space.js L515
     supportFuel: { resource: 'Helium_3', amountPerTick: 1.25 },
   },
+  {
+    id: 'living_quarters',
+    region: 'spc_red',
+    name: '火星居住区',
+    description: '在红色行星建立居住区，每座获得支援即可容纳殖民人口。',
+    // 对标 legacy/src/space.js L721
+    reqs: { mars: 1 },
+    // 对标 legacy/src/space.js L722-727（house_adjust baseline = 1.0）
+    costs: {
+      Money: spaceCost(38000, 1.28),
+      Steel: spaceCost(15000, 1.28),
+      Polymer: spaceCost(9500, 1.28),
+    },
+    effect: '每座消耗 1 红星支援；每座获得支援时人口上限 +1。',
+    // 对标 legacy/src/space.js L738-739：support -1，powered 0
+    support: { pool: 'red', amount: -1 },
+  },
+  {
+    id: 'garage',
+    region: 'spc_red',
+    name: '火星车库',
+    description: '在火星地表建立加固仓库，扩大关键物资的仓储容量。',
+    // 对标 legacy/src/space.js L851
+    reqs: { mars: 1 },
+    // 对标 legacy/src/space.js L852-857
+    costs: {
+      Money: spaceCost(75000, 1.28),
+      Iron: spaceCost(12000, 1.28),
+      Brick: spaceCost(3000, 1.28),
+      Sheet_Metal: spaceCost(1500, 1.28),
+    },
+    // 对标 legacy/src/space.js L924-943 的 effect：non-cataclysm / baseline multiplier=1
+    //   Copper +6500, Iron +5500, Cement +6000, Steel +4500, Titanium +3500, Containers +20
+    effect: '每座 +20 集装箱上限；并提升 铜 / 铁 / 水泥 / 钢 / 钛 的仓储上限。',
+    // garage 不需要电力也不占支援（legacy 无 support / powered 字段）。
+  },
+  {
+    id: 'red_mine',
+    region: 'spc_red',
+    name: '火星矿场',
+    description: '在红色行星表面开采铜与钛，为前线供给关键金属。',
+    // 对标 legacy/src/space.js L983
+    reqs: { mars: 1 },
+    // 对标 legacy/src/space.js L984-988
+    costs: {
+      Money: spaceCost(50000, 1.32),
+      Lumber: spaceCost(65000, 1.32),
+      Iron: spaceCost(33000, 1.32),
+    },
+    // 对标 legacy/src/prod.js L93-122 baseline：copper 0.25、titanium 0.02（不含 colonist / govRelation / hunger）
+    effect: '每座消耗 1 红星支援；获得支援后产出 0.25 铜 + 0.02 钛 / tick。',
+    // 对标 legacy/src/space.js L1011-1012：support -1，powered 0
+    support: { pool: 'red', amount: -1 },
+  },
+  {
+    id: 'fabrication',
+    region: 'spc_red',
+    name: '火星工坊',
+    description: '在红色行星上建立前哨制造基地，为殖民者提供工匠岗位。',
+    // 对标 legacy/src/space.js L1034
+    reqs: { mars: 1 },
+    // 对标 legacy/src/space.js L1035-1040
+    costs: {
+      Money: spaceCost(90000, 1.32),
+      Copper: spaceCost(25000, 1.32),
+      Cement: spaceCost(12000, 1.32),
+      Wrought_Iron: spaceCost(1200, 1.32),
+    },
+    // 对标 legacy/src/main.js L9769-9774：每座 support_on 的 fabrication 使 craftsman max +1
+    // 注：legacy 还通过 resources.js L329-334 给 crafting 速率 +0.02/colonist/fab；
+    //     EvoZen 尚未实装 colonist 岗位，crafting 速率加成暂留给后续 sprint。
+    effect: '每座消耗 1 红星支援；获得支援后工匠岗位上限 +1。',
+    // 对标 legacy/src/space.js L1050-1051：support -1，powered 0
+    support: { pool: 'red', amount: -1 },
+  },
 ];
 
 // ============================================================
@@ -422,6 +497,33 @@ export function getObservatoryKnowledgeCapBonus(
   }
   return gain;
 }
+
+// --- spc_red ---
+
+export function getGarageCount(state: GameState): number {
+  return getSpaceCount(state, 'garage');
+}
+
+/**
+ * garage 每座对各资源 max 的基线贡献（non-cataclysm / baseline multiplier=1）。
+ * 对标 legacy/src/space.js L874-922：
+ *   - multiplier = 1（非 particles>=4 / 非 world_control / 非 blackhole）
+ *   - h_multiplier = 1（同上；shelving>=2 才有 ×3）
+ *   - val: Copper 6500, Iron 5500, Cement 6000, Steel 4500, Titanium 3500
+ *   - Containers +20/座（非 particles>=4）
+ *
+ * 返回资源 ID → 每座加成。调用方负责乘以当前 garage 数量。
+ */
+export const GARAGE_STORAGE_PER_BUILDING: Record<string, number> = {
+  Copper: 6500,
+  Iron: 5500,
+  Cement: 6000,
+  Steel: 4500,
+  Titanium: 3500,
+};
+
+/** garage 对 Containers 上限的基线贡献（每座 +20）。 */
+export const GARAGE_CONTAINERS_PER_BUILDING = 20;
 
 // --- 供支援 / 燃料 / tick 查询的公共访问器 ---
 

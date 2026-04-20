@@ -27,7 +27,9 @@ import MobileNotSupported from './components/MobileNotSupported.vue'
 
 
 const game = useGameStore()
-const activeTab = ref<'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'>('evolution')
+type TabId = 'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'
+
+const activeTab = ref<TabId>('evolution')
 /** 市政 Tab 下的子 Tab */
 const civicSubTab = ref<'jobs' | 'government' | 'military'>('jobs')
 
@@ -70,7 +72,7 @@ watch(() => game.isEvolving, (isEvolving) => {
 }, { immediate: true })
 
 const tabs = computed(() => {
-  const list: Array<{ id: string; label: string; visible: boolean }> = []
+  const list: Array<{ id: TabId; label: string; visible: boolean }> = []
   if (game.isEvolving) {
     list.push({ id: 'evolution', label: '🧬 进化', visible: true })
   } else {
@@ -129,7 +131,7 @@ const cityTabLabel = computed(() => {
             :key="tab.id"
             class="tab-btn"
             :class="{ active: activeTab === tab.id }"
-            @click="activeTab = tab.id as any"
+            @click="activeTab = tab.id"
           >
             {{ tab.label }}
           </button>

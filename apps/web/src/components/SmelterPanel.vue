@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
-import type { SmelterState } from '@evozen/shared-types'
+import type { SmelterState, SmelterFuelId, SmelterOutputId } from '@evozen/shared-types'
 
 const game = useGameStore()
 
@@ -28,15 +28,15 @@ const totalOutputsAssigned = computed(() => {
   return (smelterState.value.Iron ?? 0) + (smelterState.value.Steel ?? 0) + (smelterState.value.Iridium ?? 0)
 })
 
-const fuels = [
+const fuels: Array<{ id: SmelterFuelId; name: string }> = [
   { id: 'Wood', name: '木材' },
   { id: 'Coal', name: '煤炭' },
   { id: 'Oil', name: '石油' },
   // { id: 'Inferno', name: '地狱风暴' },
 ]
 
-const outputs = [
-  { id: 'Iron', name: '铁' },
+const outputs: Array<{ id: SmelterOutputId; name: string; reqTech: number }> = [
+  { id: 'Iron', name: '铁', reqTech: 0 },
   { id: 'Steel', name: '钢', reqTech: 2 },
   { id: 'Iridium', name: '铱', reqTech: 0 }, // TODO: correct tech level for iridium smelting
 ]
@@ -45,17 +45,17 @@ function getTechLevel(tech: string) {
   return game.state.tech[tech] ?? 0
 }
 
-function assignFuel(id: string) {
+function assignFuel(id: SmelterFuelId) {
   game.assignSmelter('fuel', id)
 }
-function removeFuel(id: string) {
+function removeFuel(id: SmelterFuelId) {
   game.removeSmelter('fuel', id)
 }
 
-function assignOutput(id: string) {
+function assignOutput(id: SmelterOutputId) {
   game.assignSmelter('output', id)
 }
-function removeOutput(id: string) {
+function removeOutput(id: SmelterOutputId) {
   game.removeSmelter('output', id)
 }
 </script>

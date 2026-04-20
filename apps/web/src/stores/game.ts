@@ -3,7 +3,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { GameState, GameMessage } from '@evozen/shared-types'
+import type { GameState, GameMessage, MarketState, SmelterFuelId, SmelterOutputId } from '@evozen/shared-types'
 import {
   createNewGame,
   saveGame,
@@ -94,6 +94,10 @@ import {
   getSpaceActionCost as coreGetSpaceActionCost,
   canRunSpaceAction as coreCanRunSpaceAction,
   runSpaceAction as coreRunSpaceAction,
+  SPACE_STRUCTURES,
+  getSpaceBuildCost as coreGetSpaceBuildCost,
+  canBuildSpaceStructure as coreCanBuildSpaceStructure,
+  buildSpaceStructure as coreBuildSpaceStructure,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
@@ -239,7 +243,7 @@ export const useGameStore = defineStore('game', () => {
       try {
         const savedMsgs = localStorage.getItem('evozen_recent_messages')
         if (savedMsgs) messages.value = JSON.parse(savedMsgs)
-      } catch (e) {
+      } catch {
         /* ignore parser error */
       }
       addMessage('读取存档成功。', 'success', 'progress')
@@ -351,7 +355,7 @@ export const useGameStore = defineStore('game', () => {
   function persistMessages() {
     try {
       localStorage.setItem('evozen_recent_messages', JSON.stringify(messages.value))
-    } catch (e) {
+    } catch {
       /* ignore storage quota space out errors */
     }
   }
@@ -616,15 +620,23 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // ---- 熔炉操作 ----
-  function assignSmelter(category: 'fuel' | 'output', type: string) {
-    const result = coreAssignSmelter(state.value, category, type)
+  function assignSmelter(category: 'fuel', type: SmelterFuelId): void
+  function assignSmelter(category: 'output', type: SmelterOutputId): void
+  function assignSmelter(category: 'fuel' | 'output', type: SmelterFuelId | SmelterOutputId) {
+    const result = category === 'fuel'
+      ? coreAssignSmelter(state.value, 'fuel', type as SmelterFuelId)
+      : coreAssignSmelter(state.value, 'output', type as SmelterOutputId)
     if (result) {
       state.value = result
     }
   }
 
-  function removeSmelter(category: 'fuel' | 'output', type: string) {
-    const result = coreRemoveSmelter(state.value, category, type)
+  function removeSmelter(category: 'fuel', type: SmelterFuelId): void
+  function removeSmelter(category: 'output', type: SmelterOutputId): void
+  function removeSmelter(category: 'fuel' | 'output', type: SmelterFuelId | SmelterOutputId) {
+    const result = category === 'fuel'
+      ? coreRemoveSmelter(state.value, 'fuel', type as SmelterFuelId)
+      : coreRemoveSmelter(state.value, 'output', type as SmelterOutputId)
     if (result) {
       state.value = result
     }
@@ -660,15 +672,13 @@ export const useGameStore = defineStore('game', () => {
   function setMarketTradeQty(qty: number) {
     const limit = getManualTradeLimit(state.value)
     const nextQty = Math.max(1, Math.min(Math.floor(qty), limit))
-    if (!state.value.city.market) {
-      ;(state.value.city as any).market = { active: false, qty: nextQty }
-      return
-    }
-    ;(state.value.city.market as { qty?: number }).qty = nextQty
+    const market: MarketState = state.value.city.market ?? { active: false, qty: nextQty }
+    market.qty = nextQty
+    state.value.city.market = market
   }
 
   function adjustMarketTradeQty(delta: number) {
-    const currentQty = (state.value.city.market as { qty?: number } | undefined)?.qty ?? 1
+    const currentQty = state.value.city.market?.qty ?? 1
     setMarketTradeQty(currentQty + delta)
   }
 
@@ -863,6 +873,25 @@ export const useGameStore = defineStore('game', () => {
     addMessage(`🚀 太空任务 ${actionId} 已完成。`, 'special', 'progress')
   }
 
+  function getSpaceBuildCost(structureId: string): Record<string, number> {
+    return coreGetSpaceBuildCost(state.value, structureId)
+  }
+
+  function canBuildSpaceStructure(structureId: string): boolean {
+    return coreCanBuildSpaceStructure(state.value, structureId)
+  }
+
+  function buildSpaceStructure(structureId: string) {
+    const result = coreBuildSpaceStructure(state.value, structureId)
+    if (!result) {
+      addMessage('太空建筑建造条件未满足或资源不足。', 'warning', 'progress')
+      return
+    }
+    state.value = result
+    const def = SPACE_STRUCTURES.find((d) => d.id === structureId)
+    addMessage(`🛰️ 建造完成：${def?.name ?? structureId}`, 'success', 'progress')
+  }
+
   return {
     state,
     messages,
@@ -983,5 +1012,10 @@ export const useGameStore = defineStore('game', () => {
     getSpaceActionCost,
     canRunSpaceAction,
     runSpaceAction,
+    // 太空建筑
+    SPACE_STRUCTURES,
+    getSpaceBuildCost,
+    canBuildSpaceStructure,
+    buildSpaceStructure,
   }
 })

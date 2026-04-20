@@ -16,9 +16,7 @@ const game = useGameStore()
 
 const isUnlocked = computed(() => (game.state.tech['trade'] ?? 0) >= 1)
 
-const tradeRoutes = computed(() => {
-  return ((game.state.city as any).trade_routes ?? []) as TradeRoute[]
-})
+const tradeRoutes = computed<TradeRoute[]>(() => game.state.city.trade_routes ?? [])
 
 /** 获取可交易且已显示的资源列表 */
 const visibleTradables = computed(() => {
@@ -27,7 +25,7 @@ const visibleTradables = computed(() => {
 
 /** 获取当前可用金额 */
 const money = computed(() => Math.floor(game.state.resource['Money']?.amount ?? 0))
-const marketQty = computed(() => ((game.state.city.market as { qty?: number } | undefined)?.qty ?? 1))
+const marketQty = computed(() => game.state.city.market?.qty ?? 1)
 const marketQtyLimit = computed(() => game.getManualTradeLimit())
 const routeQtyLimit = computed(() => game.getTradeRouteQtyLimit())
 

@@ -31,6 +31,7 @@ export const RESOURCE_NAMES: Record<string, string> = {
   Crystal: '水晶',
   Iridium: '铱',
   Helium_3: '氦-3',
+  Mythril: '秘银',
 }
 
 /** 获取资源中文名 */

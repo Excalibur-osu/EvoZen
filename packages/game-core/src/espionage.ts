@@ -60,13 +60,13 @@ export function startSpyAction(state: GameState, govIndex: number, action: strin
     if (action === 'purchase') {
       if (gov.spy < 3) return { success: false, messages };
       
-      let price = getGovPurchasePrice(state, govIndex);
+      const price = getGovPurchasePrice(state, govIndex);
       if (state.resource.Money.amount < price) return { success: false, messages };
       state.resource.Money.amount -= price;
     }
   }
 
-  let timer = techLvl >= 4 ? 150 : 300;
+  const timer = techLvl >= 4 ? 150 : 300;
   gov.sab = timer;
   gov.act = action;
 
@@ -76,7 +76,7 @@ export function startSpyAction(state: GameState, govIndex: number, action: strin
 export function getGovPurchasePrice(state: GameState, govIndex: number): number {
   const gov = getForeignGov(state, govIndex);
   if (!gov) return Infinity;
-  let price = Math.round(Math.pow(1.15, gov.eco / 2.5) * 2500000);
+  const price = Math.round(Math.pow(1.15, gov.eco / 2.5) * 2500000);
   return price;
 }
 

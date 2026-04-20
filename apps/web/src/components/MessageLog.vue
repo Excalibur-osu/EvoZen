@@ -6,9 +6,10 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, watch } from 'vue'
 import { useGameStore } from '../stores/game'
+import type { GameMessage } from '@evozen/shared-types'
 
 const game = useGameStore()
-const logContainer = ref<any>(null)
+const logContainer = ref<HTMLElement | null>(null)
 
 const recentMessages = computed(() => {
   return game.messages.slice(-80)
@@ -17,12 +18,11 @@ const recentMessages = computed(() => {
 watch(() => game.messages.length, async () => {
   await nextTick()
   if (logContainer.value) {
-    const el = logContainer.value.$el || logContainer.value
-    el.scrollTop = el.scrollHeight
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
   }
 })
 
-function msgClass(type: string): string {
+function msgClass(type: GameMessage['type']): string {
   switch (type) {
     case 'success': return 'msg-success'
     case 'danger': return 'msg-danger'
@@ -39,17 +39,19 @@ function msgClass(type: string): string {
       <span class="log-title">📜 消息日志</span>
       <button class="clear-btn" @click="game.clearMessages()" title="清空日志">🗑️</button>
     </div>
-    <TransitionGroup name="list" tag="div" class="log-list" ref="logContainer">
-      <p
-        v-for="(msg, i) in recentMessages"
-        :key="i"
-        class="log-item"
-        :class="msgClass(msg.type)"
-      >
-        <span class="log-time" v-if="msg.timestamp">[{{ msg.timestamp }}]</span>
-        <span class="log-text">{{ msg.text }}</span>
-      </p>
-    </TransitionGroup>
+    <div class="log-list" ref="logContainer">
+      <TransitionGroup name="list" tag="div">
+        <p
+          v-for="(msg, i) in recentMessages"
+          :key="i"
+          class="log-item"
+          :class="msgClass(msg.type)"
+        >
+          <span class="log-time" v-if="msg.timestamp">[{{ msg.timestamp }}]</span>
+          <span class="log-text">{{ msg.text }}</span>
+        </p>
+      </TransitionGroup>
+    </div>
   </div>
 </template>
 

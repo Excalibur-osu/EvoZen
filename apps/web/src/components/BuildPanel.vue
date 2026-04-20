@@ -12,6 +12,16 @@ import QueuePanel from './QueuePanel.vue'
 
 const game = useGameStore()
 
+type GatherActionIcon = 'food' | 'lumber' | 'stone'
+
+interface GatherAction {
+  resId: string
+  label: string
+  icon: GatherActionIcon
+  visible: boolean
+  colorVar: string
+}
+
 /** 可见建筑：前置科技已满足 */
 const availableBuildings = computed(() => {
   return BASIC_STRUCTURES.filter(def => {
@@ -24,13 +34,13 @@ const availableBuildings = computed(() => {
 
 /** 手动采集按钮配置 */
 const gatherActions = computed(() => {
-  const actions = []
+  const actions: GatherAction[] = []
   
   if ((game.state.tech['primitive'] ?? 0) >= 1) {
     actions.push({ 
       resId: 'Food', 
       label: '搜集食物', 
-      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></svg>',
+      icon: 'food',
       visible: true,
       colorVar: 'var(--res-food)'
     })
@@ -39,7 +49,7 @@ const gatherActions = computed(() => {
   actions.push({ 
     resId: 'Lumber', 
     label: '捡拾木材', 
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9"/><path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z"/></svg>',
+    icon: 'lumber',
     visible: true,
     colorVar: 'var(--res-lumber)'
   })
@@ -49,7 +59,7 @@ const gatherActions = computed(() => {
     actions.push({ 
       resId: 'Stone', 
       label: '采集石头', 
-      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>',
+      icon: 'stone',
       visible: true,
       colorVar: 'var(--res-stone)'
     })
@@ -99,7 +109,43 @@ function isStorageFull(resId: string): boolean {
           @click="game.gather(action.resId)"
           :style="{ color: action.colorVar }"
         >
-          <span class="gather-icon-wrapper" v-html="action.icon"></span>
+          <span class="gather-icon-wrapper">
+            <svg
+              v-if="action.icon === 'food'"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z" />
+              <path d="M10 2c1 .5 2 2 2 5" />
+            </svg>
+            <svg
+              v-else-if="action.icon === 'lumber'"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" />
+              <path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" />
+            </svg>
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
+            </svg>
+          </span>
           <span class="gather-label" style="color: var(--text-primary)">{{ action.label }}</span>
         </button>
       </div>

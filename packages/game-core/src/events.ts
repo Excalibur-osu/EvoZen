@@ -10,7 +10,7 @@
  * 触发后随机选取可用事件，执行效果，重置倒计时并产生消息
  */
 
-import type { GameState, GameMessage } from '@evozen/shared-types';
+import type { GameState, GameMessage, GarrisonState } from '@evozen/shared-types';
 import { armyRating, garrisonSize } from './military';
 
 // ============================================================
@@ -94,7 +94,7 @@ export const EVENTS: EventDefinition[] = [
     },
     effect(state) {
       const ticks = rng(300, 600);
-      (state.race as any)['inspired'] = ticks;
+      state.race['inspired'] = ticks;
       return `💡 灵感迸发！一位市民灵光一闪，未来 ${ticksToTime(ticks)} 的知识产出提升 50%。`;
     },
   },
@@ -110,7 +110,7 @@ export const EVENTS: EventDefinition[] = [
     },
     effect(state) {
       const ticks = rng(300, 600);
-      (state.race as any)['motivated'] = ticks;
+      state.race['motivated'] = ticks;
       return `💪 士气高涨！市民们干劲十足，未来 ${ticksToTime(ticks)} 所有产出 +5%。`;
     },
   },
@@ -144,7 +144,7 @@ export const EVENTS: EventDefinition[] = [
       );
     },
     effect(state) {
-      const garrison = state.civic.garrison as any;
+      const garrison: GarrisonState = state.civic.garrison;
       const gSize = garrisonSize(state);
       const army = armyRating(gSize, state);
       const htLevel = techLevel(state, 'high_tech');
@@ -162,7 +162,7 @@ export const EVENTS: EventDefinition[] = [
         const species = state.race.species;
         const pop = state.resource[species];
         if (pop) pop.amount = Math.max(0, pop.amount - killed);
-        (state.stats as any).died = ((state.stats as any).died ?? 0) + killed;
+        state.stats.died = (state.stats.died ?? 0) + killed;
       }
       garrison.wounded = Math.min(garrison.workers, garrison.wounded + wounded);
       if (garrison.protest !== undefined) {
@@ -448,7 +448,7 @@ function filterEvents(state: GameState, type: 'major' | 'minor', lastEventId: st
     if (reqs.notech && techLevel(state, reqs.notech) > 0) return false;
     if (reqs.resource && !hasResource(state, reqs.resource)) return false;
     if (reqs.low_morale !== undefined) {
-      const currentMorale = (state.city.morale as { current?: number } | undefined)?.current ?? 100;
+      const currentMorale = state.city.morale?.current ?? 100;
       if (currentMorale >= reqs.low_morale) return false;
     }
 
@@ -476,7 +476,7 @@ export function tickEvents(state: GameState): GameMessage[] {
     const pool = filterEvents(state, 'major', state.event.l as string | false);
     if (pool.length > 0) {
       const ev = pool[rng(0, pool.length)];
-      (state.event as any).l = ev.id;
+      state.event.l = ev.id;
       const text = ev.effect(state);
       msgs.push({ text, type: 'warning', category: 'event' });
     }
@@ -490,7 +490,7 @@ export function tickEvents(state: GameState): GameMessage[] {
     const pool = filterEvents(state, 'minor', state.m_event.l as string | false);
     if (pool.length > 0) {
       const ev = pool[rng(0, pool.length)];
-      (state.m_event as any).l = ev.id;
+      state.m_event.l = ev.id;
       const text = ev.effect(state);
       msgs.push({ text, type: 'info', category: 'event' });
     }

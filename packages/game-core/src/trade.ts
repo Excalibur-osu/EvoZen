@@ -9,7 +9,7 @@
  * 纯函数模块，零 UI 依赖。
  */
 
-import type { GameState } from '@evozen/shared-types';
+import type { GameState, TradeRoute } from '@evozen/shared-types';
 import { RESOURCE_VALUES, TRADE_RATIOS } from './resources';
 import { getTradeBuyPriceMultiplier, getTradeSellPriceMultiplier } from './traits';
 import { getGpsTradeRouteBonus } from './space';
@@ -18,15 +18,7 @@ import { getGpsTradeRouteBonus } from './space';
 // 贸易路线数据结构
 // ============================================================
 
-/** 单条贸易路线的配置 */
-export interface TradeRoute {
-  /** 交易的资源 ID */
-  resource: string;
-  /** 'buy' = 买入资源, 'sell' = 卖出资源, 'none' = 关闭 */
-  action: 'buy' | 'sell' | 'none';
-  /** 每次交易的数量倍率（默认 1） */
-  qty: number;
-}
+export type { TradeRoute } from '@evozen/shared-types';
 
 // ============================================================
 // 可交易资源列表
@@ -212,7 +204,7 @@ export function tradeTick(state: GameState): Record<string, number> {
   // 贸易科技未解锁则跳过
   if ((state.tech['trade'] ?? 0) < 1) return deltas;
 
-  const routes = (state.city as any).trade_routes as TradeRoute[] | undefined;
+  const routes = state.city.trade_routes;
   if (!routes || routes.length === 0) return deltas;
 
   for (const route of routes) {
@@ -293,10 +285,10 @@ export function setTradeRoute(
   route: TradeRoute
 ): GameState {
   const newState: GameState = JSON.parse(JSON.stringify(state));
-  if (!(newState.city as any).trade_routes) {
-    (newState.city as any).trade_routes = [];
+  if (!newState.city.trade_routes) {
+    newState.city.trade_routes = [];
   }
-  const routes = (newState.city as any).trade_routes as TradeRoute[];
+  const routes = newState.city.trade_routes;
   routes[index] = {
     ...route,
     qty: Math.max(1, Math.min(Math.floor(route.qty ?? 1), getTradeRouteQtyLimit(newState))),

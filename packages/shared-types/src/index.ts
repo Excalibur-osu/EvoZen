@@ -228,6 +228,17 @@ export interface GarrisonState {
   crew: number;
 }
 
+export interface TradeRoute {
+  resource: string;
+  action: 'buy' | 'sell' | 'none';
+  qty: number;
+}
+
+export interface MarketState {
+  active: boolean;
+  qty?: number;
+}
+
 export interface CivicState {
   taxes: TaxState;
   govern: GovState;
@@ -279,6 +290,10 @@ export interface SmelterState {
   Steel: number;
   Iridium: number;
 }
+
+export type SmelterFuelId = 'Wood' | 'Coal' | 'Oil' | 'Inferno';
+export type SmelterOutputId = 'Iron' | 'Steel' | 'Iridium';
+export type SmelterAllocationId = SmelterFuelId | SmelterOutputId;
 
 // ============================================================
 // 种族 (Race)
@@ -440,12 +455,23 @@ export interface CityState {
   biome: string;
   ptrait: string;
   geology: Record<string, number>;
-  market: { active: boolean; qty?: number };
+  market?: MarketState;
+  trade_routes?: TradeRoute[];
   morale?: MoraleState;
   power?: PowerState;
   smelter?: SmelterState;
   /** 建筑 */
-  [structureId: string]: StructureState | CalendarState | MoraleState | PowerState | SmelterState | string | Record<string, number> | unknown;
+  [structureId: string]:
+    | StructureState
+    | CalendarState
+    | MoraleState
+    | PowerState
+    | SmelterState
+    | MarketState
+    | TradeRoute[]
+    | string
+    | Record<string, number>
+    | unknown;
 }
 
 // ============================================================

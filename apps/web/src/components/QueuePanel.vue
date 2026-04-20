@@ -5,10 +5,11 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
+import type { QueueItem } from '@evozen/shared-types'
 
 const game = useGameStore()
 
-function getProgressPercent(item: any) {
+function getProgressPercent(item: QueueItem): number {
   if (!item.cost || Object.keys(item.cost).length === 0) return 0
   let totalCost = 0
   let totalProgress = 0

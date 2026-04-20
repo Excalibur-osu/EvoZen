@@ -138,6 +138,17 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
   const observatorySupported = spaceSupport.supportOn['observatory'] ?? 0;
 
+  // 火星地表产出（对标 legacy prod.js L93-122 + main.js L6481-6498）：
+  //   red_mine 每座获得支援的建筑产出 0.25 Copper + 0.02 Titanium/tick
+  // 注：legacy 公式为 support_on['red_mine'] * workerScale(colonist.workers) * baseline。
+  //     EvoZen 尚未实装 colonist 岗位，暂按"每座自带 1 colonist"做 baseline 产出；
+  //     colonist 岗位接入后需替换为 workerScale 缩放。
+  const redMineSupported = spaceSupport.supportOn['red_mine'] ?? 0;
+  if (redMineSupported > 0) {
+    deltas['Copper'] = (deltas['Copper'] ?? 0) + redMineSupported * 0.25;
+    deltas['Titanium'] = (deltas['Titanium'] ?? 0) + redMineSupported * 0.02;
+  }
+
   // ============================================================
   // 0. 士气 & 全局乘数
   // ============================================================
@@ -475,7 +486,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
     let ironSmelter = smelterState.Iron ?? 0;
     let steelSmelter = smelterState.Steel ?? 0;
-    let iridiumSmelter = smelterState.Iridium ?? 0;
+    const iridiumSmelter = smelterState.Iridium ?? 0;
 
     const availableLumber = (state.resource['Lumber']?.amount ?? 0) / TIME_MULTIPLIER;
     const availableCoal = (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER;
@@ -486,15 +497,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const oilCost = 1;
 
     // 处理实际能够工作的燃料槽
-    let maxWoodOperable = Math.max(0, Math.floor(availableLumber / lumberCost));
+    const maxWoodOperable = Math.max(0, Math.floor(availableLumber / lumberCost));
     if (maxWoodOperable < woodFuel) {
       woodFuel = maxWoodOperable;
     }
-    let maxCoalOperable = Math.max(0, Math.floor(availableCoal / coalCost));
+    const maxCoalOperable = Math.max(0, Math.floor(availableCoal / coalCost));
     if (maxCoalOperable < coalFuel) {
       coalFuel = maxCoalOperable;
     }
-    let maxOilOperable = Math.max(0, Math.floor(availableOil / oilCost));
+    const maxOilOperable = Math.max(0, Math.floor(availableOil / oilCost));
     if (maxOilOperable < oilFuel) {
       oilFuel = maxOilOperable;
     }
@@ -509,11 +520,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       } else {
         overage -= ironSmelter;
         ironSmelter = 0;
-        if (iridiumSmelter >= overage) {
-          iridiumSmelter -= overage;
-        } else {
+        if (iridiumSmelter < overage) {
           overage -= iridiumSmelter;
-          iridiumSmelter = 0;
           steelSmelter = Math.max(0, steelSmelter - overage);
         }
       }
@@ -660,7 +668,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
   // 没有 delta 的资源 diff 归零
   for (const [resId, res] of Object.entries(newState.resource)) {
-    if (!deltas.hasOwnProperty(resId)) {
+    if (!Object.prototype.hasOwnProperty.call(deltas, resId)) {
       res.diff = 0;
     }
   }
@@ -856,6 +864,28 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const activeBiolabs = powerResult.activeConsumers['biolab'] ?? 0;
   if (activeBiolabs > 0 && newState.resource['Knowledge']) {
     newState.resource['Knowledge'].max += activeBiolabs * 3000;
+  }
+
+  // 对标 legacy/src/main.js L8888-8892：living_quarters 每座获得支援的建筑
+  //   - species.max += jobScale(1)（non-cataclysm baseline citizens=1；biodome 加成后续 sprint 补）
+  //   - colonist.max += jobScale(1)（EvoZen 尚未实装 colonist 岗位，本次 sprint 先只做人口上限）
+  const livingQuartersSupported = spaceSupport.supportOn['living_quarters'] ?? 0;
+  if (livingQuartersSupported > 0) {
+    const speciesId = newState.race.species;
+    const popRes = newState.resource[speciesId];
+    if (popRes) {
+      popRes.max += livingQuartersSupported;
+    }
+  }
+
+  // 对标 legacy/src/main.js L9769-9770：fabrication 每座获得支援使 craftsman.max +1。
+  // craftsman.max 已在 applyDerivedStateInPlace 中被重置为 foundries 数，故此处 += 安全。
+  const fabricationSupported = spaceSupport.supportOn['fabrication'] ?? 0;
+  if (fabricationSupported > 0) {
+    const craftsman = newState.civic['craftsman'] as { max?: number } | undefined;
+    if (craftsman) {
+      craftsman.max = (craftsman.max ?? 0) + fabricationSupported;
+    }
   }
 
   // ============================================================
@@ -1063,7 +1093,7 @@ function tickPopulationGrowth(state: GameState, timeMultiplier: number, messages
     popRes.amount += 1;
     
     // 分配到默认岗位（原版 L3972: global.civic[global.civic.d_job].workers++）
-    const defaultJob = (state.civic as any).d_job ?? 'unemployed';
+    const defaultJob = typeof state.civic.d_job === 'string' ? state.civic.d_job : 'unemployed';
     const jobSlot = state.civic[defaultJob] as { workers?: number } | undefined;
     if (jobSlot) {
       jobSlot.workers = (jobSlot.workers ?? 0) + 1;

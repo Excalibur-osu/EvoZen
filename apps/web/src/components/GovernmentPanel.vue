@@ -19,6 +19,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
+import type { GovernmentDef, GovernmentType } from '@evozen/game-core'
 
 const game = useGameStore()
 
@@ -27,7 +28,7 @@ const currentGovType = computed(() => game.state.civic.govern?.type ?? 'anarchy'
 
 /** 当前政体定义 */
 const currentGovDef = computed(() =>
-  game.GOVERNMENT_DEFS.find((d: { id: string }) => d.id === currentGovType.value)
+  game.GOVERNMENT_DEFS.find((d: GovernmentDef) => d.id === currentGovType.value)
 )
 
 /** 冷却计数器 */
@@ -60,8 +61,8 @@ const taxIncomeGovMultiplier = computed(() => {
 const isGovUnlocked = computed(() => (game.state.tech['govern'] ?? 0) >= 1)
 
 /** 切换政体 */
-function switchGov(govType: string) {
-  game.changeGov(govType as any)
+function switchGov(govType: GovernmentType) {
+  game.changeGov(govType)
 }
 
 /** 拖动改变税率 */
@@ -76,7 +77,7 @@ function adjustTax(delta: number) {
 }
 
 /** 检查某政体是否可用（科技前置是否满足） */
-function isGovAvailable(def: { id: string; reqGovern: number }): boolean {
+function isGovAvailable(def: GovernmentDef): boolean {
   // 基本前置：govern 科技等级
   if ((game.state.tech['govern'] ?? 0) < def.reqGovern) return false
   // 神权政体额外需要 gov_theo:1（对标 legacy/src/civics.js L397）

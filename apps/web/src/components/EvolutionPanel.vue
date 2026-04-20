@@ -19,7 +19,9 @@ const hasEvolvedOnce = ref(false)
 onMounted(() => {
   try {
     hasEvolvedOnce.value = localStorage.getItem('evozen_has_evolved_once') === 'true'
-  } catch (e) {}
+  } catch {
+    /* localStorage may be unavailable */
+  }
 })
 
 // ---- 响应式计算 ----

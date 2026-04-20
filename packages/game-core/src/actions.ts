@@ -1,4 +1,10 @@
-import type { GameState } from '@evozen/shared-types';
+import type {
+  GameState,
+  SmelterAllocationId,
+  SmelterFuelId,
+  SmelterOutputId,
+  SmelterState,
+} from '@evozen/shared-types';
 import { BASIC_STRUCTURES } from './structures';
 import { BASIC_TECHS } from './tech';
 import { BASE_JOBS } from './jobs';
@@ -333,7 +339,21 @@ export function setTaxRate(state: GameState, rate: number): GameState {
   return next;
 }
 
-export function assignSmelter(state: GameState, category: 'fuel' | 'output', type: string): GameState | null {
+function incrementSmelterAllocation(smelter: SmelterState, key: SmelterAllocationId): void {
+  smelter[key] = (smelter[key] ?? 0) + 1;
+}
+
+function decrementSmelterAllocation(smelter: SmelterState, key: SmelterAllocationId): void {
+  smelter[key] = Math.max(0, (smelter[key] ?? 0) - 1);
+}
+
+export function assignSmelter(state: GameState, category: 'fuel', type: SmelterFuelId): GameState | null;
+export function assignSmelter(state: GameState, category: 'output', type: SmelterOutputId): GameState | null;
+export function assignSmelter(
+  state: GameState,
+  category: 'fuel' | 'output',
+  type: SmelterFuelId | SmelterOutputId,
+): GameState | null {
   const next = cloneState(state);
   const smelter = next.city.smelter;
   if (!smelter) return null;
@@ -342,25 +362,31 @@ export function assignSmelter(state: GameState, category: 'fuel' | 'output', typ
     const totalFuelOptions = (smelter.Wood ?? 0) + (smelter.Coal ?? 0) + (smelter.Oil ?? 0) + (smelter.Inferno ?? 0);
     // Can't assign more fuel options than built smelters
     if (totalFuelOptions >= smelter.count) return null;
-    (smelter as Record<string, any>)[type] = ((smelter as Record<string, any>)[type] ?? 0) + 1;
+    incrementSmelterAllocation(smelter, type);
   } else if (category === 'output') {
     const totalOutputs = (smelter.Iron ?? 0) + (smelter.Steel ?? 0) + (smelter.Iridium ?? 0);
     const totalFuelOptions = (smelter.Wood ?? 0) + (smelter.Coal ?? 0) + (smelter.Oil ?? 0) + (smelter.Inferno ?? 0);
     // Can't assign more output options than assigned fuel options
     if (totalOutputs >= totalFuelOptions) return null;
-    (smelter as Record<string, any>)[type] = ((smelter as Record<string, any>)[type] ?? 0) + 1;
+    incrementSmelterAllocation(smelter, type);
   }
 
   return next;
 }
 
-export function removeSmelter(state: GameState, category: 'fuel' | 'output', type: string): GameState | null {
+export function removeSmelter(state: GameState, category: 'fuel', type: SmelterFuelId): GameState | null;
+export function removeSmelter(state: GameState, category: 'output', type: SmelterOutputId): GameState | null;
+export function removeSmelter(
+  state: GameState,
+  category: 'fuel' | 'output',
+  type: SmelterFuelId | SmelterOutputId,
+): GameState | null {
   const next = cloneState(state);
   const smelter = next.city.smelter;
   if (!smelter) return null;
 
-  if ((smelter as Record<string, any>)[type] > 0) {
-    (smelter as Record<string, any>)[type]--;
+  if ((smelter[type] ?? 0) > 0) {
+    decrementSmelterAllocation(smelter, type);
 
     // Auto-balance outputs if reducing fuels makes total fuels < total outputs
     if (category === 'fuel') {

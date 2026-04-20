@@ -1,4 +1,4 @@
-import type { GameState } from '@evozen/shared-types';
+import type { GameState, TradeRoute } from '@evozen/shared-types';
 import { BASE_JOBS } from './jobs';
 import {
   getStorageBonus,
@@ -18,6 +18,9 @@ import {
   getPropellantDepotHeliumCapBonus,
   getMoonBaseIridiumCapBonus,
   getHeliumMineHeliumCapBonus,
+  getGarageCount,
+  GARAGE_STORAGE_PER_BUILDING,
+  GARAGE_CONTAINERS_PER_BUILDING,
 } from './space';
 
 export function applyDerivedStateInPlace(state: GameState): void {
@@ -156,6 +159,19 @@ export function applyDerivedStateInPlace(state: GameState): void {
   }
   if ((s.tech['uranium'] ?? 0) >= 1) {
     s.resource['Uranium'].display = true;
+  }
+
+  // 对标 legacy/src/space.js L874-943 garage effect（baseline：non-cataclysm，multiplier=1）：
+  //   Copper +6500, Iron +5500, Cement +6000, Steel +4500, Titanium +3500 per garage
+  //   Containers +20/座（在下方 Containers max 一段合并）。
+  //   Alloy / Nano_Tube / Neutronium / Infernite 待对应管理/资源接入后再补。
+  const garageCount = getGarageCount(s);
+  if (garageCount > 0) {
+    for (const [resId, perBuilding] of Object.entries(GARAGE_STORAGE_PER_BUILDING)) {
+      const res = s.resource[resId];
+      if (!res) continue;
+      res.max += garageCount * perBuilding;
+    }
   }
 
   const hunterWorkers = (s.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0;
@@ -321,7 +337,12 @@ export function applyDerivedStateInPlace(state: GameState): void {
     }
   }
   if (s.resource['Containers']) {
-    s.resource['Containers'].max = Math.max(0, warehouses * containerCapacity + wharves * 10 - getTotalAssignedContainers(s));
+    // 对标 legacy/src/space.js L924-934：garage 每座 +20 集装箱（baseline containers 值）。
+    const garageContainers = garageCount * GARAGE_CONTAINERS_PER_BUILDING;
+    s.resource['Containers'].max = Math.max(
+      0,
+      warehouses * containerCapacity + wharves * 10 + garageContainers - getTotalAssignedContainers(s),
+    );
     if (s.resource['Containers'].amount > s.resource['Containers'].max) {
       s.resource['Containers'].amount = s.resource['Containers'].max;
     }
@@ -355,12 +376,11 @@ export function applyDerivedStateInPlace(state: GameState): void {
   if ((s.tech['trade'] ?? 0) >= 1) {
     s.settings.showMarket = true;
     const maxRoutes = getMaxTradeRoutes(s);
-    if (!(s.city as { trade_routes?: unknown }).trade_routes) {
-      (s.city as { trade_routes?: Array<{ resource: string; action: string; qty: number }> }).trade_routes = [];
+    if (!s.city.trade_routes) {
+      s.city.trade_routes = [];
     }
 
-    const routes =
-      (s.city as { trade_routes?: Array<{ resource: string; action: string; qty: number }> }).trade_routes ?? [];
+    const routes: TradeRoute[] = s.city.trade_routes;
 
     while (routes.length < maxRoutes) {
       routes.push({ resource: 'Food', action: 'none', qty: 1 });

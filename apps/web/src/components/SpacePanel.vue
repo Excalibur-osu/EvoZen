@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
+import { getResourceName } from '../utils/resourceNames'
 
 const game = useGameStore()
 
@@ -12,11 +13,21 @@ const structureLabels: Record<string, string> = {
   moon_base: '月面基地',
   iridium_mine: '铱矿',
   helium_mine: '氦-3 采集站',
-  spaceport: '火星航天港',
   observatory: '月面天文台',
+  spaceport: '火星航天港',
+  living_quarters: '火星居住区',
+  garage: '火星车库',
+  red_mine: '火星矿场',
+  fabrication: '火星工坊',
   mars_base: '火星基地',
   red_tower: '火星高塔',
   red_factory: '太空工厂',
+}
+
+const regionLabels: Record<string, string> = {
+  spc_home: '近地轨道',
+  spc_moon: '月球',
+  spc_red: '红色行星',
 }
 
 const highTech = computed(() => game.state.tech['high_tech'] ?? 0)
@@ -53,24 +64,132 @@ const actionCards = computed(() => {
   })
 })
 
-const structures = computed(() => {
-  return Object.entries(game.state.space)
-    .map(([id, value]) => {
-      const item = value as { count?: number; on?: number; support?: number; s_max?: number }
-      return {
-        id,
-        name: structureLabels[id] ?? id,
-        count: item.count ?? 0,
-        on: item.on ?? 0,
-        support: item.support ?? 0,
-        sMax: item.s_max ?? 0,
+interface BuildCard {
+  id: string
+  region: string
+  name: string
+  description: string
+  effect: string
+  reqText: string
+  count: number
+  on: number
+  support: number
+  sMax: number
+  costs: Record<string, number>
+  techUnlocked: boolean
+  spaceReqsOk: boolean
+  traitOk: boolean
+  canBuild: boolean
+}
+
+interface RegionGroup {
+  id: string
+  name: string
+  items: BuildCard[]
+}
+
+/**
+ * 构造每座建筑的可建造卡片。筛选规则：
+ *   - 科技条件全部满足（reqs）才会显示为"可建造"候选；尚未解锁时不进区域卡片列表，
+ *     但如果该槽位已 ensureSpaceStructure（state.space[id] 存在），仍作为占位展示。
+ */
+const regionGroups = computed<RegionGroup[]>(() => {
+  const groups: Record<string, RegionGroup> = {}
+
+  for (const def of game.SPACE_STRUCTURES) {
+    const struct = game.state.space[def.id] as
+      | { count?: number; on?: number; support?: number; s_max?: number }
+      | undefined
+
+    // 科技前置
+    let techUnlocked = true
+    for (const [techId, lvl] of Object.entries(def.reqs)) {
+      if ((game.state.tech[techId] ?? 0) < lvl) {
+        techUnlocked = false
+        break
       }
+    }
+    // 太空前置建筑
+    let spaceReqsOk = true
+    if (def.spaceReqs) {
+      for (const [sid, minCount] of Object.entries(def.spaceReqs)) {
+        const s = game.state.space[sid] as { count?: number } | undefined
+        if ((s?.count ?? 0) < minCount) {
+          spaceReqsOk = false
+          break
+        }
+      }
+    }
+    // 种族 not_trait
+    let traitOk = true
+    if (def.notTrait) {
+      for (const trait of def.notTrait) {
+        if ((game.state.race as Record<string, unknown>)[trait] !== undefined) {
+          traitOk = false
+          break
+        }
+      }
+    }
+
+    // 未解锁且未注册槽位的建筑直接跳过
+    const hasSlot = (struct?.count ?? 0) > 0
+    if (!techUnlocked && !hasSlot) continue
+    if (!traitOk && !hasSlot) continue
+
+    if (!groups[def.region]) {
+      groups[def.region] = {
+        id: def.region,
+        name: regionLabels[def.region] ?? def.region,
+        items: [],
+      }
+    }
+
+    const reqParts: string[] = []
+    for (const [techId, lvl] of Object.entries(def.reqs)) reqParts.push(`${techId}:${lvl}`)
+    if (def.spaceReqs) {
+      for (const [sid, minCount] of Object.entries(def.spaceReqs)) {
+        reqParts.push(`${structureLabels[sid] ?? sid}≥${minCount}`)
+      }
+    }
+
+    groups[def.region].items.push({
+      id: def.id,
+      region: def.region,
+      name: structureLabels[def.id] ?? def.name,
+      description: def.description,
+      effect: def.effect,
+      reqText: reqParts.join(' / '),
+      count: struct?.count ?? 0,
+      on: struct?.on ?? 0,
+      support: struct?.support ?? 0,
+      sMax: struct?.s_max ?? 0,
+      costs: techUnlocked ? game.getSpaceBuildCost(def.id) : {},
+      techUnlocked,
+      spaceReqsOk,
+      traitOk,
+      canBuild: game.canBuildSpaceStructure(def.id),
     })
-    .filter((item) => item.count > 0 || item.id === 'satellite' || item.id === 'iridium_mine' || item.id === 'helium_mine')
+  }
+
+  const order = ['spc_home', 'spc_moon', 'spc_red']
+  return order.filter((r) => groups[r]).map((r) => groups[r])
 })
 
 function performAction(actionId: string) {
   game.runSpaceAction(actionId)
+}
+
+function buildStructure(id: string) {
+  game.buildSpaceStructure(id)
+}
+
+function formatAmount(amount: number): string {
+  if (amount >= 10000) return amount.toLocaleString()
+  return amount.toString()
+}
+
+function resourceName(id: string): string {
+  return getResourceName(id)
 }
 </script>
 
@@ -137,21 +256,53 @@ function performAction(actionId: string) {
       </article>
     </section>
 
-    <section class="registry-card">
-      <div class="registry-head">
-        <span class="registry-title">已注册的太空结构</span>
-        <span class="registry-count">{{ structures.length }}</span>
-      </div>
-      <div v-if="structures.length === 0" class="empty-state">
+    <section v-if="regionGroups.length === 0" class="registry-card">
+      <div class="empty-state">
         完成发射与月球任务后，这里会开始出现真实的太空结构槽位。
       </div>
-      <div v-else class="structure-list">
-        <div v-for="item in structures" :key="item.id" class="structure-row">
-          <span class="structure-name">{{ item.name }}</span>
-          <span class="structure-meta">
-            count {{ item.count }}<template v-if="item.on > 0"> / on {{ item.on }}</template><template v-if="item.sMax > 0 || item.support > 0"> / support {{ item.support }} / s_max {{ item.sMax }}</template>
-          </span>
-        </div>
+    </section>
+
+    <section
+      v-for="group in regionGroups"
+      :key="group.id"
+      class="region-card"
+    >
+      <div class="region-head">
+        <span class="region-title">{{ group.name }}</span>
+        <span class="region-count">{{ group.items.length }} 座结构</span>
+      </div>
+      <div class="build-grid">
+        <article
+          v-for="item in group.items"
+          :key="item.id"
+          class="build-card"
+          :class="{ locked: !item.techUnlocked, ready: item.canBuild }"
+        >
+          <div class="build-head">
+            <span class="build-title">{{ item.name }}</span>
+            <span class="build-meta">
+              <template v-if="item.count > 0">已建 {{ item.count }}</template>
+              <template v-else>未建造</template>
+              <template v-if="item.on > 0"> / on {{ item.on }}</template>
+              <template v-if="item.sMax > 0 || item.support > 0"> / support {{ item.support }}/{{ item.sMax }}</template>
+            </span>
+          </div>
+          <p class="build-desc">{{ item.description }}</p>
+          <p class="build-effect">✨ {{ item.effect }}</p>
+          <p class="build-req">前置：{{ item.reqText || '—' }}</p>
+          <div v-if="item.techUnlocked" class="cost-row">
+            <span v-for="(amount, res) in item.costs" :key="res" class="cost-chip">
+              {{ resourceName(String(res)) }} {{ formatAmount(amount) }}
+            </span>
+          </div>
+          <button
+            class="btn primary build-btn"
+            :disabled="!item.canBuild"
+            @click="buildStructure(item.id)"
+          >
+            {{ !item.techUnlocked ? '未解锁' : !item.spaceReqsOk ? '前置不足' : item.canBuild ? '建造一座' : '资源不足' }}
+          </button>
+        </article>
       </div>
     </section>
   </div>
@@ -324,5 +475,96 @@ function performAction(actionId: string) {
   flex-direction: column;
   gap: 10px;
   margin-top: 10px;
+}
+
+.region-card {
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.region-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.region-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.region-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.build-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.build-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.build-card.locked {
+  opacity: 0.55;
+}
+
+.build-card.ready {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.build-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.build-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.build-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.build-desc,
+.build-effect,
+.build-req {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.build-desc,
+.build-req {
+  color: var(--text-secondary);
+}
+
+.build-effect {
+  color: var(--text-accent);
+}
+
+.build-btn {
+  align-self: flex-start;
+  margin-top: 4px;
 }
 </style>

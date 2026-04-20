@@ -1,12 +1,13 @@
 {
   "name": "@evozen/web",
   "private": true,
-  "version": "0.8.3",
+  "version": "0.8.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b"
   },
   "dependencies": {
     "@evozen/game-core": "*",
