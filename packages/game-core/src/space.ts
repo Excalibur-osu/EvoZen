@@ -6,7 +6,13 @@
  *   - spc_home: satellite / propellant_depot / gps / nav_beacon
  *   - spc_moon: moon_base / iridium_mine / helium_mine / observatory
  *   - spc_red: spaceport / living_quarters / garage / red_mine / fabrication
- *   - spc_red extension: red_tower / red_factory / biodome / exotic_lab
+ *   - spc_red extension: red_tower / red_factory / biodome / exotic_lab / ziggurat / space_barracks
+ *   - spc_hell: geothermal / swarm_plant
+ *   - spc_sun: swarm_control / swarm_satellite
+ *   - spc_gas: gas_mining / gas_storage
+ *   - spc_gas_moon: outpost / oil_extractor
+ *   - spc_belt: space_station / elerium_ship / iridium_ship / iron_ship
+ *   - spc_dwarf: elerium_contain / e_reactor
  *
  * 所有成本与加成系数逐行对标 legacy；EvoZen 当前不执行 fuel_adjust / spatialReasoning
  * （truepath / world_control / 种族修饰尚未进入当前 scope）。
@@ -17,7 +23,7 @@ import type { GameState } from '@evozen/shared-types';
 export type SpaceCostFunction = (state: GameState, count: number) => number;
 
 /** 支援池标识。单独抽象方便未来新增 belt/alpha 等。 */
-export type SupportPool = 'moon' | 'red';
+export type SupportPool = 'moon' | 'red' | 'belt';
 
 export interface SpaceStructureDefinition {
   /** 建筑 ID，与 state.space[id] 对应 */
@@ -409,6 +415,282 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     // 对标 legacy/src/space.js L1281-1283
     support: { pool: 'red', amount: -1 },
   },
+  {
+    id: 'ziggurat',
+    region: 'spc_red',
+    name: '古代神殿',
+    description: '在火星地表复建远古神殿，以殖民者的信仰力量换取全局产出加成。',
+    // 对标 legacy/src/space.js L1309: reqs: { theology: 4 }
+    reqs: { theology: 4 },
+    // 对标 legacy/src/space.js L1310-1314
+    costs: {
+      Money: spaceCost(600000, 1.28),
+      Stone: spaceCost(250000, 1.28),
+      Aluminium: spaceCost(70000, 1.28),
+      Mythril: spaceCost(250, 1.28),
+    },
+    effect: '每座按殖民者人数与神殿数量提供全局资源产出乘数加成。',
+    // ziggurat 无电力、无支援（legacy struct: { count: 0 }）。
+  },
+  {
+    id: 'space_barracks',
+    region: 'spc_red',
+    name: '太空军营',
+    description: '在火星前线驻扎太空陆战队，扩大驻军上限但消耗石油与食物。',
+    // 对标 legacy/src/space.js L1376: reqs: { marines: 1 }
+    reqs: { marines: 1 },
+    // 对标 legacy/src/space.js L1377-1381（忽略 Horseshoe）
+    costs: {
+      Money: spaceCost(350000, 1.28),
+      Alloy: spaceCost(65000, 1.28),
+      Iridium: spaceCost(22500, 1.28),
+      Wrought_Iron: spaceCost(12500, 1.28),
+    },
+    effect: '每座提供额外驻军上限，但每座消耗 2 石油/tick 与 10 食物/tick。',
+    // 对标 legacy/src/space.js L1398: powered(){ return 0; }
+    // space_barracks 无电力、无 support 字段。on 由油耗逐座裁剪（legacy main.js L2393-2403）。
+  },
+
+  // ===== spc_hell =====
+  // 对标 legacy/src/space.js L1493-1660
+  {
+    id: 'geothermal',
+    region: 'spc_hell',
+    name: '地热发电站',
+    description: '利用高温地狱行星的地热能产生电力。',
+    reqs: { hell: 1 },
+    costs: {
+      Money: spaceCost(38000, 1.35),
+      Steel: spaceCost(15000, 1.35),
+      Polymer: spaceCost(9500, 1.35),
+    },
+    effect: '每座产出 8 电力，消耗 0.5 氦-3/tick。',
+    powerCost: -8,
+    supportFuel: { resource: 'Helium_3', amountPerTick: 0.5 },
+  },
+  {
+    id: 'swarm_plant',
+    region: 'spc_hell',
+    name: '虫群工厂',
+    description: '在地狱行星生产虫群卫星组件，降低卫星成本。',
+    // 对标 legacy/src/space.js L1629: reqs: { solar: 4, hell: 1 }
+    reqs: { solar: 4, hell: 1 },
+    costs: {
+      Money: spaceCost(75000, 1.28),
+      Iron: spaceCost(65000, 1.28),
+      Neutronium: spaceCost(75, 1.28),
+      Brick: spaceCost(2500, 1.28),
+      Mythril: spaceCost(100, 1.28),
+    },
+    effect: '每座降低虫群卫星建造成本 6%。',
+    // swarm_plant 无电力、无支援。
+  },
+
+  // ===== spc_sun =====
+  // 对标 legacy/src/space.js L1700-1772
+  {
+    id: 'swarm_control',
+    region: 'spc_sun',
+    name: '虫群控制站',
+    description: '在恒星轨道部署控制中心，提供虫群支援池。',
+    reqs: { solar: 3 },
+    costs: {
+      Money: spaceCost(100000, 1.3),
+      Knowledge: spaceCost(60000, 1.3),
+      Alloy: spaceCost(7500, 1.3),
+      Helium_3: spaceCost(2000, 1.3),
+      Mythril: spaceCost(250, 1.3),
+    },
+    effect: '每座提供 10 虫群支援上限（swarm >= 2 时提升至 12）。',
+    // swarm_control 是 spc_sun 的支援池提供者，不消耗电力。
+  },
+  {
+    id: 'swarm_satellite',
+    region: 'spc_sun',
+    name: '虫群卫星',
+    description: '在恒星轨道部署太阳能卫星，提供全局电力。',
+    reqs: { solar: 3 },
+    costs: {
+      Money: spaceCost(5000, 1.1),
+      Copper: spaceCost(2500, 1.1),
+      Iridium: spaceCost(150, 1.1),
+      Helium_3: spaceCost(50, 1.1),
+    },
+    effect: '每座产出 0.35 电力，消耗 1 虫群支援。',
+    // 无 powerCost（产电），支援由 swarm_control 管理。
+  },
+
+  // ===== spc_gas =====
+  // 对标 legacy/src/space.js L1863-1928
+  {
+    id: 'gas_mining',
+    region: 'spc_gas',
+    name: '气体采集站',
+    description: '在气态巨行星大气中采集氦-3。',
+    reqs: { gas_giant: 1 },
+    costs: {
+      Money: spaceCost(250000, 1.32),
+      Uranium: spaceCost(500, 1.32),
+      Alloy: spaceCost(10000, 1.32),
+      Helium_3: spaceCost(2500, 1.32),
+      Mythril: spaceCost(25, 1.32),
+    },
+    effect: '每座每 tick 产出氦-3，消耗 2 电力。',
+    powerCost: 2,
+  },
+  {
+    id: 'gas_storage',
+    region: 'spc_gas',
+    name: '轨道储存站',
+    description: '在气态巨行星轨道建造资源存储设施。',
+    reqs: { gas_giant: 1 },
+    costs: {
+      Money: spaceCost(125000, 1.32),
+      Iridium: spaceCost(3000, 1.32),
+      Sheet_Metal: spaceCost(2000, 1.32),
+      Helium_3: spaceCost(1000, 1.32),
+    },
+    effect: '每座增加 Oil +3500, Helium_3 +2500, Uranium +1000 上限。',
+    // 纯存储建筑，无电力。
+  },
+
+  // ===== spc_gas_moon =====
+  // 对标 legacy/src/space.js L2007-2123
+  {
+    id: 'outpost',
+    region: 'spc_gas_moon',
+    name: '前哨站',
+    description: '在气体卫星建立中子素采集前哨。',
+    reqs: { gas_moon: 1 },
+    costs: {
+      Money: spaceCost(666000, 1.3),
+      Titanium: spaceCost(18000, 1.3),
+      Iridium: spaceCost(2500, 1.3),
+      Helium_3: spaceCost(6000, 1.3),
+      Mythril: spaceCost(300, 1.3),
+    },
+    effect: '每座产出中子素，提供 +500 中子素上限。消耗 3 电力 + 2 Oil/tick。',
+    powerCost: 3,
+  },
+  {
+    id: 'oil_extractor',
+    region: 'spc_gas_moon',
+    name: '石油提取器',
+    description: '从气态卫星的碳氢化合物湖泊中提取石油。',
+    reqs: { gas_moon: 2 },
+    costs: {
+      Money: spaceCost(666000, 1.3),
+      Polymer: spaceCost(7500, 1.3),
+      Helium_3: spaceCost(2500, 1.3),
+      Wrought_Iron: spaceCost(5000, 1.3),
+    },
+    effect: '每座每 tick 产出石油。消耗 1 电力。',
+    powerCost: 1,
+  },
+
+  // ===== spc_belt =====
+  // 对标 legacy/src/space.js L2165-2335
+  {
+    id: 'space_station',
+    region: 'spc_belt',
+    name: '太空站',
+    description: '在小行星带建立空间站，提供矿工岗位与支援池。',
+    reqs: { asteroid: 2 },
+    costs: {
+      Money: spaceCost(250000, 1.3),
+      Iron: spaceCost(85000, 1.3),
+      Polymer: spaceCost(18000, 1.3),
+      Iridium: spaceCost(2800, 1.28),
+      Helium_3: spaceCost(2000, 1.3),
+      Mythril: spaceCost(75, 1.25),
+    },
+    effect: '每座提供 3 太空矿工岗位 + 5 Elerium 上限(asteroid>=5)。消耗 3 电力 + 2.5 He3 + 10 Food/tick。',
+    powerCost: 3,
+    // space_station 是 spc_belt 的支援池提供者（support: 'belt'）。
+    // 但它自身也是消费者（电力 + 燃料 + 食物），与 moon_base/spaceport 类似。
+  },
+  {
+    id: 'elerium_ship',
+    region: 'spc_belt',
+    name: '超铀采矿船',
+    description: '在小行星带采集超铀元素。',
+    reqs: { asteroid: 5 },
+    costs: {
+      Money: spaceCost(500000, 1.3),
+      Uranium: spaceCost(2500, 1.3),
+      Titanium: spaceCost(10000, 1.3),
+      Mythril: spaceCost(500, 1.3),
+      Helium_3: spaceCost(5000, 1.3),
+    },
+    effect: '每座产出 Elerium。消耗 2 小行星带支援。',
+    support: { pool: 'belt', amount: -2 },
+  },
+  {
+    id: 'iridium_ship',
+    region: 'spc_belt',
+    name: '铱矿采矿船',
+    description: '在小行星带采集铱矿。',
+    reqs: { asteroid: 3 },
+    costs: {
+      Money: spaceCost(120000, 1.3),
+      Uranium: spaceCost(1000, 1.3),
+      Alloy: spaceCost(48000, 1.3),
+      Iridium: spaceCost(2800, 1.3),
+      Helium_3: spaceCost(1800, 1.3),
+    },
+    effect: '每座产出 Iridium。消耗 1 小行星带支援。',
+    support: { pool: 'belt', amount: -1 },
+  },
+  {
+    id: 'iron_ship',
+    region: 'spc_belt',
+    name: '铁矿采矿船',
+    description: '在小行星带采集铁矿。',
+    reqs: { asteroid: 3 },
+    costs: {
+      Money: spaceCost(80000, 1.3),
+      Steel: spaceCost(42000, 1.3),
+      Aluminium: spaceCost(38000, 1.3),
+      Polymer: spaceCost(16000, 1.3),
+      Helium_3: spaceCost(1200, 1.3),
+    },
+    effect: '每座产出 Iron。消耗 1 小行星带支援。',
+    support: { pool: 'belt', amount: -1 },
+  },
+
+  // ===== spc_dwarf =====
+  // 对标 legacy/src/space.js L2374-2441
+  {
+    id: 'elerium_contain',
+    region: 'spc_dwarf',
+    name: '超铀容器',
+    description: '在矮行星建造高级超铀存储容器。',
+    reqs: { dwarf: 1 },
+    costs: {
+      Money: spaceCost(800000, 1.28),
+      Cement: spaceCost(120000, 1.28),
+      Iridium: spaceCost(50000, 1.28),
+      Neutronium: spaceCost(250, 1.28),
+    },
+    effect: '每座增加 Elerium +100 上限。消耗 6 电力。',
+    powerCost: 6,
+  },
+  {
+    id: 'e_reactor',
+    region: 'spc_dwarf',
+    name: '超铀反应堆',
+    description: '利用超铀元素产生大量电力。',
+    reqs: { elerium: 2 },
+    costs: {
+      Money: spaceCost(1250000, 1.28),
+      Steel: spaceCost(350000, 1.28),
+      Neutronium: spaceCost(1250, 1.28),
+      Mythril: spaceCost(2500, 1.28),
+    },
+    effect: '每座产出 25 电力，消耗 0.05 Elerium/tick。',
+    powerCost: -25,
+    supportFuel: { resource: 'Elerium', amountPerTick: 0.05 },
+  },
 ];
 
 // ============================================================
@@ -590,6 +872,30 @@ export function getObservatoryKnowledgeCapBonus(
   return gain;
 }
 
+/**
+ * exotic_lab 对知识上限的贡献（对标 legacy main.js L9670-9706）：
+ *   sci = 500
+ *   if ancient_study >= 2: sci += templeCount * 15
+ *   gain = support_on['exotic_lab'] * colonist.workers * sci
+ *
+ * 当前 scope 简化：忽略 science >= 13 的 laboratory bonus / mass_driver / cataclysm / high_pop。
+ */
+export function getExoticLabKnowledgeCapBonus(
+  state: GameState,
+  supportedCount: number,
+): number {
+  if (supportedCount <= 0) return 0;
+  let sci = 500;
+  if ((state.tech['ancient_study'] ?? 0) >= 2) {
+    const templeCount =
+      (state.city['temple'] as { count?: number } | undefined)?.count ?? 0;
+    sci += templeCount * 15;
+  }
+  const colonistWorkers =
+    (state.civic['colonist'] as { workers?: number } | undefined)?.workers ?? 0;
+  return supportedCount * colonistWorkers * sci;
+}
+
 // --- spc_red ---
 
 export function getGarageCount(state: GameState): number {
@@ -620,3 +926,51 @@ export const GARAGE_CONTAINERS_PER_BUILDING = 20;
 // --- 供支援 / 燃料 / tick 查询的公共访问器 ---
 
 export { getSpaceCount as getSpaceStructCount, getSpaceOn as getSpaceStructOn };
+
+// --- spc_red: ziggurat ---
+
+/**
+ * 对标 legacy/src/space.js L7333-7356 zigguratBonus()：
+ *   bonus = 1 + (templeCount * colonist.workers * zig)
+ *   zig base = tech['ancient_study'] ? 0.006 : 0.004
+ *
+ * 当前 scope 简化：忽略 ancient_deify / theocracy / ooze / high_pop 修饰。
+ * 调用方（tick.ts）将此乘数应用到所有基础资源产出上。
+ */
+export function zigguratBonus(state: GameState): number {
+  if (getSpaceCount(state, 'ziggurat') <= 0) return 1;
+  const zig = (state.tech['ancient_study'] ?? 0) > 0 ? 0.006 : 0.004;
+  const templeCount =
+    (state.city['temple'] as { count?: number } | undefined)?.count ?? 0;
+  const colonistWorkers =
+    (state.civic['colonist'] as { workers?: number } | undefined)?.workers ?? 0;
+  return 1 + templeCount * colonistWorkers * zig;
+}
+
+// --- spc_red: space_barracks ---
+
+/**
+ * space_barracks 每座提供的驻军数。
+ * 对标 legacy/src/space.js L1407-1419：
+ *   soldiers = marines >= 2 ? 4 : 2
+ *   evil universe: soldiers-- (non-cataclysm)，+ biodome_on * 0.075
+ *   grenadier: soldiers /= 2
+ *
+ * 当前 scope 简化：忽略 evil universe / grenadier / biodome evil bonus。
+ */
+export function getSpaceBarracksSoldiers(state: GameState): number {
+  return (state.tech['marines'] ?? 0) >= 2 ? 4 : 2;
+}
+
+/**
+ * space_barracks 每座 on 消耗的石油/tick。
+ * 对标 legacy/src/main.js L2394：oil_cost = fuel_adjust(2, true)
+ * 当前不实现 fuel_adjust，直接返回 base=2。
+ */
+export const SPACE_BARRACKS_OIL_PER_TICK = 2;
+
+/**
+ * space_barracks 每座 on 消耗的食物/tick（非 cataclysm）。
+ * 对标 legacy/src/main.js L3759-3761：space_marines = barracks.on * 10
+ */
+export const SPACE_BARRACKS_FOOD_PER_TICK = 10;

@@ -404,6 +404,14 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const garrisons = getStructCount('garrison');
   const soldiersPerGarrison = (s.tech['military'] ?? 0) >= 5 ? 3 : 2;
   s.civic.garrison.max = garrisons * soldiersPerGarrison;
+
+  // 对标 legacy main.js L8730-8732：space_barracks 每座 on 贡献额外驻军上限。
+  const spaceBarracksOn = (s.space['space_barracks'] as { on?: number } | undefined)?.on ?? 0;
+  if (spaceBarracksOn > 0) {
+    const soldiersPerBarracks = (s.tech['marines'] ?? 0) >= 2 ? 4 : 2;
+    s.civic.garrison.max += spaceBarracksOn * soldiersPerBarracks;
+  }
+
   if (s.civic.garrison.workers > s.civic.garrison.max) {
     s.civic.garrison.workers = s.civic.garrison.max;
   }

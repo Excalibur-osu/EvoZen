@@ -92,6 +92,7 @@ function resolvePool(
   const PRIMARY_REGIONS: Record<SupportPool, string> = {
     moon: 'spc_moon',
     red: 'spc_red',
+    belt: 'spc_belt',
   };
   const primaryRegion = PRIMARY_REGIONS[pool];
 

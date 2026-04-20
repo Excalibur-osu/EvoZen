@@ -531,19 +531,19 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
     const totalFuel = woodFuel + coalFuel + oilFuel;
 
-    // 当配置产出 > 实际提供的燃料数时做自动降级（优先降铁，后降铱，最后降钢）
+    // 当配置产出 > 实际提供的燃料数时做自动降级
+    // 对标 legacy main.js L4993-5004: 先降钢，再降铁，最后降铱
     let overage = ironSmelter + steelSmelter + iridiumSmelter - totalFuel;
     if (overage > 0) {
-      if (ironSmelter >= overage) {
-        ironSmelter -= overage;
-      } else {
-        overage -= ironSmelter;
-        ironSmelter = 0;
-        if (iridiumSmelter < overage) {
-          overage -= iridiumSmelter;
-          steelSmelter = Math.max(0, steelSmelter - overage);
-        }
-      }
+      const disableSteel = Math.min(overage, steelSmelter);
+      steelSmelter -= disableSteel;
+      overage -= disableSteel;
+
+      const disableIron = Math.min(overage, ironSmelter);
+      ironSmelter -= disableIron;
+      overage -= disableIron;
+
+      // 极端情况：iridium 也不够
     } else if (overage < 0) {
       // 原版默认会将多余的所有燃料强行塞入产铁
       ironSmelter += Math.abs(overage);
@@ -631,6 +631,59 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     deltas['Aluminium'] =
       (deltas['Aluminium'] ?? 0)
       + aluminiumBase * (1 + refineryBonus / 100) * effectiveProdMult;
+  }
+
+  // ============================================================
+  // 9c. 深空建筑产出分段 — 对标 legacy/src/prod.js
+  // ============================================================
+  // gas_mining (He3 采集船) — prod.js L340-375
+  const gasShipCount = (state.space['gas_mining'] as { on?: number } | undefined)?.on ?? 0;
+  if (gasShipCount > 0) {
+    const gasTech = techLevel('helium');
+    let gasRate = 0.5;
+    if (gasTech >= 4) gasRate = 0.65;
+    if (gasTech >= 5) gasRate = 0.85;
+    deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + gasShipCount * gasRate;
+  }
+
+  // oil_extractor (气态卫星石油) — prod.js L395-425
+  const oilExtractorCount = (state.space['oil_extractor'] as { on?: number } | undefined)?.on ?? 0;
+  if (oilExtractorCount > 0) {
+    const gasMoonTech = techLevel('gas_moon');
+    let extractRate = 0.18;
+    if (gasMoonTech >= 3) extractRate = 0.24;
+    if (gasMoonTech >= 5) extractRate = 0.312;
+    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilExtractorCount * extractRate;
+  }
+
+  // space_station (小行星带) belt_mining — prod.js L430-460
+  const stationCount = (state.space['space_station'] as { on?: number } | undefined)?.on ?? 0;
+  if (stationCount > 0) {
+    const asteroidTech = techLevel('asteroid');
+    let beltRate = 0.12;
+    if (asteroidTech >= 5) beltRate = 0.18;
+    if (asteroidTech >= 6) beltRate = 0.28;
+    const beltMining = stationCount * beltRate;
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + beltMining;
+
+    // Elerium 随机发现事件 — 对标 legacy main.js L10875-10895
+    // 当 asteroid=3 且矿船活跃时，以概率 beltMining/250 触发 asteroid:4
+    if (asteroidTech === 3 && beltMining > 0) {
+      if (Math.random() * 250 <= beltMining) {
+        const next = state as GameState;
+        next.tech['asteroid'] = 4;
+        if (!next.resource['Elerium']) {
+          next.resource['Elerium'] = { name: 'Elerium', amount: 0, max: 100, display: true, diff: 0, value: 0, rate: 0, crates: 0, delta: 0 };
+        } else {
+          next.resource['Elerium'].display = true;
+        }
+        messages.push({
+          text: '⚛️ 矿船在小行星带发现了超铀元素——Elerium！',
+          type: 'info',
+          category: 'progress',
+        });
+      }
+    }
   }
 
   // ============================================================

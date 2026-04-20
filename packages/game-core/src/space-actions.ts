@@ -41,6 +41,54 @@ export const SPACE_ACTIONS: SpaceActionDefinition[] = [
       Helium_3: 4500,
     },
   },
+  {
+    id: 'hell_mission',
+    name: '地狱行星任务',
+    description: '探索灼热的内行星，为地热发电建立入口。',
+    effect: '完成后推进到 hell:1，解锁地热发电站。',
+    reqs: { space: 3, space_explore: 3 },
+    costs: { Helium_3: 6500 },
+  },
+  {
+    id: 'sun_mission',
+    name: '恒星任务',
+    description: '向恒星发射探测器，为戴森虫群奠定基础。',
+    effect: '完成后推进到 solar:1。',
+    reqs: { space_explore: 4 },
+    costs: { Helium_3: 15000 },
+  },
+  {
+    id: 'gas_mission',
+    name: '气态巨行星任务',
+    description: '向外太阳系的气态巨行星发射探测器。',
+    effect: '完成后推进到 space:5，解锁气体卫星与小行星带区域。',
+    reqs: { space: 4, space_explore: 4 },
+    costs: { Helium_3: 12500 },
+  },
+  {
+    id: 'gas_moon_mission',
+    name: '气态卫星任务',
+    description: '探索气态巨行星的卫星，建立中子素采集前哨。',
+    effect: '完成后推进到 space:6 / gas_moon:1，解锁前哨站。',
+    reqs: { space: 5 },
+    costs: { Helium_3: 30000 },
+  },
+  {
+    id: 'belt_mission',
+    name: '小行星带任务',
+    description: '探索火星与木星之间的小行星带。',
+    effect: '完成后推进到 asteroid:1，解锁矮行星区域。',
+    reqs: { space: 5 },
+    costs: { Helium_3: 25000 },
+  },
+  {
+    id: 'dwarf_mission',
+    name: '矮行星任务',
+    description: '探索小行星带外缘的矮行星。',
+    effect: '完成后推进到 dwarf:1，解锁超铀容器。',
+    reqs: { asteroid: 1, elerium: 1 },
+    costs: { Helium_3: 45000 },
+  },
 ];
 
 function cloneState(state: GameState): GameState {
@@ -70,6 +118,12 @@ export function canRunSpaceAction(state: GameState, actionId: string): boolean {
   if (actionId === 'test_launch' && (state.tech['space'] ?? 0) >= 2) return false;
   if (actionId === 'moon_mission' && (state.tech['space'] ?? 0) >= 3) return false;
   if (actionId === 'red_mission' && (state.tech['space'] ?? 0) >= 4) return false;
+  if (actionId === 'hell_mission' && (state.tech['hell'] ?? 0) >= 1) return false;
+  if (actionId === 'sun_mission' && (state.tech['solar'] ?? 0) >= 1) return false;
+  if (actionId === 'gas_mission' && (state.tech['space'] ?? 0) >= 5) return false;
+  if (actionId === 'gas_moon_mission' && (state.tech['space'] ?? 0) >= 6) return false;
+  if (actionId === 'belt_mission' && (state.tech['asteroid'] ?? 0) >= 1) return false;
+  if (actionId === 'dwarf_mission' && (state.tech['dwarf'] ?? 0) >= 1) return false;
 
   const costs = getSpaceActionCost(state, actionId);
   for (const [resId, cost] of Object.entries(costs)) {
@@ -106,6 +160,30 @@ export function runSpaceAction(state: GameState, actionId: string): GameState | 
       ensureSpaceStructure(next, 'garage');
       ensureSpaceStructure(next, 'red_mine');
       ensureSpaceStructure(next, 'fabrication');
+      return next;
+    case 'hell_mission':
+      next.tech['hell'] = Math.max(next.tech['hell'] ?? 0, 1);
+      ensureSpaceStructure(next, 'geothermal');
+      return next;
+    case 'sun_mission':
+      next.tech['solar'] = Math.max(next.tech['solar'] ?? 0, 1);
+      return next;
+    case 'gas_mission':
+      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 5);
+      // 对标 legacy/src/space.js L1857：gas_mission 完成后初始化 space_station 槽位
+      ensureSpaceStructure(next, 'space_station');
+      return next;
+    case 'gas_moon_mission':
+      next.tech['space'] = Math.max(next.tech['space'] ?? 0, 6);
+      next.tech['gas_moon'] = Math.max(next.tech['gas_moon'] ?? 0, 1);
+      ensureSpaceStructure(next, 'outpost');
+      return next;
+    case 'belt_mission':
+      next.tech['asteroid'] = Math.max(next.tech['asteroid'] ?? 0, 1);
+      return next;
+    case 'dwarf_mission':
+      next.tech['dwarf'] = Math.max(next.tech['dwarf'] ?? 0, 1);
+      ensureSpaceStructure(next, 'elerium_contain');
       return next;
     default:
       return null;

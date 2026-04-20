@@ -135,6 +135,8 @@ export function createNewGame(): GameState {
       // 太空特有资源（前置 0 最大值以临时隐藏）
       Iridium: { ...makeResource('铱', 0, 0), value: 0 },
       Helium_3: { ...makeResource('氦-3', 0, 0), value: 0 },
+      Elerium: { ...makeResource('超铀', 0, 0), value: 297.115 },
+      Neutronium: { ...makeResource('中子素', 0, 0), value: 150 },
       Mythril: { ...makeResource('秘银', -1, 0), value: 94.239 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },

@@ -1791,4 +1791,242 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 250000 },
     effect: '火星殖民推进到 Lv.5，并注册异星实验室槽位。',
   },
+  // legacy tech.js L7750-7769: space_marines → marines:1
+  {
+    id: 'space_marines',
+    name: '太空陆战队',
+    description: '在火星殖民地部署专业军事力量，保障前线安全。',
+    category: 'military',
+    era: '早期太空',
+    reqs: { space: 3, mars: 2 },
+    grant: ['marines', 1],
+    costs: { Knowledge: 210000 },
+    effect: '解锁火星军营，可在红色行星驻扎太空陆战队以扩大驻军上限。',
+  },
+
+  // ===== 神学 / 宗教科技链 =====
+  // theology:1 由 prestige 基因 'ancients' 自动授予，当前不可达。
+  // 以下科技在 theology:1 就位后形成完整可达链。
+
+  // legacy tech.js L8345-8369: theology → theology:2
+  {
+    id: 'theology',
+    name: '神学',
+    description: '研究信仰的力量。',
+    category: 'religion',
+    era: '文明',
+    reqs: { theology: 1, housing: 1, cement: 1 },
+    grant: ['theology', 2],
+    costs: { Knowledge: 900 },
+    effect: '解锁神殿建筑，为后续宗教科技奠定基础。',
+  },
+  // legacy tech.js L8371-8399: fanaticism → theology:3
+  // 原版有 fanaticism / alt_fanaticism 两个分支（取决于 transcendence 基因），
+  // 当前简化为单一 fanaticism。
+  {
+    id: 'fanaticism',
+    name: '狂热信仰',
+    description: '将信仰推向极致。',
+    category: 'religion',
+    era: '文明',
+    reqs: { theology: 2 },
+    grant: ['theology', 3],
+    costs: { Knowledge: 2500 },
+    effect: '推进神学到 Lv.3，为古代神学解锁前置。',
+  },
+  // legacy tech.js L8432-8457: ancient_theology → theology:4
+  {
+    id: 'ancient_theology',
+    name: '古代神学',
+    description: '在火星殖民地复兴远古信仰。',
+    category: 'religion',
+    era: '早期太空',
+    reqs: { theology: 3, mars: 2 },
+    // 原版 condition: global.genes['ancients']；当前 ancients 基因未实装，
+    // 与 theology:1 来源相同，链路自然阻断。
+    grant: ['theology', 4],
+    costs: { Knowledge: 180000 },
+    effect: '解锁火星古代神殿（ziggurat），赋予全局资源产出加成。',
+  },
+  // legacy tech.js L8459-8483: study → theology:5 + ancient_study:1
+  {
+    id: 'study',
+    name: '远古研究',
+    description: '深入研究远古文明遗迹。',
+    category: 'religion',
+    era: '早期太空',
+    reqs: { theology: 4 },
+    grant: ['theology', 5],
+    costs: { Knowledge: 195000 },
+    effect: '获得 ancient_study:1，提升神殿全局乘数基数（0.004 → 0.006）。',
+  },
+
+  // ===== 太阳能 / 戴森球科技链 =====
+
+  // legacy tech.js L8968-8985: dyson_sphere → solar:2
+  {
+    id: 'dyson_sphere',
+    name: '戴森球',
+    description: '构思在恒星周围建造巨型能量采集结构。',
+    category: 'power_generation',
+    era: '早期太空',
+    reqs: { solar: 1 },
+    grant: ['solar', 2],
+    costs: { Knowledge: 195000 },
+    effect: '解锁戴森虫群技术路线。',
+  },
+  // legacy tech.js L8987-9005: dyson_swarm → solar:3
+  {
+    id: 'dyson_swarm',
+    name: '戴森虫群',
+    description: '以大量小型卫星替代单体球壳，更可行的恒星能量采集方案。',
+    category: 'power_generation',
+    era: '早期太空',
+    reqs: { solar: 2 },
+    grant: ['solar', 3],
+    costs: { Knowledge: 210000 },
+    effect: '解锁虫群控制站与虫群卫星建筑。',
+  },
+  // legacy tech.js L9007-9025: swarm_plant → solar:4
+  {
+    id: 'swarm_plant',
+    name: '虫群工厂科技',
+    description: '在地狱行星建造虫群卫星零件工厂。',
+    category: 'power_generation',
+    era: '深空',
+    reqs: { solar: 3, hell: 1, gas_moon: 1 },
+    grant: ['solar', 4],
+    costs: { Knowledge: 250000 },
+    effect: '解锁地狱行星虫群工厂，降低卫星成本。',
+  },
+
+  // ===== 大气采矿 → 气态巨行星 =====
+
+  // legacy tech.js L9315-9334: atmospheric_mining → gas_giant:1
+  {
+    id: 'atmospheric_mining',
+    name: '大气层采矿',
+    description: '开发从气态巨行星大气中采集资源的技术。',
+    category: 'power_generation',
+    era: '早期太空',
+    reqs: { space: 5 },
+    grant: ['gas_giant', 1],
+    costs: { Knowledge: 190000 },
+    effect: '解锁气态巨行星的气体采集站与轨道储存站。',
+  },
+
+  // ===== 零重力采矿 → 小行星带 =====
+
+  // legacy tech.js L9395-9415: zero_g_mining → asteroid:2
+  {
+    id: 'zero_g_mining',
+    name: '零重力采矿',
+    description: '在微重力环境中进行资源开采的技术。',
+    category: 'space_mining',
+    era: '早期太空',
+    reqs: { asteroid: 1, high_tech: 8 },
+    grant: ['asteroid', 2],
+    costs: { Knowledge: 210000 },
+    effect: '解锁小行星带太空站、铱矿采矿船与铁矿采矿船。',
+  },
+
+  // ===== 超铀开采 → asteroid:5 =====
+
+  // legacy tech.js L9417-9439: elerium_mining → asteroid:5
+  {
+    id: 'elerium_mining',
+    name: '超铀矿开采',
+    description: '开发从小行星中提取超铀元素的技术。',
+    category: 'space_mining',
+    era: '深空',
+    reqs: { asteroid: 4 },
+    grant: ['asteroid', 5],
+    costs: { Knowledge: 235000, Elerium: 1 },
+    effect: '解锁超铀采矿船。',
+  },
+
+  // ===== 超铀科技 → elerium:1 =====
+
+  // legacy tech.js L9480-9498: elerium_tech → elerium:1
+  {
+    id: 'elerium_tech',
+    name: '超铀工程',
+    description: '研究超铀元素的工程应用。',
+    category: 'space_mining',
+    era: '深空',
+    reqs: { asteroid: 5 },
+    grant: ['elerium', 1],
+    costs: { Knowledge: 275000, Elerium: 20 },
+    effect: '解锁矮行星探索任务与超铀容器。',
+  },
+
+  // ===== 超铀反应堆 → elerium:2 =====
+
+  // legacy tech.js L9500-9519: elerium_reactor → elerium:2
+  {
+    id: 'elerium_reactor',
+    name: '超铀反应堆科技',
+    description: '利用超铀裂变产生大量电力。',
+    category: 'power_generation',
+    era: '深空',
+    reqs: { dwarf: 1, elerium: 1 },
+    grant: ['elerium', 2],
+    costs: { Knowledge: 325000, Elerium: 180 },
+    effect: '解锁矮行星超铀反应堆。',
+  },
+
+  // ===== 产出升级科技 =====
+
+  // legacy tech.js L9441-9458: laser_mining → asteroid:6
+  // 解锁后 iridium_ship 0.055→0.08, iron_ship 2→3, elerium_ship 0.005→0.0075
+  {
+    id: 'laser_mining',
+    name: '激光采矿',
+    description: '使用聚焦激光束提高小行星带采矿效率。',
+    category: 'space_mining',
+    era: '深空',
+    reqs: { asteroid: 5, elerium: 1, high_tech: 9 },
+    grant: ['asteroid', 6],
+    costs: { Knowledge: 350000 },
+    effect: '提升小行星带采矿船产出效率。',
+  },
+  // legacy tech.js L9460-9478: plasma_mining → asteroid:7
+  // 解锁后 iridium_ship 0.08→0.1, iron_ship 3→4, elerium_ship 0.0075→0.009
+  {
+    id: 'plasma_mining',
+    name: '等离子采矿',
+    description: '使用等离子切割技术进一步提高采矿效率。',
+    category: 'space_mining',
+    era: '星际',
+    reqs: { asteroid: 6, high_tech: 13 },
+    grant: ['asteroid', 7],
+    costs: { Knowledge: 825000 },
+    effect: '进一步提升小行星带采矿船产出效率。',
+  },
+  // legacy tech.js L9336-9354: helium_attractor → helium:1
+  // 解锁后 gas_mining He3 产出 0.5→0.65
+  {
+    id: 'helium_attractor',
+    name: '氦吸引器',
+    description: '改进气态巨行星大气采集技术，提高氦-3产出。',
+    category: 'power_generation',
+    era: '深空',
+    reqs: { gas_giant: 1, elerium: 1 },
+    grant: ['helium', 1],
+    costs: { Knowledge: 290000, Elerium: 250 },
+    effect: '气态巨行星氦-3采集效率提升 30%。',
+  },
+  // legacy tech.js L9027-9044: space_sourced → solar:5
+  // 解锁 iron_ship 的附加 Swarm Satellite 组件效果
+  {
+    id: 'space_sourced',
+    name: '太空资源化',
+    description: '将太空采集的原材料直接用于虫群卫星生产。',
+    category: 'power_generation',
+    era: '深空',
+    reqs: { solar: 4, asteroid: 3 },
+    grant: ['solar', 5],
+    costs: { Knowledge: 300000 },
+    effect: '铁矿采矿船可为虫群卫星提供原材料。',
+  },
 ];

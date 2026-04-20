@@ -151,6 +151,12 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
     }
     next.settings.showIndustry = true;
   }
+  // 对标 legacy/src/space.js L2197-2198：建造首座 space_station 时 asteroid 推进到 3
+  if (structureId === 'space_station') {
+    if ((next.tech['asteroid'] ?? 0) < 3) {
+      next.tech['asteroid'] = 3;
+    }
+  }
 
   applyDerivedStateInPlace(next);
   return next;
@@ -287,6 +293,57 @@ export function researchTech(state: GameState, techId: string): GameState | null
       break;
     case 'exotic_lab':
       ensureSpaceStructure(next, 'exotic_lab');
+      break;
+    case 'space_marines':
+      // space_barracks 不走 power/support 池，但需要 on 字段来追踪油耗裁剪。
+      // ensureSpaceStructure 只创建 { count: 0 }，不含 on；必须手动初始化 on: 0，
+      // 后续 buildSpaceStructure 的 "else if (building.on !== undefined)" 分支会自增。
+      if (!next.space['space_barracks']) {
+        next.space['space_barracks'] = { count: 0, on: 0 };
+      }
+      break;
+    case 'ancient_theology':
+      ensureSpaceStructure(next, 'ziggurat');
+      break;
+    case 'study':
+      // legacy tech.js L8479: global.tech['ancient_study'] = 1;
+      next.tech['ancient_study'] = 1;
+      break;
+
+    // ===== 太阳能 / 戴森 =====
+    case 'dyson_swarm':
+      // solar:3 → 解锁虫群控制站与虫群卫星
+      ensureSpaceStructure(next, 'swarm_control');
+      ensureSpaceStructure(next, 'swarm_satellite');
+      break;
+    case 'swarm_plant':
+      // solar:4 → 解锁地狱行星虫群工厂
+      ensureSpaceStructure(next, 'swarm_plant');
+      break;
+
+    // ===== 气态巨行星 =====
+    case 'atmospheric_mining':
+      // gas_giant:1 → 解锁采集站与储存站
+      ensureSpaceStructure(next, 'gas_mining');
+      ensureSpaceStructure(next, 'gas_storage');
+      break;
+
+    // ===== 小行星带 =====
+    case 'zero_g_mining':
+      // asteroid:2 → 解锁太空站、铱矿船、铁矿船
+      ensureSpaceStructure(next, 'space_station');
+      ensureSpaceStructure(next, 'iridium_ship');
+      ensureSpaceStructure(next, 'iron_ship');
+      break;
+    case 'elerium_mining':
+      // asteroid:5 → 解锁超铀采矿船
+      ensureSpaceStructure(next, 'elerium_ship');
+      break;
+
+    // ===== 超铀 / 矮行星 =====
+    case 'elerium_reactor':
+      // elerium:2 → 解锁超铀反应堆
+      ensureSpaceStructure(next, 'e_reactor');
       break;
   }
 
