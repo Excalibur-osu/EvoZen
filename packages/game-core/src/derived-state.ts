@@ -31,6 +31,8 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
   const getStructCount = (id: string): number =>
     (s.city[id] as { count: number } | undefined)?.count ?? 0;
+  const getSpaceCount = (id: string): number =>
+    (s.space[id] as { count?: number } | undefined)?.count ?? 0;
 
   const setJobMax = (jobId: string, max: number): void => {
     const job = s.civic[jobId] as { max: number } | undefined;
@@ -146,6 +148,9 @@ export function applyDerivedStateInPlace(state: GameState): void {
     if (iridiumBonus > 0) {
       s.resource['Iridium'].display = true;
     }
+  }
+  if (s.resource['Mythril'] && getSpaceCount('iridium_mine') > 0) {
+    s.resource['Mythril'].display = true;
   }
 
   let titaniumMax = 50;
@@ -297,9 +302,8 @@ export function applyDerivedStateInPlace(state: GameState): void {
   // 当建筑被拆除 → job.max 下降 → 可能 workers > max
   // 多余的工人必须退回到 unemployed，否则出现幽灵工人（无建筑却产出资源）
   const clampableJobs = [
-    'farmer', 'miner', 'coal_miner', 'cement_worker',
-    'banker', 'professor', 'scientist', 'craftsman',
-    'entertainer', 'priest',
+    'farmer', 'miner', 'coal_miner', 'cement_worker', 'banker',
+    'professor', 'scientist', 'craftsman', 'entertainer', 'priest',
   ];
   const unemployed = s.civic['unemployed'] as { workers: number } | undefined;
   for (const jobId of clampableJobs) {
@@ -366,11 +370,18 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
     if (!s.city['foundry']) {
       (s.city as Record<string, unknown>)['foundry'] = {
-        count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0,
+        count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0, Mythril: 0,
       };
     } else if ((s.city['foundry'] as { Sheet_Metal?: number }).Sheet_Metal === undefined) {
       (s.city['foundry'] as { Sheet_Metal?: number }).Sheet_Metal = 0;
     }
+    if ((s.city['foundry'] as { Mythril?: number }).Mythril === undefined) {
+      (s.city['foundry'] as { Mythril?: number }).Mythril = 0;
+    }
+  }
+
+  if (getSpaceCount('living_quarters') > 0 && s.civic['colonist']) {
+    (s.civic['colonist'] as { display?: boolean }).display = true;
   }
 
   if ((s.tech['trade'] ?? 0) >= 1) {

@@ -32,6 +32,8 @@ export const RESOURCE_NAMES: Record<string, string> = {
   Iridium: '铱',
   Helium_3: '氦-3',
   Mythril: '秘银',
+  Stanene: '锡烯',
+  Soul_Gem: '灵魂宝石',
 }
 
 /** 获取资源中文名 */

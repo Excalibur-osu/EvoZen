@@ -11,10 +11,11 @@
  *   + 季节加成（春 +5, 冬 -5）
  *   + 天气效果（-5 ~ +2）
  *   + 娱乐（艺人 × 戏剧等级 × 民主加成）
+ *   + VR 中心（每座获得支援的 vr_center +1，joyless 不生效）
  *   - 压力（各岗位工人数 / 岗位 stress 容忍度）
  *   - 失业惩罚（每失业 1 人 → -1）
  *
- * 士气上限 = 125 + 剧场数 + 低税率奖励
+ * 士气上限 = 125 + 剧场数 + VR 中心 + 低税率奖励
  *
  * 纯函数模块，零 UI 依赖。
  */
@@ -46,6 +47,7 @@ export interface MoraleResult {
 
 export interface MoraleOptions {
   activeCasinos?: number;
+  supportedVrCenters?: number;
 }
 
 // ============================================================
@@ -209,6 +211,14 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
   }
   morale += entertainment;
 
+  // VR 中心士气加成 — 对标 legacy main.js L3064-3071
+  // 当前未接入 gaslighter 政体修正，先保留基础值 +1/座。
+  let vr = 0;
+  if ((options.supportedVrCenters ?? 0) > 0 && !state.race['joyless']) {
+    vr = (options.supportedVrCenters ?? 0) * 1;
+    morale += vr;
+  }
+
   // 政体直接调整基础士气
   // 对标 legacy main.js L1378-1382
   morale += getGovernmentMoraleOffset(state);
@@ -225,6 +235,9 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
 
   // 赌场提高士气上限 — 对标 legacy main.js L3167
   moraleCap += options.activeCasinos ?? 0;
+
+  // VR 中心提高士气上限 — 对标 legacy main.js L3176-3177
+  moraleCap += (options.supportedVrCenters ?? 0) * 2;
 
   // 纪念碑士气上限加成 — 对标 legacy arpa.js L172-175: +2 per monument
   moraleCap += getMonumentMoraleBonus(state);
@@ -263,6 +276,7 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
     cap: moraleCap,
     stress: +stress.toFixed(1),
     entertain: +entertainment.toFixed(1),
+    vr: +vr.toFixed(1),
     season: seasonBonus,
     weather: weatherBonus,
     unemployed: unemployedPenalty,

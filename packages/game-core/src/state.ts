@@ -135,7 +135,7 @@ export function createNewGame(): GameState {
       // 太空特有资源（前置 0 最大值以临时隐藏）
       Iridium: { ...makeResource('铱', 0, 0), value: 0 },
       Helium_3: { ...makeResource('氦-3', 0, 0), value: 0 },
-      Mythril: { ...makeResource('秘银', 0, 0), value: 0 },
+      Mythril: { ...makeResource('秘银', -1, 0), value: 94.239 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },
       Brick: { ...makeResource('砖', -1, 0), value: 0 },
@@ -160,7 +160,7 @@ export function createNewGame(): GameState {
       geology: {},
       market: { active: false, qty: 1 },
       // 铸造厂产线分配（工匠 → 合成品）
-      foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0 },
+      foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0, Mythril: 0 },
       // 工厂产线分配（需要 high_tech:3 科技）
       factory: { count: 0, on: 0, Alloy: 0, Polymer: 0, Lux: 0, Furs: 0 } as FactoryState,
       // 熔炉多燃料生产状态
@@ -196,6 +196,7 @@ export function createNewGame(): GameState {
       quarry_worker: makeJob('quarry_worker', 1, 5),
       miner: makeJob('miner', 1, 4),
       coal_miner: makeJob('coal_miner', 0.2, 4),
+      colonist: makeJob('colonist', 1, 5),
       craftsman: makeJob('craftsman', 1, 5),
       cement_worker: makeJob('cement_worker', 0.4, 5),
       banker: makeJob('banker', 0.1, 6),

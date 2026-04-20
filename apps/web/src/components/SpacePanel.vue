@@ -16,12 +16,15 @@ const structureLabels: Record<string, string> = {
   observatory: '月面天文台',
   spaceport: '火星航天港',
   living_quarters: '火星居住区',
+  vr_center: 'VR 中心',
   garage: '火星车库',
   red_mine: '火星矿场',
   fabrication: '火星工坊',
   mars_base: '火星基地',
   red_tower: '火星高塔',
   red_factory: '太空工厂',
+  biodome: '生物穹顶',
+  exotic_lab: '异星实验室',
 }
 
 const regionLabels: Record<string, string> = {

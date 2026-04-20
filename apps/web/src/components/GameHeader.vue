@@ -12,11 +12,13 @@ const appVersion = __APP_VERSION__
 const moraleTooltip = computed(() => {
   const m = game.state.city.morale
   if (!m) return '士气: 100%'
+  const vrBonus = m.vr ?? 0
   const lines = [
     `基础: 100%`,
     m.season !== 0 ? `季节: ${m.season > 0 ? '+' : ''}${m.season}%` : '',
     m.weather !== 0 ? `天气: ${m.weather > 0 ? '+' : ''}${m.weather}%` : '',
     m.entertain !== 0 ? `娱乐: +${m.entertain}%` : '',
+    vrBonus !== 0 ? `VR 中心: +${vrBonus}%` : '',
     m.stress !== 0 ? `压力: ${m.stress.toFixed(1)}%` : '',
     m.unemployed !== 0 ? `失业: ${m.unemployed}%` : '',
     `———`,

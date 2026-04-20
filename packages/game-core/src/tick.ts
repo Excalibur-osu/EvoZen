@@ -8,7 +8,7 @@
  */
 
 import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
-import { craftingTick } from './crafting';
+import { craftingTickWithSupport } from './crafting';
 import { tradeTick } from './trade';
 import {
   getTaxMultiplier,
@@ -137,16 +137,28 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + heliumSupported * 0.18;
   }
   const observatorySupported = spaceSupport.supportOn['observatory'] ?? 0;
+  const livingQuartersSupported = spaceSupport.supportOn['living_quarters'] ?? 0;
+  const vrCenterSupported = spaceSupport.supportOn['vr_center'] ?? 0;
+  const fabricationSupported = spaceSupport.supportOn['fabrication'] ?? 0;
+  const biodomeSupported = spaceSupport.supportOn['biodome'] ?? 0;
+  const exoticLabSupported = spaceSupport.supportOn['exotic_lab'] ?? 0;
+  const colonistWorkers = workers('colonist');
+  const effectiveColonistWorkers = Math.min(colonistWorkers, livingQuartersSupported);
+  const redFactoryPowered = powerResult.activeConsumers['red_factory'] ?? 0;
+  const redFactoryMaxLines =
+    (state.space['red_factory'] as { on?: number; count?: number } | undefined)?.on
+    ?? (state.space['red_factory'] as { count?: number } | undefined)?.count
+    ?? 0;
 
   // 火星地表产出（对标 legacy prod.js L93-122 + main.js L6481-6498）：
-  //   red_mine 每座获得支援的建筑产出 0.25 Copper + 0.02 Titanium/tick
-  // 注：legacy 公式为 support_on['red_mine'] * workerScale(colonist.workers) * baseline。
-  //     EvoZen 尚未实装 colonist 岗位，暂按"每座自带 1 colonist"做 baseline 产出；
-  //     colonist 岗位接入后需替换为 workerScale 缩放。
+  //   red_mine 每座获得支援的建筑按 colonist.workers 缩放：
+  //   support_on['red_mine'] * colonist.workers * (0.25 Copper + 0.02 Titanium)
   const redMineSupported = spaceSupport.supportOn['red_mine'] ?? 0;
-  if (redMineSupported > 0) {
-    deltas['Copper'] = (deltas['Copper'] ?? 0) + redMineSupported * 0.25;
-    deltas['Titanium'] = (deltas['Titanium'] ?? 0) + redMineSupported * 0.02;
+  if (redMineSupported > 0 && effectiveColonistWorkers > 0) {
+    deltas['Copper'] =
+      (deltas['Copper'] ?? 0) + redMineSupported * effectiveColonistWorkers * 0.25;
+    deltas['Titanium'] =
+      (deltas['Titanium'] ?? 0) + redMineSupported * effectiveColonistWorkers * 0.02;
   }
 
   // ============================================================
@@ -156,6 +168,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // morale 决定 global_multiplier，影响所有工人产出
   const moraleResult = calculateMorale(state, {
     activeCasinos: poweredOn['casino'] ?? 0,
+    supportedVrCenters: vrCenterSupported,
   });
   const prodMult = moraleResult.globalMultiplier;
 
@@ -187,6 +200,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const hunterFurs = hunters * militaryTech / 20;
   // rage 行星特性：狩猎产出 ×1.02
   const rageHuntMult = hasPlanetTrait(state, 'rage') ? rageVars()[1] : 1;
+  const biodomeBaseFood = state.race.universe === 'evil' ? 0.1 : 0.25;
+  let biodomeFood = biodomeSupported * effectiveColonistWorkers * biodomeBaseFood;
+  if (state.race['cataclysm'] || state.race['orbit_decayed']) {
+    biodomeFood += biodomeSupported * 2;
+  }
 
   // 农民产出 — 对标 legacy/src/jobs.js L797-822 farmerValue()
   // farmerValue(farm=true) = impact + (agriculture >= 2 ? 1.15 : 0.65)
@@ -238,6 +256,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
   deltas['Food'] =
     (hunterFood * rageHuntMult + farmerFood * weatherFoodMult) * prodMult * planetGlobalMult
+    + biodomeFood * prodMult
     - foodConsumption
     - tourismFoodDemand;
 
@@ -617,7 +636,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 10a. 工匠合成产线（自动消耗原料、产出合成品）
   // ============================================================
-  const craftDeltas = craftingTick(state);
+  const craftDeltas = craftingTickWithSupport(
+    state,
+    fabricationSupported,
+    effectiveColonistWorkers,
+  );
   for (const [resId, delta] of Object.entries(craftDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
   }
@@ -628,6 +651,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const tradeDeltas = tradeTick(state);
   for (const [resId, delta] of Object.entries(tradeDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
+  }
+
+  // 对标 legacy/src/main.js L2406-2410：每座 powered red_factory 额外消耗 1 Helium_3/tick。
+  if (redFactoryPowered > 0) {
+    deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) - redFactoryPowered;
   }
 
   // ============================================================
@@ -865,22 +893,55 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (activeBiolabs > 0 && newState.resource['Knowledge']) {
     newState.resource['Knowledge'].max += activeBiolabs * 3000;
   }
+  if (exoticLabSupported > 0 && newState.resource['Knowledge']) {
+    let exoticScience = 500;
+    if (newState.race['cataclysm'] && observatorySupported > 0) {
+      exoticScience *= 1 + observatorySupported * 0.25;
+    }
+    newState.resource['Knowledge'].max += exoticLabSupported * effectiveColonistWorkers * exoticScience;
 
-  // 对标 legacy/src/main.js L8888-8892：living_quarters 每座获得支援的建筑
-  //   - species.max += jobScale(1)（non-cataclysm baseline citizens=1；biodome 加成后续 sprint 补）
-  //   - colonist.max += jobScale(1)（EvoZen 尚未实装 colonist 岗位，本次 sprint 先只做人口上限）
-  const livingQuartersSupported = spaceSupport.supportOn['living_quarters'] ?? 0;
+    if (newState.race['cataclysm'] || newState.race['orbit_decayed']) {
+      const scientist = newState.civic['scientist'] as { max?: number } | undefined;
+      if (scientist) {
+        scientist.max = (scientist.max ?? 0) + exoticLabSupported;
+      }
+    }
+  }
+
+  // 对标 legacy/src/main.js L8888-8892：
+  //   - living_quarters 增加 species.max 与 colonist.max
+  //   - citizens() 基础值在 cataclysm/orbit_decayed 为 2，否则为 1
+  //   - biodome 会为每座 living_quarters 额外增加 0.05/0.1 人口上限
+  const colonist = newState.civic['colonist'] as { max?: number; workers?: number } | undefined;
+  if (colonist) {
+    colonist.max = livingQuartersSupported;
+    if ((colonist.workers ?? 0) > colonist.max) {
+      const excess = (colonist.workers ?? 0) - colonist.max;
+      colonist.workers = colonist.max;
+      const unemployed = newState.civic['unemployed'] as { workers?: number } | undefined;
+      if (unemployed) {
+        unemployed.workers = (unemployed.workers ?? 0) + excess;
+      }
+    }
+  }
+
   if (livingQuartersSupported > 0) {
     const speciesId = newState.race.species;
     const popRes = newState.resource[speciesId];
+    const citizensPerQuarterBase =
+      newState.race['cataclysm'] || newState.race['orbit_decayed'] ? 2 : 1;
+    const biodomeBonusPerQuarter =
+      biodomeSupported > 0
+        ? biodomeSupported * ((newState.tech['mars'] ?? 0) >= 6 ? 0.1 : 0.05)
+        : 0;
+    const citizensPerQuarter = citizensPerQuarterBase + biodomeBonusPerQuarter;
     if (popRes) {
-      popRes.max += livingQuartersSupported;
+      popRes.max += Math.round(livingQuartersSupported * citizensPerQuarter);
     }
   }
 
   // 对标 legacy/src/main.js L9769-9770：fabrication 每座获得支援使 craftsman.max +1。
   // craftsman.max 已在 applyDerivedStateInPlace 中被重置为 foundries 数，故此处 += 安全。
-  const fabricationSupported = spaceSupport.supportOn['fabrication'] ?? 0;
   if (fabricationSupported > 0) {
     const craftsman = newState.civic['craftsman'] as { max?: number } | undefined;
     if (craftsman) {
@@ -966,7 +1027,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 15. 工厂产线 tick
   // 对标 legacy/src/industry.js f_rate表，工厂 powered = on
   // ============================================================
-  factoryTick(newState, powerResult.activeConsumers['factory'] ?? 0, TIME_MULTIPLIER, deltas, effectiveProdMult);
+  factoryTick(
+    newState,
+    powerResult.activeConsumers['factory'] ?? 0,
+    TIME_MULTIPLIER,
+    deltas,
+    effectiveProdMult,
+    redFactoryPowered,
+    redFactoryMaxLines,
+  );
 
   // ============================================================
   // 16. ARPA 长线研究 tick
@@ -1025,6 +1094,7 @@ function removeOneCitizen(state: GameState): void {
     'quarry_worker',
     'miner',
     'coal_miner',
+    'colonist',
     'craftsman',
     'cement_worker',
     'banker',
@@ -1118,6 +1188,8 @@ export function factoryTick(
   timeMul: number,
   deltas: Record<string, number>,
   prodMultiplier: number,
+  extraPoweredLines: number = 0,
+  extraMaxLines: number = 0,
 ): void {
   const factory = state.city['factory'] as {
     count: number;
@@ -1129,8 +1201,9 @@ export function factoryTick(
   } | undefined;
   if (!factory) return;
 
-  const maxFactories = Math.max(0, factory.on ?? factory.count ?? 0);
-  const eff = maxFactories > 0 ? poweredOn / maxFactories : 0;
+  const maxFactories = Math.max(0, (factory.on ?? factory.count ?? 0) + extraMaxLines);
+  const activeFactories = Math.max(0, poweredOn + extraPoweredLines);
+  const eff = maxFactories > 0 ? activeFactories / maxFactories : 0;
   if (eff <= 0) return;
 
   let remainingLines = maxFactories;

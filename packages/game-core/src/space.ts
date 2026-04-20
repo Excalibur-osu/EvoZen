@@ -6,6 +6,7 @@
  *   - spc_home: satellite / propellant_depot / gps / nav_beacon
  *   - spc_moon: moon_base / iridium_mine / helium_mine / observatory
  *   - spc_red: spaceport / living_quarters / garage / red_mine / fabrication
+ *   - spc_red extension: red_tower / red_factory / biodome / exotic_lab
  *
  * 所有成本与加成系数逐行对标 legacy；EvoZen 当前不执行 fuel_adjust / spatialReasoning
  * （truepath / world_control / 种族修饰尚未进入当前 scope）。
@@ -243,6 +244,26 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     supportFuel: { resource: 'Helium_3', amountPerTick: 1.25 },
   },
   {
+    id: 'red_tower',
+    region: 'spc_red',
+    name: '火星高塔',
+    description: '在红色行星上建立稳定的深空通信与观测塔，进一步扩张前线支援能力。',
+    // 对标 legacy/src/space.js L554
+    reqs: { mars: 3 },
+    // 对标 legacy/src/space.js L556-559
+    costs: {
+      Money: spaceCost(225000, 1.28),
+      Iron: spaceCost(22000, 1.28),
+      Cement: spaceCost(15000, 1.28),
+      Alloy: spaceCost(8000, 1.28),
+    },
+    effect: '每座需要 2MW 电力；每座 on 后额外提供 1 红星支援。',
+    // 对标 legacy/src/space.js L565
+    powerCost: 2,
+    // 对标 legacy/src/space.js L569：baseline support = 1
+    support: { pool: 'red', amount: 1 },
+  },
+  {
     id: 'living_quarters',
     region: 'spc_red',
     name: '火星居住区',
@@ -255,8 +276,26 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Steel: spaceCost(15000, 1.28),
       Polymer: spaceCost(9500, 1.28),
     },
-    effect: '每座消耗 1 红星支援；每座获得支援时人口上限 +1。',
+    effect: '每座消耗 1 红星支援；获得支援后增加人口上限与行星居民上限。',
     // 对标 legacy/src/space.js L738-739：support -1，powered 0
+    support: { pool: 'red', amount: -1 },
+  },
+  {
+    id: 'vr_center',
+    region: 'spc_red',
+    name: 'VR 中心',
+    description: '在火星殖民地部署沉浸式娱乐设施，稳定前线居民情绪并提高士气承受上限。',
+    // 对标 legacy/src/space.js L813
+    reqs: { mars: 1, broadcast: 3 },
+    // 对标 legacy/src/space.js L814-817
+    costs: {
+      Money: spaceCost(380000, 1.25),
+      Copper: spaceCost(55000, 1.25),
+      Stanene: spaceCost(100000, 1.25),
+      Soul_Gem: spaceCost(1, 1.25),
+    },
+    effect: '每座消耗 1 红星支援；在非 joyless 状态下提供 +1 士气，并使士气上限 +2。',
+    // 对标 legacy/src/space.js L839-840：support -1，powered 0
     support: { pool: 'red', amount: -1 },
   },
   {
@@ -291,8 +330,9 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Lumber: spaceCost(65000, 1.32),
       Iron: spaceCost(33000, 1.32),
     },
-    // 对标 legacy/src/prod.js L93-122 baseline：copper 0.25、titanium 0.02（不含 colonist / govRelation / hunger）
-    effect: '每座消耗 1 红星支援；获得支援后产出 0.25 铜 + 0.02 钛 / tick。',
+    // 对标 legacy/src/prod.js L93-122 + main.js L5733-5740：
+    // 产出 = support_on['red_mine'] * colonist.workers * baseline
+    effect: '每座消耗 1 红星支援；获得支援后按行星居民数量产出铜与钛。',
     // 对标 legacy/src/space.js L1011-1012：support -1，powered 0
     support: { pool: 'red', amount: -1 },
   },
@@ -310,11 +350,63 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Cement: spaceCost(12000, 1.32),
       Wrought_Iron: spaceCost(1200, 1.32),
     },
-    // 对标 legacy/src/main.js L9769-9774：每座 support_on 的 fabrication 使 craftsman max +1
-    // 注：legacy 还通过 resources.js L329-334 给 crafting 速率 +0.02/colonist/fab；
-    //     EvoZen 尚未实装 colonist 岗位，crafting 速率加成暂留给后续 sprint。
-    effect: '每座消耗 1 红星支援；获得支援后工匠岗位上限 +1。',
+    // 对标 legacy/src/main.js L9769-9774 + resources.js L329-334：
+    // 每座 support_on 的 fabrication 使 craftsman max +1，并按 colonist.workers 提升 crafting 速率。
+    effect: '每座消耗 1 红星支援；获得支援后工匠岗位上限 +1，并提升制造效率。',
     // 对标 legacy/src/space.js L1050-1051：support -1，powered 0
+    support: { pool: 'red', amount: -1 },
+  },
+  {
+    id: 'red_factory',
+    region: 'spc_red',
+    name: '太空工厂',
+    description: '把部分高端工业产线转移到火星，直接扩展现有工厂的可用产线。',
+    // 对标 legacy/src/space.js L1074
+    reqs: { mars: 4 },
+    // 对标 legacy/src/space.js L1075-1078
+    costs: {
+      Money: spaceCost(75000, 1.32),
+      Brick: spaceCost(10000, 1.32),
+      Coal: spaceCost(7500, 1.32),
+      Mythril: spaceCost(50, 1.32),
+    },
+    effect: '每座需要 3MW 电力与 1 氦-3/tick；扩展工厂产线容量。',
+    // 对标 legacy/src/space.js L1091
+    powerCost: 3,
+  },
+  {
+    id: 'biodome',
+    region: 'spc_red',
+    name: '生物穹顶',
+    description: '在火星前线建立可持续生态穹顶，为殖民地提供食物与额外居住收益。',
+    // 对标 legacy/src/space.js L1142
+    reqs: { mars: 2 },
+    // 对标 legacy/src/space.js L1144-1147（忽略 deconstructor 分支 Nanite）
+    costs: {
+      Money: spaceCost(45000, 1.28),
+      Lumber: spaceCost(65000, 1.28),
+      Brick: spaceCost(1000, 1.28),
+    },
+    effect: '每座消耗 1 红星支援；提供额外食物产出，并提高居住区的人口上限收益。',
+    // 对标 legacy/src/space.js L1166-1168
+    support: { pool: 'red', amount: -1 },
+  },
+  {
+    id: 'exotic_lab',
+    region: 'spc_red',
+    name: '异星实验室',
+    description: '在火星建立高端实验设施，扩大知识上限并为后续异星资源研究预留入口。',
+    // 对标 legacy/src/space.js L1242
+    reqs: { mars: 5 },
+    // 对标 legacy/src/space.js L1244-1247
+    costs: {
+      Money: spaceCost(750000, 1.28),
+      Steel: spaceCost(100000, 1.28),
+      Mythril: spaceCost(1000, 1.28),
+      Elerium: (_state, count) => Math.max(0, spaceCost(20, 1.28)(_state, count) - 4),
+    },
+    effect: '每座消耗 1 红星支援；提高知识上限，并为后续异星资源链预留接口。',
+    // 对标 legacy/src/space.js L1281-1283
     support: { pool: 'red', amount: -1 },
   },
 ];

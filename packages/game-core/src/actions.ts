@@ -18,7 +18,7 @@ import {
   getSpaceBuildCost,
 } from './space';
 
-const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal'] as const;
+const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
 
 function cloneState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
@@ -144,6 +144,13 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
   if (structureId === 'spaceport') {
     next.tech['mars'] = Math.max(next.tech['mars'] ?? 0, 1);
   }
+  if (structureId === 'red_factory') {
+    const factory = next.city['factory'] as { Alloy?: number } | undefined;
+    if (factory) {
+      factory.Alloy = (factory.Alloy ?? 0) + 1;
+    }
+    next.settings.showIndustry = true;
+  }
 
   applyDerivedStateInPlace(next);
   return next;
@@ -267,13 +274,19 @@ export function researchTech(state: GameState, techId: string): GameState | null
       ensureSpaceStructure(next, 'observatory');
       break;
     case 'colonization':
-      ensureSpaceStructure(next, 'mars_base');
+      ensureSpaceStructure(next, 'biodome');
       break;
     case 'red_tower':
       ensureSpaceStructure(next, 'red_tower');
       break;
     case 'space_manufacturing':
       ensureSpaceStructure(next, 'red_factory');
+      break;
+    case 'vr_center':
+      ensureSpaceStructure(next, 'vr_center');
+      break;
+    case 'exotic_lab':
+      ensureSpaceStructure(next, 'exotic_lab');
       break;
   }
 

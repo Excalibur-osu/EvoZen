@@ -35,6 +35,7 @@ const JOB_OUTPUT: Record<string, string> = {
   quarry_worker: '🪨 石头',
   miner: '🔶 铜/铁',
   coal_miner: '⚫ 煤炭',
+  colonist: '🚀 火星前线',
   cement_worker: '🧱 水泥 (消耗石头)',
   banker: '💰 金币加成',
   professor: '📚 知识',

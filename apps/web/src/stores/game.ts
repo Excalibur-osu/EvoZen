@@ -596,7 +596,13 @@ export const useGameStore = defineStore('game', () => {
     const result = manualCraft(state.value, craftId, qty)
     if (result) {
       state.value = result
-      const names: Record<string, string> = { Plywood: '胶合板', Brick: '砖块', Wrought_Iron: '锻铁' }
+      const names: Record<string, string> = {
+        Plywood: '胶合板',
+        Brick: '砖块',
+        Wrought_Iron: '锻铁',
+        Sheet_Metal: '金属板',
+        Mythril: '秘银',
+      }
       addMessage(`⚒ 手动合成了 ${qty} 份${names[craftId] ?? craftId}。`, 'success', 'progress')
     } else {
       addMessage('材料不足，无法合成。', 'warning', 'progress')

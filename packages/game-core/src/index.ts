@@ -88,6 +88,7 @@ export * from './espionage';
 export {
   manualCraft,
   craftingTick,
+  craftingTickWithSupport,
   assignCraftsman,
   removeCraftsman,
   CRAFTABLE_IDS,

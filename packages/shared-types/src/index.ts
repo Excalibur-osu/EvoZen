@@ -125,6 +125,7 @@ export type BasicJobId =
   | 'quarry_worker'
   | 'miner'
   | 'coal_miner'
+  | 'colonist'
   | 'craftsman'
   | 'cement_worker'
   | 'banker'
@@ -159,6 +160,8 @@ export interface MoraleState {
   stress: number;
   /** 娱乐加成 */
   entertain: number;
+  /** VR 中心加成 */
+  vr: number;
   /** 季节加成 */
   season: number;
   /** 天气加成 */
@@ -432,6 +435,8 @@ export interface MoraleState {
   stress: number;
   /** 娱乐贡献 */
   entertain: number;
+  /** VR 中心贡献 */
+  vr: number;
   /** 季节贡献 */
   season: number;
   /** 天气贡献 */

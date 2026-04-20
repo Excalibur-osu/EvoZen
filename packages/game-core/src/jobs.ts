@@ -71,6 +71,13 @@ export const BASE_JOBS: JobDefinition[] = [
     description: '煤矿工人在地下深处开采煤炭。',
   },
   {
+    id: 'colonist',
+    name: '行星居民',
+    impact: 1,
+    stress: 5,
+    description: '行星居民负责维持火星前线设施的高效运转。',
+  },
+  {
     id: 'craftsman',
     name: '工匠',
     impact: 1,

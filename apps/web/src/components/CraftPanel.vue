@@ -20,6 +20,8 @@ const craftNames: Record<string, string> = {
   Plywood: '胶合板',
   Brick: '砖块',
   Wrought_Iron: '锻铁',
+  Sheet_Metal: '金属板',
+  Mythril: '秘银',
 }
 
 /** 合成品描述 */
@@ -27,6 +29,8 @@ const craftDesc: Record<string, string> = {
   Plywood: '由木材压制而成，用于高级建筑。',
   Brick: '由水泥烧制而成，坚固耐用的建材。',
   Wrought_Iron: '由铁锭锻造而成的高强度材料。',
+  Sheet_Metal: '由铝材压制成板，用于更先进的工业与太空建材。',
+  Mythril: '以铱和合金锻造的稀有材料，是火星前线扩张的关键资源。',
 }
 
 const isUnlocked = computed(() => (game.state.tech['foundry'] ?? 0) >= 1)
@@ -48,6 +52,7 @@ const totalAssigned = computed(() => {
 })
 
 const unassigned = computed(() => craftsmanWorkers.value - totalAssigned.value)
+const visibleCraftIds = computed(() => CRAFTABLE_IDS.filter(id => game.state.resource[id]?.display))
 
 /** 检查是否有足够原料手动合成 */
 function canCraft(craftId: string): boolean {
@@ -79,7 +84,7 @@ function getCraftAmount(craftId: string): number {
 
     <div class="craft-grid">
       <div
-        v-for="craftId in CRAFTABLE_IDS"
+        v-for="craftId in visibleCraftIds"
         :key="craftId"
         class="craft-card card"
       >

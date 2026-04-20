@@ -17,10 +17,10 @@ import { CRAFT_COSTS } from './resources';
 // ============================================================
 
 /** 第一阶段支持的合成品 ID */
-export type CraftableId = 'Plywood' | 'Brick' | 'Wrought_Iron' | 'Sheet_Metal';
+export type CraftableId = 'Plywood' | 'Brick' | 'Wrought_Iron' | 'Sheet_Metal' | 'Mythril';
 
 /** 所有可合成的产品 ID 列表 */
-export const CRAFTABLE_IDS: CraftableId[] = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal'];
+export const CRAFTABLE_IDS: CraftableId[] = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'];
 
 // ============================================================
 // 合成产线数据结构（存储在 city.foundry 中）
@@ -149,7 +149,11 @@ export function manualCraft(
  *
  * @returns 各资源的 delta 变化量
  */
-export function craftingTick(state: GameState): Record<string, number> {
+export function craftingTickWithSupport(
+  state: GameState,
+  fabricationSupported: number,
+  colonistWorkers: number,
+): Record<string, number> {
   const deltas: Record<string, number> = {};
 
   // 铸造科技未解锁则跳过
@@ -160,6 +164,12 @@ export function craftingTick(state: GameState): Record<string, number> {
 
   const speed = 1;
   const baseTickRate = speed / 140; // 每个工匠每 tick 的基础产出
+  const fabricationBonusPerColonist =
+    state.race['cataclysm'] || state.race['orbit_decayed'] ? 0.05 : 0.02;
+  const fabricationBonus =
+    fabricationSupported > 0 && colonistWorkers > 0
+      ? fabricationSupported * colonistWorkers * fabricationBonusPerColonist
+      : 0;
 
   for (const craftId of CRAFTABLE_IDS) {
     const assignedWorkers = foundry[craftId] ?? 0;
@@ -189,11 +199,18 @@ export function craftingTick(state: GameState): Record<string, number> {
     }
 
     // 产出合成品
-    const output = effectiveWorkers * baseTickRate * getAutoCraftRatio(state, craftId, assignedWorkers);
+    const output = effectiveWorkers
+      * baseTickRate
+      * getAutoCraftRatio(state, craftId, assignedWorkers)
+      * (1 + fabricationBonus);
     deltas[craftId] = (deltas[craftId] ?? 0) + output;
   }
 
   return deltas;
+}
+
+export function craftingTick(state: GameState): Record<string, number> {
+  return craftingTickWithSupport(state, 0, 0);
 }
 
 // ============================================================

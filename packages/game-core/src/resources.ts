@@ -21,6 +21,7 @@ export const RESOURCE_VALUES: Record<string, number> = {
   Alloy: 350,
   Polymer: 250,
   Iridium: 420,
+  Mythril: 94.239,
 };
 
 /** 贸易比率 */
@@ -50,4 +51,5 @@ export const CRAFT_COSTS: Record<string, CraftRecipe[]> = {
   Brick: [{ resource: 'Cement', amount: 40 }],
   Wrought_Iron: [{ resource: 'Iron', amount: 80 }],
   Sheet_Metal: [{ resource: 'Aluminium', amount: 120 }],
+  Mythril: [{ resource: 'Iridium', amount: 100 }, { resource: 'Alloy', amount: 250 }],
 };
