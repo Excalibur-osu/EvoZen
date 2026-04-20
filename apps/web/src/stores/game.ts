@@ -140,7 +140,7 @@ export const useGameStore = defineStore('game', () => {
   const day = computed(() => state.value.city.calendar?.day ?? 0)
   const season = computed(() => {
     const s = state.value.city.calendar?.season ?? 0
-    return ['春', '夏', '秋', '冬'][s] ?? '春'
+    return ['春天', '夏天', '秋天', '冬天'][s] ?? '春天'
   })
   const morale = computed(() => state.value.city.morale?.current ?? 100)
   const moraleCap = computed(() => state.value.city.morale?.cap ?? 125)
@@ -149,14 +149,83 @@ export const useGameStore = defineStore('game', () => {
     if (m < 100) return +(m / 100).toFixed(2)
     return +(1 + (m - 100) / 200).toFixed(2)
   })
+
   const weatherLabel = computed(() => {
     const w = state.value.city.calendar?.weather ?? 2
     const t = state.value.city.calendar?.temp ?? 1
     const wind = state.value.city.calendar?.wind ?? 0
-    const weatherNames = ['🌧️ 雨', '☁️ 多云', '☀️ 晴']
-    let label = weatherNames[w] ?? '☀️ 晴'
-    if (w === 0 && t > 0 && wind === 1) label = '⛈️ 雷暴'
-    return label
+    // 对标 legacy/src/seasons.js weatherDescription()
+    if (w === 0) {
+      if (t === 0) {
+        return wind === 1 ? '❄️ 暴风雪' : '❄️ 下雪'
+      } else {
+        return wind === 1 ? '⛈️ 暴风雨' : '🌧️ 下雨'
+      }
+    } else if (w === 1) {
+      return wind === 1 ? '☁️ 多云&有风' : '☁️ 多云'
+    } else {
+      return wind === 1 ? '☀️ 晴朗&有风' : '☀️ 晴朗'
+    }
+  })
+
+  const tempLabel = computed(() => {
+    const t = state.value.city.calendar?.temp ?? 1
+    // 对标 legacy/src/seasons.js tempDescription()
+    if (t === 0) return '🌡️ 寒冷'
+    if (t === 2) return '🌡️ 炎热'
+    return '🌡️ 温度适中'
+  })
+
+  const moonLabel = computed(() => {
+    const moon = state.value.city.calendar?.moon ?? 0
+    // 对标 legacy/src/seasons.js moonDescription()
+    if (moon === 0) return '🌑 新月'
+    if (moon > 0 && moon < 7) return '🌒 娥眉月'
+    if (moon === 7) return '🌓 上弦月'
+    if (moon > 7 && moon < 14) return '🌔 盈凸月'
+    if (moon === 14) return '🌕 满月'
+    if (moon > 14 && moon < 21) return '🌖 亏凸月'
+    if (moon === 21) return '🌗 下弦月'
+    if (moon > 21) return '🌘 残月'
+    return '🌑 新月'
+  })
+
+  const weatherTooltip = computed(() => {
+    const w = state.value.city.calendar?.weather ?? 2
+    const t = state.value.city.calendar?.temp ?? 1
+    const wind = state.value.city.calendar?.wind ?? 0
+    const lines = []
+
+    // 天气描述
+    lines.push(`天气: ${weatherLabel.value}`)
+
+    // 温度描述
+    const tempNames = ['寒冷', '温度适中', '炎热']
+    lines.push(`温度: ${tempNames[t] ?? '温度适中'}`)
+    lines.push(`风力: ${wind === 1 ? '有风' : '无风'}`)
+    lines.push('———')
+
+    // 天气对农业的影响
+    if (t === 0) {
+      if (w === 0) lines.push('农业产出: -30% (寒冷且雨雪)')
+      else lines.push('农业产出: -15% (寒冷)')
+    } else if (w === 2) {
+      lines.push('农业产出: +10% (晴天)')
+    } else {
+      lines.push('农业产出: 正常')
+    }
+
+    // 天气对士气的影响
+    if (w === 0 && t > 0) {
+      if (wind === 1) lines.push('士气: -5 (雷暴)')
+      else lines.push('士气: -2 (下雨)')
+    } else if (w === 2) {
+      if ((wind === 0 && t < 2) || (wind === 1 && t === 2)) {
+        lines.push('士气: +2 (晴朗宜人)')
+      }
+    }
+
+    return lines.join('\n')
   })
 
   // ---- 方法 ----
@@ -807,6 +876,9 @@ export const useGameStore = defineStore('game', () => {
     moraleCap,
     globalMultiplier,
     weatherLabel,
+    weatherTooltip,
+    tempLabel,
+    moonLabel,
     init,
     togglePause,
     save,

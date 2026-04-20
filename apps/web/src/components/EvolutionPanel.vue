@@ -34,7 +34,7 @@ const rnaDiff = computed(() => (rna.value?.diff ?? 0) * 4)
 const dnaAmount = computed(() => Math.floor(dna.value?.amount ?? 0))
 const dnaMax = computed(() => dna.value?.max ?? 100)
 const dnaDiff = computed(() => (dna.value?.diff ?? 0) * 4)
-const dnaNVisible = computed(() => dna.value?.display ?? false)
+const dnaNVisible = computed(() => true)
 
 function formatRate(n: number): string {
   const sign = n > 0 ? '+' : ''
@@ -197,11 +197,12 @@ const stageDesc = computed(() => {
         </div>
         <button
           class="btn"
+          :class="{ primary: rnaAmount >= 2 && dnaAmount < dnaMax }"
           style="margin-top: 8px; width: 100%"
           :disabled="rnaAmount < 2 || dnaAmount >= dnaMax"
           @click="game.formDNA()"
         >
-          合成 DNA（消耗 2 RNA）
+          合成 DNA
         </button>
       </div>
     </div>

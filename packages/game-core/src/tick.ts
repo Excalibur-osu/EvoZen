@@ -797,6 +797,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       // 每天随机化天气 — 对标 legacy main.js L1222-1265
       randomizeWeather(newState);
 
+      // 月相推进 — 对标 legacy main.js: moon 每天 +1, 到 28 归零
+      newState.city.calendar.moon = ((newState.city.calendar.moon ?? 0) + 1) % 28;
+
       if (newState.city.calendar.day > newState.city.calendar.orbit) {
         newState.city.calendar.day = 1;
         newState.city.calendar.year++;

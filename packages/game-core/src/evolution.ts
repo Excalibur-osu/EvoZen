@@ -143,7 +143,7 @@ export const EVO_UPGRADES: EvoUpgrade[] = [
     rnaCost: (count) => count * 50 + 75,
     dnaCost: (count) => count * 35 + 65,
     effectText: (_count) =>
-      '线粒体提升细胞膜和真核细胞的储量增幅（每个线粒体额外 +5）。',
+      '每个额外提供：细胞膜 +5 RNA上限，真核细胞 +10 DNA上限。',
     isAvailable: (evo) => 'mitochondria' in evo,
   },
 ];
@@ -366,7 +366,7 @@ export function evolutionTick(state: GameState, timeMul: number): boolean {
   if (evoHas(state, 'nucleus') && dna && dna.amount < dna.max) {
     let increment = evoCount(state, 'nucleus');
     // 下调至 RNA 可负担的量
-    while (rna.amount < increment * 2) {
+    while (rna.amount < increment * 2 * timeMul) {
       increment--;
       if (increment <= 0) break;
     }
@@ -502,7 +502,14 @@ export function purchaseEvoUpgrade(
       }
       break;
     }
-    // organelles / nucleus / mitochondria：效果在 evolutionTick 中动态计算
+    case 'mitochondria': {
+      const memCount = evoCount(newState, 'membrane');
+      const eukCount = evoCount(newState, 'eukaryotic_cell');
+      if (memCount > 0) newState.resource['RNA'].max += memCount * 5;
+      if (eukCount > 0 && newState.resource['DNA']) newState.resource['DNA'].max += eukCount * 10;
+      break;
+    }
+    // organelles / nucleus：效果在 evolutionTick 中动态计算
   }
 
   return newState;

@@ -51,7 +51,9 @@ watch(() => game.lastSaveTime, () => {
         <span class="cal-year">年 <b>{{ game.year }}</b></span>
         <span class="cal-day">日 <b>{{ game.day }}</b></span>
         <span class="cal-season" :class="'season-' + game.state.city.calendar?.season">{{ game.season }}</span>
+        <span class="cal-temp">{{ game.tempLabel }}</span>
         <span class="cal-weather">{{ game.weatherLabel }}</span>
+        <span class="cal-moon">{{ game.moonLabel }}</span>
       </template>
 
       <span
@@ -62,7 +64,8 @@ watch(() => game.lastSaveTime, () => {
           'morale-ok': game.morale === 100,
           'morale-high': game.morale > 100,
         }"
-        :title="moraleTooltip"
+        :data-tooltip="moraleTooltip"
+        data-tooltip-pos="bottom"
       >
         😊 {{ game.morale }}%
       </span>
@@ -199,6 +202,18 @@ watch(() => game.lastSaveTime, () => {
 /* 天气 */
 .cal-weather {
   font-size: 11px;
+}
+
+/* 温度 */
+.cal-temp {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* 月相 */
+.cal-moon {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 /* 士气 */

@@ -1,13 +1,11 @@
 {
   "name": "@evozen/game-core",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "EvoZen core game logic - pure TypeScript, no UI dependencies",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
     "typecheck": "tsc -b tsconfig.json"
   },
   "exports": {
@@ -21,8 +19,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "@vitest/coverage-v8": "^4.1.2",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "typescript": "^6.0.2"
   }
 }
