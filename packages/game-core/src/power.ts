@@ -99,6 +99,21 @@ const SPACE_GENERATORS: PowerGeneratorDef[] = SPACE_STRUCTURES
       : undefined,
   }));
 
+const INTERSTELLAR_GENERATORS: PowerGeneratorDef[] = INTERSTELLAR_STRUCTURES
+  .filter((def) => (def.powerCost ?? 0) < 0)
+  .map((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'interstellar',
+    power: Math.abs(def.powerCost ?? 0),
+    fuel: def.supportFuel
+      ? {
+        resource: def.supportFuel.resource,
+        amountPerTick: def.supportFuel.amountPerTick,
+      }
+      : undefined,
+  }));
+
 const SPACE_CONSUMERS: PowerConsumerDef[] = SPACE_STRUCTURES
   .filter((def) => (def.powerCost ?? 0) > 0)
   .map((def) => ({
@@ -118,7 +133,7 @@ const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
   }));
 
 export function listPowerGenerators(): PowerGeneratorDef[] {
-  return [...CITY_GENERATORS, ...SPACE_GENERATORS];
+  return [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS];
 }
 
 export function listPowerConsumers(): PowerConsumerDef[] {

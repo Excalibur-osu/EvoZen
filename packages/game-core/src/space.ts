@@ -69,13 +69,35 @@ export interface SpaceStructureDefinition {
 }
 
 /**
+ * 对标 legacy/src/space.js spaceScaling()
+ * 计算太空建筑的种族特质数量修饰
+ */
+export function applySpaceScaling(state: GameState, count: number): number {
+  let amt = count;
+  // TODO(sprint): 接入 forge (amt -= traits.forge.vars()[1])
+  if (state.race['forge']) {
+    // stub
+  }
+  if (state.race['artisan']) {
+    amt *= 0.85; // 1 - 15/100
+  }
+  if (state.race['crafty']) {
+    amt *= 0.95; // 1 - 5/100
+  }
+  return amt;
+}
+
+/**
  * 对标 legacy/src/functions.js `spaceCostMultiplier(id, offset, base, mult)`：
- *   cost = round(base * mult^count)
+ *   cost = ceil(base * mult^count)
  *
  * 当前不处理 offset（队列预扣尚未接入太空），与 city 建筑的 scaleCost 实现保持一致。
  */
 function spaceCost(base: number, mult: number): SpaceCostFunction {
-  return (_state, count) => Math.round(base * Math.pow(mult, count));
+  return (state, count) => {
+    const scaledAmt = applySpaceScaling(state, count);
+    return Math.ceil(base * Math.pow(mult, scaledAmt));
+  };
 }
 
 export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [

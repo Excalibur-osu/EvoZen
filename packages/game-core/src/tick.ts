@@ -138,7 +138,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const supportEff = requestedMiningDroids > 0 ? miningDroidSupported / requestedMiningDroids : 0;
     const adamantiteDroids = (miningDroid.adam ?? 0) * supportEff;
     if (adamantiteDroids > 0) {
-      deltas['Adamantite'] = (deltas['Adamantite'] ?? 0) + adamantiteDroids * 0.075;
+      let processingBonus = 0;
+      const processingSupported = interstellarSupport.supportOn['processing'] ?? 0;
+      if (processingSupported > 0) {
+        processingBonus = processingSupported * 0.12;
+      }
+      deltas['Adamantite'] = (deltas['Adamantite'] ?? 0) + adamantiteDroids * 0.075 * (1 + processingBonus);
     }
   }
 
@@ -224,31 +229,43 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     biodomeFood += biodomeSupported * 2;
   }
 
-  // 农民产出 — 对标 legacy/src/jobs.js L797-822 farmerValue()
-  // farmerValue(farm=true) = impact + (agriculture >= 2 ? 1.15 : 0.65)
-  // impact = 0.82
-  const farmers = workers('farmer');
-  let farmerBase = 0.82;  // impact
-  // 有农场时的额外加成（原版 jobs.js L799-800）
-  if (farmers > 0 && structCount('farm') > 0) {
-    farmerBase += techLevel('agriculture') >= 2 ? 1.15 : 0.65;
+  // 农民产出 — 对标 legacy/src/jobs.js L797-822 farmerValue() 及 legacy/src/main.js L3567-3574
+  const totalFarmers = workers('farmer');
+  const farmsCount = structCount('farm');
+
+  let farmers = totalFarmers;
+  let farmhands = 0;
+  if (farmers > farmsCount) {
+    farmhands = farmers - farmsCount;
+    farmers = farmsCount;
   }
-  // 锄头科技加成 — 原版 jobs.js L806: hoe 每级 +33%
-  const hoeLevel = techLevel('hoe');
-  if (hoeLevel > 0) {
-    farmerBase *= 1 + hoeLevel / 3;
-  }
+
+  const getFarmerValue = (hasFarm: boolean) => {
+    let farming = 0.82; // impact
+    if (hasFarm && farmsCount > 0) {
+      farming += techLevel('agriculture') >= 2 ? 1.15 : 0.65;
+    }
+    const hoeLevel = techLevel('hoe');
+    if (hoeLevel > 0) {
+      farming *= 1 + hoeLevel / 3;
+    }
+    if (techLevel('agriculture') >= 7) {
+      farming *= 1.1;
+    }
+    return farming;
+  };
+
+  const farmerFoodBase = farmers * getFarmerValue(true) + farmhands * getFarmerValue(false);
+
   // 磨坊建筑加成（原版 main.js L3587-3591）
   // agriculture >= 5 → 5%/座, 否则 3%/座（非电力化磨坊）
   const mills = structCount('mill');
   const millBonus = techLevel('agriculture') >= 5 ? 0.05 : 0.03;
   let foodMult = 1 + mills * millBonus;
-  if (techLevel('agriculture') >= 7) {
-    foodMult *= 1.1;
-  }
+  
   // trashed 行星特性：农业产出 ×0.75
   foodMult *= getFarmPlanetMultiplier(state);
-  const farmerFood = farmers * farmerBase * foodMult;
+  const farmerFood = farmerFoodBase * foodMult;
 
   // 食物消耗 — 原版 main.js L3711:
   // consume = (pop + soldiers - (unemployed + hunters) * 0.5) * food_consume_mod
@@ -327,10 +344,38 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const quarries = structCount('rock_quarry');
   const activeQuarries = poweredOn['rock_quarry'] ?? 0;
   let stoneMult = 1 + quarries * 0.02;
+  let quarryPowerMult = 1;
   if (activeQuarries > 0) {
-    stoneMult *= 1 + activeQuarries * 0.04;
+    quarryPowerMult += activeQuarries * 0.04;
   }
-  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * effectiveProdMult;
+  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * quarryPowerMult * effectiveProdMult;
+
+  // ============================================================
+  // 4.5 铝 — 采石副产物 (Aluminium)
+  // ============================================================
+  // 原版 main.js L5834-5904: 采石产生的铝副产品
+  const refineries = structCount('metal_refinery');
+  if (refineries > 0) {
+    const alumRatio = 0.08;
+    let alumBase = quarryWorkers * stoneBase * alumRatio;
+    
+    // 行星地质特征加成
+    if (state.city.geology?.['Aluminium']) {
+      alumBase *= 1 + state.city.geology['Aluminium'];
+    }
+
+    let alumDelta = alumBase * stoneMult * quarryPowerMult * effectiveProdMult;
+
+    // 金属精炼厂加成: +6%/座
+    let refineryMult = 1 + refineries * 0.06;
+    // 如果研发了 alumina >= 2，通电的精炼厂额外 +6%/座
+    if (techLevel('alumina') >= 2) {
+      const activeRefineries = poweredOn['metal_refinery'] ?? 0;
+      refineryMult += activeRefineries * 0.06;
+    }
+    alumDelta *= refineryMult;
+    deltas['Aluminium'] = alumDelta;
+  }
 
   // ============================================================
   // 5. 铜 / 铁 — 矿工
@@ -338,30 +383,30 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 原版 main.js L6117-6119: miner_base = workers * impact(1.0)
   // 铜系数 main.js L6158: copper_mult = 1/7
   // 铁系数 main.js L6225: iron_mult  = 1/4
-  const activeMines = poweredOn['mine'] ?? 0;
-  const actualMiners = Math.min(workers('miner'), activeMines);
+  const actualMiners = workers('miner');
   const pickaxeLevel = techLevel('pickaxe');
   const minerToolMult = 1 + pickaxeLevel * 0.15;
   const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
   // 矿井通电加成：+5%/座
+  const activeMines = poweredOn['mine'] ?? 0;
   const minePowerMult = activeMines > 0 ? 1 + activeMines * 0.05 : 1;
   // dense/permafrost/magnetic 行星特性：影响矿工产出
   const minerPlanetMult = getMinerPlanetMultiplier(state);
   const copperGeologyMult = 1 + (state.city.geology?.['Copper'] ?? 0);
   const ironGeologyMult = 1 + (state.city.geology?.['Iron'] ?? 0);
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * minerPlanetMult * effectiveProdMult;  // ≈0.143
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * minerPlanetMult * effectiveProdMult;
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * minerPlanetMult * effectiveProdMult;  // 1/4
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * minerPlanetMult * effectiveProdMult;
   }
 
   // ============================================================
   // 6. 煤炭 — 煤矿工人
   // ============================================================
-  const coalMineActive = poweredOn['coal_mine'] ?? workers('coal_miner');
-  const actualCoalMiners = Math.min(workers('coal_miner'), coalMineActive);
+  const actualCoalMiners = workers('coal_miner');
   const coalToolMult = 1 + pickaxeLevel * 0.12;
-  const coalPowerMult = coalMineActive > 0 ? 1 + coalMineActive * 0.05 : 1;
+  const activeCoalMines = poweredOn['coal_mine'] ?? 0;
+  const coalPowerMult = activeCoalMines > 0 ? 1 + activeCoalMines * 0.05 : 1;
   const coalGeologyMult = 1 + (state.city.geology?.['Coal'] ?? 0);
   deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * coalPowerMult * coalGeologyMult * effectiveProdMult;
 
@@ -421,9 +466,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const professorsBase = professors * profImpact * profGovMult;
   // 科学家产出 — impact = 1.0
   let sciImpact = 1.0;
-  const wardenclyffes = structCount('wardenclyffe');
-  if (techLevel('science') >= 6 && wardenclyffes > 0) {
-    sciImpact *= 1 + professors * wardenclyffes * 0.01;
+  const activeWardenclyffes = poweredOn['wardenclyffe'] ?? 0;
+  if (techLevel('science') >= 6 && activeWardenclyffes > 0) {
+    sciImpact *= 1 + professors * activeWardenclyffes * 0.01;
   }
   // 卫星加成——原版 main.js L4197-4199:
   // if (global.space['satellite']) scientist_base *= 1 + (satellite.count * 0.01)

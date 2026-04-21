@@ -320,13 +320,13 @@ export function randomizeWeather(state: GameState): void {
   const tempRoll = Math.random();
   if (cal.season === 3) {
     // 冬季偏冷
-    cal.temp = tempRoll < 0.6 ? 0 : (tempRoll < 0.9 ? 1 : 2);
+    cal.temp = tempRoll < 0.65 ? 0 : (tempRoll < 0.9 ? 1 : 2);
   } else if (cal.season === 1) {
     // 夏季偏热
-    cal.temp = tempRoll < 0.1 ? 0 : (tempRoll < 0.4 ? 1 : 2);
+    cal.temp = tempRoll < 0.1 ? 0 : (tempRoll < 0.35 ? 1 : 2);
   } else {
     // 春/秋温和
-    cal.temp = tempRoll < 0.2 ? 0 : (tempRoll < 0.7 ? 1 : 2);
+    cal.temp = tempRoll < 0.2 ? 0 : (tempRoll < 0.8 ? 1 : 2);
   }
 
   // 风 50/50
