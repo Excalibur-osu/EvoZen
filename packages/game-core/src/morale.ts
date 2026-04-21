@@ -291,44 +291,137 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
 }
 
 // ============================================================
-// 天气随机化 — 对标 legacy main.js L1222-1265
+// 天气随机化 — 对标 legacy main.js L11816-11953
 // ============================================================
 
+function randInt(maxExclusive: number): number {
+  return Math.floor(Math.random() * maxExclusive);
+}
+
+function clampWeatherTemp(temp: number): number {
+  if (temp < 0) return 0;
+  if (temp > 2) return 2;
+  return temp;
+}
+
 /**
- * 每天随机生成天气
- * 原版在每天推进时随机化 weather/temp/wind
+ * 每天按 legacy 公式尝试刷新天气。
  *
- * weather: 0=雨, 1=多云, 2=晴（概率大致 30/30/40）
- * temp: 依季节变化（春夏偏温暖，冬偏寒冷）
- * wind: 0/1 均匀随机
+ * 注意：
+ * - 仅 1/6 概率真正刷新天气；否则沿用上一天状态。
+ * - `stormy` / `rainbow` / `darkness` / `rejuvenated` 等依赖未实装特质的分支暂不接入。
  */
 export function randomizeWeather(state: GameState): void {
   const cal = state.city.calendar;
   if (!cal) return;
 
-  // 天气类型随机
-  const weatherRoll = Math.random();
-  if (weatherRoll < 0.3) {
-    cal.weather = 0; // 雨/暴风雨
-  } else if (weatherRoll < 0.6) {
-    cal.weather = 1; // 多云
-  } else {
-    cal.weather = 2; // 晴
+  // legacy: Math.rand(0,5) === 0
+  if (randInt(6) !== 0) {
+    return;
   }
 
-  // 温度依季节
-  const tempRoll = Math.random();
-  if (cal.season === 3) {
-    // 冬季偏冷
-    cal.temp = tempRoll < 0.65 ? 0 : (tempRoll < 0.9 ? 1 : 2);
-  } else if (cal.season === 1) {
-    // 夏季偏热
-    cal.temp = tempRoll < 0.1 ? 0 : (tempRoll < 0.35 ? 1 : 2);
-  } else {
-    // 春/秋温和
-    cal.temp = tempRoll < 0.2 ? 0 : (tempRoll < 0.8 ? 1 : 2);
+  let tempRoll = randInt(4);
+  let skyRoll = randInt(5);
+  let windRoll = randInt(4);
+
+  const biome = state.city.biome;
+  const hasPermafrost = state.city.ptrait === 'permafrost';
+
+  switch (biome) {
+    case 'oceanic':
+    case 'swamp':
+      if (randInt(3) === 0 && skyRoll > 0) {
+        skyRoll -= 1;
+      }
+      break;
+    case 'tundra':
+    case 'taiga':
+      if (cal.season === 3) {
+        tempRoll = 0;
+      } else if (randInt(3) === 0 && tempRoll > 0) {
+        tempRoll -= 1;
+      }
+      break;
+    case 'desert':
+      if (randInt(3) === 0 && skyRoll < 4) {
+        skyRoll += 1;
+      }
+      break;
+    case 'ashland':
+      if (randInt(3) === 0) {
+        if (skyRoll < 1) {
+          skyRoll += 1;
+        } else if (skyRoll > 2) {
+          skyRoll -= 1;
+        }
+      }
+    // legacy 在 ashland 后故意 fall through 到 volcanic
+    case 'volcanic':
+      if (cal.season === 1) {
+        tempRoll = 2;
+      } else if (randInt(3) === 0 && tempRoll < 2 && !hasPermafrost) {
+        tempRoll += 1;
+      }
+      break;
+    default:
+      break;
   }
 
-  // 风 50/50
-  cal.wind = Math.random() < 0.5 ? 1 : 0;
+  switch (cal.season) {
+    case 0:
+      if (randInt(4) === 0 && skyRoll > 0) {
+        skyRoll -= 1;
+      }
+      break;
+    case 1:
+      if (randInt(4) === 0 && tempRoll < 2) {
+        tempRoll += 1;
+      }
+      break;
+    case 2:
+      if (randInt(4) === 0 && windRoll > 0) {
+        windRoll -= 1;
+      }
+      break;
+    case 3:
+      if (randInt(4) === 0 && tempRoll > 0) {
+        tempRoll -= 1;
+      }
+      break;
+    default:
+      break;
+  }
+
+  if (skyRoll === 0) {
+    cal.weather = 0;
+  } else if (skyRoll <= 2) {
+    cal.weather = 1;
+  } else {
+    cal.weather = 2;
+  }
+
+  if (tempRoll === 0) {
+    let nextTemp = clampWeatherTemp(cal.temp - 1);
+    if (cal.season === 1 && nextTemp === 0) {
+      nextTemp = 1;
+    }
+    if (nextTemp === 0 && biome === 'hellscape' && !hasPermafrost) {
+      nextTemp = 1;
+    }
+    if (nextTemp === 0 && biome === 'eden' && cal.season !== 3) {
+      nextTemp = 1;
+    }
+    cal.temp = nextTemp;
+  } else if (tempRoll === 2) {
+    let nextTemp = clampWeatherTemp(cal.temp + 1);
+    if (cal.season === 3 && nextTemp === 2) {
+      nextTemp = 1;
+    }
+    if (nextTemp === 2 && biome === 'eden' && cal.season !== 1) {
+      nextTemp = 1;
+    }
+    cal.temp = nextTemp;
+  }
+
+  cal.wind = windRoll === 0 ? 1 : 0;
 }

@@ -58,6 +58,86 @@ import {
  */
 const TIME_MULTIPLIER = 0.25;
 
+function getFarmBiomeMultiplier(state: GameState): number {
+  switch (state.city.biome) {
+    case 'grassland':
+      return 1.2;
+    case 'savanna':
+      return 1.1;
+    case 'ashland':
+      return 0.62;
+    case 'volcanic':
+      return 0.9;
+    case 'hellscape':
+      return 0.25;
+    default:
+      return 1;
+  }
+}
+
+function getLumberBiomeMultiplier(state: GameState): number {
+  switch (state.city.biome) {
+    case 'forest':
+      return 1.2;
+    case 'savanna':
+      return 0.8;
+    case 'desert':
+      return 0.75;
+    case 'swamp':
+      return 1.1;
+    case 'taiga':
+      return 1.1;
+    default:
+      return 1;
+  }
+}
+
+function getStoneBiomeMultiplier(state: GameState): number {
+  switch (state.city.biome) {
+    case 'desert':
+      return 1.2;
+    case 'swamp':
+      return 0.88;
+    default:
+      return 1;
+  }
+}
+
+function getCopperBiomeMultiplier(state: GameState): number {
+  switch (state.city.biome) {
+    case 'volcanic':
+      return 1.12;
+    case 'ashland':
+      return 1.1;
+    default:
+      return 1;
+  }
+}
+
+function getIronBiomeMultiplier(state: GameState): number {
+  switch (state.city.biome) {
+    case 'volcanic':
+      return 1.08;
+    case 'ashland':
+      return 1.1;
+    default:
+      return 1;
+  }
+}
+
+function getOilBiomeMultiplier(state: GameState): number {
+  switch (state.city.biome) {
+    case 'desert':
+      return 1.1;
+    case 'tundra':
+      return 0.9;
+    case 'taiga':
+      return 0.92;
+    default:
+      return 1;
+  }
+}
+
 /**
  * 执行单个游戏 tick
  * 纯函数：接收当前状态 → 返回新状态 + 事件
@@ -249,6 +329,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (hoeLevel > 0) {
       farming *= 1 + hoeLevel / 3;
     }
+    farming *= getFarmBiomeMultiplier(state);
     if (techLevel('agriculture') >= 7) {
       farming *= 1.1;
     }
@@ -309,6 +390,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // lumber_yard: +2%/座
   const lumberjacks = workers('lumberjack');
   let lumberBase = 1;  // impact = 1.0
+  lumberBase *= getLumberBiomeMultiplier(state);
   // 石斧科技加成 — 原版 main.js L5559: axe > 1 才有加成
   const axeLevel = techLevel('axe');
   if (axeLevel > 1) {
@@ -332,6 +414,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 原版 main.js L5663-5677: impact = 1.0（不是 0.8）
   const quarryWorkers = workers('quarry_worker');
   let stoneBase = 1.0;  // quarry_worker.impact = 1.0
+  stoneBase *= getStoneBiomeMultiplier(state);
   // hammer 科技加成 — 原版 jobs.js L119: 每级 hammer +40%
   const hammerLevel = techLevel('hammer');
   if (hammerLevel > 0) {
@@ -394,10 +477,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const minerPlanetMult = getMinerPlanetMultiplier(state);
   const copperGeologyMult = 1 + (state.city.geology?.['Copper'] ?? 0);
   const ironGeologyMult = 1 + (state.city.geology?.['Iron'] ?? 0);
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * minerPlanetMult * effectiveProdMult;
+  const copperBiomeMult = getCopperBiomeMultiplier(state);
+  const ironBiomeMult = getIronBiomeMultiplier(state);
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * copperBiomeMult * minerPlanetMult * effectiveProdMult;
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * minerPlanetMult * effectiveProdMult;
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * ironBiomeMult * minerPlanetMult * effectiveProdMult;
   }
 
   // ============================================================
@@ -669,30 +754,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       oilPerWell *= techLevel('oil') >= 6 ? 1.75 : 1.25;
     }
     oilPerWell *= 1 + (state.city.geology?.['Oil'] ?? 0);
+    oilPerWell *= getOilBiomeMultiplier(state);
     deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWells * oilPerWell * effectiveProdMult;
-  }
-
-  const metalRefineries = structCount('metal_refinery');
-  if (metalRefineries > 0 && actualMiners > 0) {
-    let refineryBonus = metalRefineries * 6;
-    const activeRefineries = poweredOn['metal_refinery'] ?? 0;
-    if (techLevel('alumina') >= 2 && activeRefineries > 0) {
-      refineryBonus += activeRefineries * 6;
-    }
-
-    const aluminiumGeologyMult = 1 + (state.city.geology?.['Aluminium'] ?? 0);
-    const aluminiumBase =
-      actualMiners
-      * minerToolMult
-      * minerExplosiveMult
-      * minePowerMult
-      * 0.088
-      * aluminiumGeologyMult
-      * minerPlanetMult;
-
-    deltas['Aluminium'] =
-      (deltas['Aluminium'] ?? 0)
-      + aluminiumBase * (1 + refineryBonus / 100) * effectiveProdMult;
   }
 
   // ============================================================
@@ -711,10 +774,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // oil_extractor (气态卫星石油) — prod.js L395-425
   const oilExtractorCount = (state.space['oil_extractor'] as { on?: number } | undefined)?.on ?? 0;
   if (oilExtractorCount > 0) {
-    const gasMoonTech = techLevel('gas_moon');
-    let extractRate = 0.18;
-    if (gasMoonTech >= 3) extractRate = 0.24;
-    if (gasMoonTech >= 5) extractRate = 0.312;
+    let extractRate = techLevel('oil') >= 4 ? 0.48 : 0.4;
+    if (techLevel('oil') >= 7) {
+      extractRate *= 2;
+    } else if (techLevel('oil') >= 5) {
+      extractRate *= techLevel('oil') >= 6 ? 1.75 : 1.25;
+    }
     deltas['Oil'] = (deltas['Oil'] ?? 0) + oilExtractorCount * extractRate;
   }
 

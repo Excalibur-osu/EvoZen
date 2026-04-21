@@ -13,6 +13,7 @@ import {
   getBuildCost as coreGetBuildCost,
   canBuildStructure as coreCanBuildStructure,
   buildStructure as coreBuildStructure,
+  manualGather as coreManualGather,
   enqueueStructure as coreEnqueueStructure,
   dequeueStructure as coreDequeueStructure,
   isTechAvailable as coreIsTechAvailable,
@@ -586,14 +587,10 @@ export const useGameStore = defineStore('game', () => {
 
   /** 手动搜集资源（早期采集） */
   function gather(resourceId: string) {
-    const res = state.value.resource[resourceId]
-    if (!res) return
-    let amount = 1
-    // 石斧科技加成
-    if (resourceId === 'Lumber' && (state.value.tech['axe'] ?? 0) >= 1) amount = 2
-    if (resourceId === 'Stone' && (state.value.tech['mining'] ?? 0) >= 1) amount = 2
-    if (res.max > 0 && res.amount >= res.max) return
-    res.amount = Math.min(res.amount + amount, res.max > 0 ? res.max : Infinity)
+    const result = coreManualGather(state.value, resourceId)
+    if (result) {
+      state.value = result
+    }
   }
 
   // ---- 合成操作 ----

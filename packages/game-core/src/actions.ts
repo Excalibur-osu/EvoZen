@@ -99,6 +99,20 @@ export function buildStructure(state: GameState, structureId: string): GameState
   return next;
 }
 
+export function manualGather(state: GameState, resourceId: string): GameState | null {
+  const resource = state.resource[resourceId];
+  if (!resource) return null;
+  if (resource.max > 0 && resource.amount >= resource.max) return null;
+
+  const next = cloneState(state);
+  const target = next.resource[resourceId];
+  if (!target) return null;
+
+  const nextAmount = target.amount + 1;
+  target.amount = target.max > 0 ? Math.min(nextAmount, target.max) : nextAmount;
+  return next;
+}
+
 // ============================================================
 // 太空建筑建造
 // ============================================================

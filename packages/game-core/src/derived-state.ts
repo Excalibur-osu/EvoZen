@@ -130,15 +130,23 @@ export function applyDerivedStateInPlace(state: GameState): void {
     s.resource['Oil'].display = true;
   }
   // 对标 legacy space.js L160-162 + L373：
-  //   Helium_3.max = propellant_depot * 1000 (需 display)  +  helium_mine * 100
+  // 对标 legacy actions.js L3114-3122 + space.js L160-162 + L373：
+  //   Helium_3.max = oil_depot * 400 (需 display) + propellant_depot * 1000 (需 display) + helium_mine * 100
   // derived-state 会被重复调用，必须直接赋值而非 +=。
   if (s.resource['Helium_3']) {
     const heliumMineBonus = getHeliumMineHeliumCapBonus(s);
-    s.resource['Helium_3'].max = getPropellantDepotHeliumCapBonus(s) + heliumMineBonus;
+    const oilDepotHeliumBonus = s.resource['Helium_3'].display ? oilDepots * 400 : 0;
+    s.resource['Helium_3'].max = oilDepotHeliumBonus + getPropellantDepotHeliumCapBonus(s) + heliumMineBonus;
     // 建成首座 helium_mine 后解锁 Helium_3（legacy space.js L392）
     if (heliumMineBonus > 0) {
       s.resource['Helium_3'].display = true;
     }
+  }
+
+  // 对标 legacy actions.js L3118-3135：
+  //   Uranium.max = baseline 250 + oil_depot * 250（需 uranium >= 2）
+  if (s.resource['Uranium']) {
+    s.resource['Uranium'].max = 250 + ((s.tech['uranium'] ?? 0) >= 2 ? oilDepots * 250 : 0);
   }
 
   // 对标 legacy space.js L262：moon_base 每座 Iridium.max +500（baseline 0）

@@ -621,10 +621,11 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     reqs: { oil: 2 },
     costs: {
       Money: scaleCost(2500, 1.46),
+      Iron: scaleConditionalCost(325, 1.36, (state) => hasCityTrait(state, 'unstable')),
       Cement: scaleCementCost(3750, 1.46),
       Sheet_Metal: scaleCost(100, 1.45),
     },
-    effect: '石油储存上限 +1000。',
+    effect: '石油储存上限 +1000；已解锁铀/氦-3 后额外提供对应储量上限。',
   },
 
   // ---- 发电设施 ----

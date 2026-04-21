@@ -9,6 +9,7 @@ export {
   getBuildCost,
   canBuildStructure,
   buildStructure,
+  manualGather,
   buildSpaceStructure,
   buildInterstellarStructure,
   enqueueStructure,

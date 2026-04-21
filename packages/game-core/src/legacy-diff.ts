@@ -6,7 +6,9 @@ import { createNewGame } from './state';
 import { applySimulationDerivedState, runSimulationTick, simulateTicks } from './simulation';
 import { gameTick } from './tick';
 import { armyRating, mercCost, tickTraining } from './military';
+import { manualGather } from './actions';
 import { assignSpeciesTraits } from './traits';
+import { randomizeWeather } from './morale';
 
 export interface DifferentialSlice {
   resourceDiffs?: Record<string, number>;
@@ -29,30 +31,66 @@ export interface LegacyCoreModel {
     farmerImpact: number;
     farmerStress: number;
     lumberjackImpact: number;
+    quarryWorkerImpact: number;
     minerImpact: number;
+    coalMinerImpact: number;
     lumberjackStress: number;
     minerStress: number;
+    coalMinerStress: number;
     entertainerStress: number;
   };
   food: {
     farmBonusLowTech: number;
     farmBonusHighTech: number;
+    grasslandFarmMultiplier: number;
     weatherColdRainMultiplier: number;
     weatherColdOtherMultiplier: number;
     weatherSunnyMultiplier: number;
     workerConsumptionDiscount: number;
   };
   lumber: {
+    forestLumberMultiplier: number;
     axeBonusPerLevelAboveOne: number;
     lumberYardBonusPerBuilding: number;
     sawmillBonusPerBuilding: number;
     sawmillPoweredBonusPerActive: number;
   };
+  quarry: {
+    desertStoneMultiplier: number;
+    swampStoneMultiplier: number;
+    hammerBonusPerLevel: number;
+    rockQuarryBonusPerBuilding: number;
+    powerBonusPerActive: number;
+    aluminiumRatio: number;
+    refineryBonusPerBuilding: number;
+    refineryPoweredBonusPerActive: number;
+  };
   miner: {
     pickaxeBonusPerLevel: number;
     copperMultiplier: number;
     ironMultiplier: number;
+    volcanicCopperMultiplier: number;
+    ashlandCopperMultiplier: number;
+    volcanicIronMultiplier: number;
+    ashlandIronMultiplier: number;
     minePowerBonusPerActive: number;
+  };
+  coal: {
+    pickaxeBonusPerLevel: number;
+    impact: number;
+    powerBonusPerActive: number;
+    uraniumDivisor: number;
+  };
+  oil: {
+    desertMultiplier: number;
+    tundraMultiplier: number;
+    taigaMultiplier: number;
+    baseLowTech: number;
+    baseHighTech: number;
+    wellStorageCapPerBuilding: number;
+    depotOilCapPerBuilding: number;
+    depotUraniumCapPerBuilding: number;
+    depotHeliumCapPerBuilding: number;
   };
   power: {
     oilGeneratorPower: number;
@@ -196,6 +234,24 @@ function round(value: number | undefined, digits: number = 6): number {
   return Number((value ?? 0).toFixed(digits));
 }
 
+function withMockedRandom<T>(values: number[], fn: () => T): T {
+  const originalRandom = Math.random;
+  let index = 0;
+  Math.random = () => {
+    const next = values[index];
+    if (index < values.length - 1) {
+      index += 1;
+    }
+    return next ?? 0;
+  };
+
+  try {
+    return fn();
+  } finally {
+    Math.random = originalRandom;
+  }
+}
+
 function defaultActualSlice(state: GameState): DifferentialSlice {
   const output = gameTick(state);
   return {
@@ -216,6 +272,7 @@ export function loadLegacyCoreModel(): LegacyCoreModel {
   const resourcesSrc = readLegacy('resources.js');
   const civicsSrc = readLegacy('civics.js');
   const racesSrc = readLegacy('races.js');
+  const prodSrc = readLegacy('prod.js');
   const [farmBonusHighTech, farmBonusLowTech] = extractNumbers(
     jobsSrc,
     /farming \+= global\.tech\['agriculture'\] && global\.tech\.agriculture >= 2 \? ([\d.]+) : ([\d.]+);/,
@@ -238,14 +295,22 @@ export function loadLegacyCoreModel(): LegacyCoreModel {
       farmerImpact: extractJobImpact(jobsSrc, 'farmer'),
       farmerStress: extractJobStress(jobsSrc, 'farmer'),
       lumberjackImpact: extractJobImpact(jobsSrc, 'lumberjack'),
+      quarryWorkerImpact: extractJobImpact(jobsSrc, 'quarry_worker'),
       minerImpact: extractJobImpact(jobsSrc, 'miner'),
+      coalMinerImpact: extractJobImpact(jobsSrc, 'coal_miner'),
       lumberjackStress: extractJobStress(jobsSrc, 'lumberjack'),
       minerStress: extractJobStress(jobsSrc, 'miner'),
+      coalMinerStress: extractJobStress(jobsSrc, 'coal_miner'),
       entertainerStress: extractJobStress(jobsSrc, 'entertainer'),
     },
     food: {
       farmBonusLowTech,
       farmBonusHighTech,
+      grasslandFarmMultiplier: extractNumber(
+        racesSrc,
+        /grassland:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+\] : \[([\d.]+)\];/,
+        'food.grasslandFarmMultiplier',
+      ),
       weatherColdRainMultiplier: extractNumber(
         mainSrc,
         /weather_multiplier \*= global\.race\['chilled'\] \? \(1 \+ traits\.chilled\.vars\(\)\[3\] \/ 100\) : ([\d.]+);/,
@@ -268,6 +333,11 @@ export function loadLegacyCoreModel(): LegacyCoreModel {
       ),
     },
     lumber: {
+      forestLumberMultiplier: extractNumber(
+        racesSrc,
+        /forest:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+\] : \[([\d.]+)\];/,
+        'lumber.forestLumberMultiplier',
+      ),
       axeBonusPerLevelAboveOne: extractNumber(
         mainSrc,
         /\(global\.tech\.axe - 1\) \* ([\d.]+) : 0\) \+ 1;/,
@@ -289,6 +359,48 @@ export function loadLegacyCoreModel(): LegacyCoreModel {
         'lumber.sawmillPoweredBonusPerActive',
       ),
     },
+    quarry: {
+      desertStoneMultiplier: extractNumber(
+        racesSrc,
+        /desert:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[([\d.]+),[\d.]+,[\d.]+\];/,
+        'quarry.desertStoneMultiplier',
+      ),
+      swampStoneMultiplier: extractNumber(
+        racesSrc,
+        /swamp:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,[\d.]+,[\d.]+,([\d.]+)\];/,
+        'quarry.swampStoneMultiplier',
+      ),
+      hammerBonusPerLevel: extractNumber(
+        jobsSrc,
+        /let multiplier = \(global\.tech\['hammer'\] && global\.tech\['hammer'\] > 0 \? global\.tech\['hammer'\] \* ([\d.]+) : 0\) \+ 1;/,
+        'quarry.hammerBonusPerLevel',
+      ),
+      rockQuarryBonusPerBuilding: extractNumber(
+        mainSrc,
+        /rock_quarry \+= global\.city\['rock_quarry'\]\.count \* ([\d.]+);/,
+        'quarry.rockQuarryBonusPerBuilding',
+      ),
+      powerBonusPerActive: extractNumber(
+        mainSrc,
+        /power_mult \+= \(p_on\['rock_quarry'\] \* ([\d.]+)\);/,
+        'quarry.powerBonusPerActive',
+      ),
+      aluminiumRatio: extractNumber(
+        mainSrc,
+        /let alum_ratio = global\.race\['cataclysm'\] \? [\d.]+ : ([\d.]+);/,
+        'quarry.aluminiumRatio',
+      ),
+      refineryBonusPerBuilding: extractNumber(
+        mainSrc,
+        /let refinery = global\.city\['metal_refinery'\] \? global\.city\['metal_refinery'\]\.count \* (\d+) : 0;/,
+        'quarry.refineryBonusPerBuilding',
+      ),
+      refineryPoweredBonusPerActive: extractNumber(
+        mainSrc,
+        /refinery \+= p_on\['metal_refinery'\] \* (\d+) \* q_multiplier;/,
+        'quarry.refineryPoweredBonusPerActive',
+      ),
+    },
     miner: {
       pickaxeBonusPerLevel: extractNumber(
         mainSrc,
@@ -305,10 +417,95 @@ export function loadLegacyCoreModel(): LegacyCoreModel {
         /let iron_mult = ([^;]+);/,
         'miner.ironMultiplier',
       ),
+      volcanicCopperMultiplier: extractNumber(
+        racesSrc,
+        /volcanic:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,([\d.]+),[\d.]+\];/,
+        'miner.volcanicCopperMultiplier',
+      ),
+      ashlandCopperMultiplier: extractNumber(
+        racesSrc,
+        /ashland:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,[\d.]+,([\d.]+)\];/,
+        'miner.ashlandCopperMultiplier',
+      ),
+      volcanicIronMultiplier: extractNumber(
+        racesSrc,
+        /volcanic:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,[\d.]+,([\d.]+)\];/,
+        'miner.volcanicIronMultiplier',
+      ),
+      ashlandIronMultiplier: extractNumber(
+        racesSrc,
+        /ashland:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,[\d.]+,([\d.]+)\];/,
+        'miner.ashlandIronMultiplier',
+      ),
       minePowerBonusPerActive: extractNumber(
         mainSrc,
         /power_mult \+= \(p_on\['mine'\] \* ([\d.]+)\);/,
         'miner.minePowerBonusPerActive',
+      ),
+    },
+    coal: {
+      pickaxeBonusPerLevel: extractNumber(
+        mainSrc,
+        /coal_base \*= \(global\.tech\['pickaxe'\] && global\.tech\.pickaxe > 0 \? global\.tech\.pickaxe \* ([\d.]+) : 0\) \+ 1;/,
+        'coal.pickaxeBonusPerLevel',
+      ),
+      impact: extractJobImpact(jobsSrc, 'coal_miner'),
+      powerBonusPerActive: extractNumber(
+        mainSrc,
+        /power_mult \+= \(p_on\['coal_mine'\] \* ([\d.]+)\);/,
+        'coal.powerBonusPerActive',
+      ),
+      uraniumDivisor: extractNumber(
+        mainSrc,
+        /let uranium = delta \/ \(global\.race\['cataclysm'\] \? \d+ : (\d+)\)/,
+        'coal.uraniumDivisor',
+      ),
+    },
+    oil: {
+      desertMultiplier: extractNumber(
+        racesSrc,
+        /desert:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,([\d.]+),[\d.]+\];/,
+        'oil.desertMultiplier',
+      ),
+      tundraMultiplier: extractNumber(
+        racesSrc,
+        /tundra:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+\] : \[[\d.]+,([\d.]+)\];/,
+        'oil.tundraMultiplier',
+      ),
+      taigaMultiplier: extractNumber(
+        racesSrc,
+        /taiga:\s*\{[\s\S]*?return global\.race\['rejuvenated'\] \? \[[\d.]+,[\d.]+,[\d.]+\] : \[[\d.]+,[\d.]+,([\d.]+)\];/,
+        'oil.taigaMultiplier',
+      ),
+      baseHighTech: extractNumbers(
+        prodSrc,
+        /let oil = global\.tech\['oil'\] >= 4 \? ([\d.]+) : ([\d.]+);/,
+        'oil.baseRates',
+      )[0],
+      baseLowTech: extractNumbers(
+        prodSrc,
+        /let oil = global\.tech\['oil'\] >= 4 \? ([\d.]+) : ([\d.]+);/,
+        'oil.baseRates',
+      )[1],
+      wellStorageCapPerBuilding: extractNumber(
+        mainSrc,
+        /global\.city\['oil_well'\]\.count \* spatialReasoning\((\d+)\)/,
+        'oil.wellStorageCapPerBuilding',
+      ),
+      depotOilCapPerBuilding: extractNumber(
+        mainSrc,
+        /global\.city\['oil_depot'\]\.count \* spatialReasoning\((\d+)\)/,
+        'oil.depotOilCapPerBuilding',
+      ),
+      depotUraniumCapPerBuilding: extractNumber(
+        actionsSrc,
+        /global\['resource'\]\['Uranium'\]\.max \+= spatialReasoning\((\d+)\) \* \(global\.tech\['world_control'\] \? 1\.5 : 1\);/,
+        'oil.depotUraniumCapPerBuilding',
+      ),
+      depotHeliumCapPerBuilding: extractNumber(
+        actionsSrc,
+        /global\['resource'\]\['Helium_3'\]\.max \+= spatialReasoning\((\d+)\) \* \(global\.tech\['world_control'\] \? 1\.5 : 1\);/,
+        'oil.depotHeliumCapPerBuilding',
       ),
     },
     power: {
@@ -520,6 +717,171 @@ export function assertSlicesMatch(
 }
 
 export const legacyCoreDifferentialScenarios: DifferentialScenario[] = [
+  {
+    id: 'calendar-year-rollover',
+    description: '日历推进应在 dayTick 满 20 时推进日期，并正确处理年切换、月相归零与 season 重算',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.calendar.dayTick = 19;
+      state.city.calendar.day = 365;
+      state.city.calendar.orbit = 365;
+      state.city.calendar.year = 9;
+      state.city.calendar.moon = 27;
+      state.city.calendar.season = 3;
+      state.stats.days = 0;
+      return state;
+    },
+    actual: (state) => {
+      const output = withMockedRandom([0.9], () => gameTick(state));
+      return {
+        resources: {
+          dayTick: round(output.state.city.calendar.dayTick),
+          day: round(output.state.city.calendar.day),
+          year: round(output.state.city.calendar.year),
+          moon: round(output.state.city.calendar.moon),
+          season: round(output.state.city.calendar.season),
+          totalDays: round(output.state.stats.days),
+        },
+      };
+    },
+    expected: () => ({
+      resources: {
+        dayTick: 0,
+        day: 1,
+        year: 10,
+        moon: 0,
+        season: 0,
+        totalDays: 1,
+      },
+    }),
+  },
+  {
+    id: 'calendar-season-segmentation',
+    description: '日历推进应按 orbit/4 的 seasonLength 重算季节',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.calendar.dayTick = 19;
+      state.city.calendar.day = 182;
+      state.city.calendar.orbit = 365;
+      state.city.calendar.year = 1;
+      state.city.calendar.moon = 10;
+      state.city.calendar.season = 0;
+      state.stats.days = 0;
+      return state;
+    },
+    actual: (state) => {
+      const output = withMockedRandom([0.9], () => gameTick(state));
+      return {
+        resources: {
+          dayTick: round(output.state.city.calendar.dayTick),
+          day: round(output.state.city.calendar.day),
+          year: round(output.state.city.calendar.year),
+          moon: round(output.state.city.calendar.moon),
+          season: round(output.state.city.calendar.season),
+          totalDays: round(output.state.stats.days),
+        },
+      };
+    },
+    expected: () => ({
+      resources: {
+        dayTick: 0,
+        day: 183,
+        year: 1,
+        moon: 11,
+        season: 2,
+        totalDays: 1,
+      },
+    }),
+  },
+  {
+    id: 'weather-no-refresh',
+    description: '天气随机化应在非 1/6 刷新窗口时保持原状态不变',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.calendar.weather = 1;
+      state.city.calendar.temp = 2;
+      state.city.calendar.wind = 1;
+      return state;
+    },
+    actual: (state) => {
+      withMockedRandom([0.9], () => randomizeWeather(state));
+      return {
+        resources: {
+          weather: round(state.city.calendar.weather),
+          temp: round(state.city.calendar.temp),
+          wind: round(state.city.calendar.wind),
+        },
+      };
+    },
+    expected: () => ({
+      resources: {
+        weather: 1,
+        temp: 2,
+        wind: 1,
+      },
+    }),
+  },
+  {
+    id: 'weather-summer-ashland-roll',
+    description: '天气随机化应正确处理 ashland 夏季分支、sky 映射、温度爬坡与 wind 结果',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.biome = 'ashland';
+      state.city.calendar.season = 1;
+      state.city.calendar.weather = 2;
+      state.city.calendar.temp = 1;
+      state.city.calendar.wind = 0;
+      return state;
+    },
+    actual: (state) => {
+      withMockedRandom([0.0, 0.1, 0.0, 0.0, 0.0, 0.9], () => randomizeWeather(state));
+      return {
+        resources: {
+          weather: round(state.city.calendar.weather),
+          temp: round(state.city.calendar.temp),
+          wind: round(state.city.calendar.wind),
+        },
+      };
+    },
+    expected: () => ({
+      resources: {
+        weather: 1,
+        temp: 2,
+        wind: 1,
+      },
+    }),
+  },
+  {
+    id: 'weather-hellscape-cold-clamp',
+    description: '天气随机化应在 hellscape 上阻止温度降到 0（无 permafrost）',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.biome = 'hellscape';
+      state.city.calendar.season = 0;
+      state.city.calendar.weather = 1;
+      state.city.calendar.temp = 1;
+      state.city.calendar.wind = 0;
+      state.city.ptrait = 'none';
+      return state;
+    },
+    actual: (state) => {
+      withMockedRandom([0.0, 0.0, 0.8, 0.9, 0.9], () => randomizeWeather(state));
+      return {
+        resources: {
+          weather: round(state.city.calendar.weather),
+          temp: round(state.city.calendar.temp),
+          wind: round(state.city.calendar.wind),
+        },
+      };
+    },
+    expected: () => ({
+      resources: {
+        weather: 2,
+        temp: 1,
+        wind: 0,
+      },
+    }),
+  },
   {
     id: 'military-training-human-bootcamp',
     description: 'legacy 训练速率链路：baseline ÷ diverse × boot_camp × time_multiplier',
@@ -749,6 +1111,112 @@ export const legacyCoreDifferentialScenarios: DifferentialScenario[] = [
     },
   },
   {
+    id: 'lumberjack-forest-biome',
+    description: 'legacy 伐木 biome 分支：forest 应提供木材倍率',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.biome = 'forest';
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'lumberjack', 1);
+      return state;
+    },
+    expected: (model) => ({
+      resourceDiffs: {
+        Lumber: round(model.jobs.lumberjackImpact * model.lumber.forestLumberMultiplier * model.timeMultiplier),
+      },
+    }),
+  },
+  {
+    id: 'quarry-core-output',
+    description: 'legacy 采石核心链路：impact × hammer × explosives × rock_quarry × time_multiplier',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.hammer = 2;
+      state.tech.explosives = 2;
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'quarry_worker', 1);
+      state.city.rock_quarry = { count: 2, on: 0 };
+      return state;
+    },
+    expected: (model) => {
+      const hammerMult = 1 + 2 * model.quarry.hammerBonusPerLevel;
+      const explosiveMult = 1 + 2 * 0.25;
+      const quarryMult = 1 + 2 * model.quarry.rockQuarryBonusPerBuilding;
+      return {
+        resourceDiffs: {
+          Stone: round(model.jobs.quarryWorkerImpact * hammerMult * explosiveMult * quarryMult * model.timeMultiplier),
+        },
+      };
+    },
+  },
+  {
+    id: 'quarry-desert-biome',
+    description: 'legacy 采石 biome 分支：desert 应提供石头倍率',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.biome = 'desert';
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'quarry_worker', 1);
+      return state;
+    },
+    expected: (model) => ({
+      resourceDiffs: {
+        Stone: round(model.jobs.quarryWorkerImpact * model.quarry.desertStoneMultiplier * model.timeMultiplier),
+      },
+    }),
+  },
+  {
+    id: 'quarry-swamp-biome',
+    description: 'legacy 采石 biome 分支：swamp 应提供石头倍率',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.city.biome = 'swamp';
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'quarry_worker', 1);
+      return state;
+    },
+    expected: (model) => ({
+      resourceDiffs: {
+        Stone: round(model.jobs.quarryWorkerImpact * model.quarry.swampStoneMultiplier * model.timeMultiplier),
+      },
+    }),
+  },
+  {
+    id: 'aluminium-refinery-output',
+    description: 'legacy 铝精炼链路：quarry_worker 副产铝并受 rock_quarry 与 metal_refinery 叠乘修正',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.alumina = 2;
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'quarry_worker', 1);
+      state.city.rock_quarry = { count: 1, on: 1 };
+      state.city.metal_refinery = { count: 1, on: 1 };
+      state.city.oil_power = { count: 1, on: 1 };
+      state.resource.Oil.amount = 9999;
+      state.resource.Oil.max = 999999;
+      return state;
+    },
+    expected: (model) => {
+      const quarryMult = 1 + model.quarry.rockQuarryBonusPerBuilding;
+      const quarryPowerMult = 1 + model.quarry.powerBonusPerActive;
+      const refineryMult =
+        1
+        + (model.quarry.refineryBonusPerBuilding + model.quarry.refineryPoweredBonusPerActive) / 100;
+      return {
+        resourceDiffs: {
+          Aluminium: round(
+            model.jobs.quarryWorkerImpact
+            * model.quarry.aluminiumRatio
+            * quarryMult
+            * quarryPowerMult
+            * refineryMult
+            * model.timeMultiplier,
+          ),
+        },
+      };
+    },
+  },
+  {
     id: 'miner-core-output',
     description: 'legacy 矿工核心链路：impact × pickaxe × power × copper/iron ratio × time_multiplier',
     setup: () => {
@@ -773,6 +1241,203 @@ export const legacyCoreDifferentialScenarios: DifferentialScenario[] = [
         },
       };
     },
+  },
+  {
+    id: 'miner-volcanic-copper-biome',
+    description: 'legacy 矿工 biome 分支：volcanic 应放大铜产出',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.mining = 3;
+      state.tech.pickaxe = 2;
+      state.city.biome = 'volcanic';
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'miner', 1);
+      state.city.mine = { count: 1, on: 1 };
+      state.city.oil_power = { count: 1, on: 1 };
+      state.resource.Oil.amount = 9999;
+      state.resource.Oil.max = 999999;
+      return state;
+    },
+    expected: (model) => {
+      const minerMult = 1 + 2 * model.miner.pickaxeBonusPerLevel;
+      const powerMult = 1 + model.miner.minePowerBonusPerActive;
+      return {
+        resourceDiffs: {
+          Copper: round(
+            model.jobs.minerImpact
+            * minerMult
+            * powerMult
+            * model.miner.copperMultiplier
+            * model.miner.volcanicCopperMultiplier
+            * model.timeMultiplier,
+          ),
+        },
+      };
+    },
+  },
+  {
+    id: 'miner-ashland-iron-biome',
+    description: 'legacy 矿工 biome 分支：ashland 应放大铁产出',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.mining = 3;
+      state.tech.pickaxe = 2;
+      state.city.biome = 'ashland';
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'miner', 1);
+      state.city.mine = { count: 1, on: 1 };
+      state.city.oil_power = { count: 1, on: 1 };
+      state.resource.Oil.amount = 9999;
+      state.resource.Oil.max = 999999;
+      return state;
+    },
+    expected: (model) => {
+      const minerMult = 1 + 2 * model.miner.pickaxeBonusPerLevel;
+      const powerMult = 1 + model.miner.minePowerBonusPerActive;
+      return {
+        resourceDiffs: {
+          Iron: round(
+            model.jobs.minerImpact
+            * minerMult
+            * powerMult
+            * model.miner.ironMultiplier
+            * model.miner.ashlandIronMultiplier
+            * model.timeMultiplier,
+          ),
+        },
+      };
+    },
+  },
+  {
+    id: 'coal-uranium-output',
+    description: 'legacy 煤矿链路：coal_miner 产煤并按固定比例产铀',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.mining = 4;
+      state.tech.pickaxe = 2;
+      state.tech.explosives = 2;
+      state.tech.uranium = 1;
+      setWorkers(state, 'unemployed', 0);
+      setWorkers(state, 'coal_miner', 1);
+      state.city.coal_mine = { count: 1, on: 1 };
+      state.city.oil_power = { count: 1, on: 1 };
+      state.resource.Oil.amount = 9999;
+      state.resource.Oil.max = 999999;
+      return state;
+    },
+    expected: (model) => {
+      const coalDelta =
+        model.coal.impact
+        * (1 + 2 * model.coal.pickaxeBonusPerLevel)
+        * (0.95 + 2 * 0.15)
+        * (1 + model.coal.powerBonusPerActive)
+        * model.timeMultiplier;
+      return {
+        resourceDiffs: {
+          Coal: round(coalDelta),
+          Uranium: round(coalDelta / model.coal.uraniumDivisor),
+        },
+      };
+    },
+  },
+  {
+    id: 'oil-well-desert-biome',
+    description: 'legacy 石油井 biome 分支：desert 应放大 oil_well 产出',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.oil = 1;
+      state.city.biome = 'desert';
+      setWorkers(state, 'unemployed', 1);
+      state.city.oil_well = { count: 1 };
+      return state;
+    },
+    expected: (model) => ({
+      resourceDiffs: {
+        Oil: round(model.oil.baseLowTech * model.oil.desertMultiplier * model.timeMultiplier),
+      },
+    }),
+  },
+  {
+    id: 'oil-extractor-oil-tech-scaling',
+    description: 'legacy 气态卫星 oil_extractor 应随 oil 科技而不是 gas_moon 科技缩放',
+    setup: () => {
+      const state = bootstrapCivilization(1);
+      state.tech.oil = 5;
+      setWorkers(state, 'unemployed', 1);
+      state.space.oil_extractor = { count: 1, on: 1 };
+      return state;
+    },
+    expected: (model) => ({
+      resourceDiffs: {
+        Oil: round(model.oil.baseHighTech * 1.25 * model.timeMultiplier),
+      },
+    }),
+  },
+  {
+    id: 'oil-depot-storage-caps',
+    description: 'legacy oil_depot 应同时扩展 Oil / Uranium / Helium_3 的储量上限',
+    setup: () => {
+      const state = bootstrapCivilization(1, { inflateCaps: false });
+      state.tech.oil = 2;
+      state.tech.uranium = 2;
+      state.city.oil_well = { count: 1 };
+      state.city.oil_depot = { count: 2 };
+      state.resource.Helium_3.display = true;
+      return state;
+    },
+    actual: (state) => {
+      const derived = applySimulationDerivedState(state);
+      return {
+        resources: {
+          OilMax: round(derived.resource.Oil.max),
+          UraniumMax: round(derived.resource.Uranium.max),
+          HeliumMax: round(derived.resource.Helium_3.max),
+        },
+      };
+    },
+    expected: (model) => ({
+      resources: {
+        OilMax: round(model.oil.wellStorageCapPerBuilding + 2 * model.oil.depotOilCapPerBuilding),
+        UraniumMax: round(250 + 2 * model.oil.depotUraniumCapPerBuilding),
+        HeliumMax: round(2 * model.oil.depotHeliumCapPerBuilding),
+      },
+    }),
+  },
+  {
+    id: 'manual-gather-basics',
+    description: 'legacy 早期手动采集应保持基础 1 点收益，不吃 axe / mining 的额外翻倍',
+    setup: () => {
+      const state = bootstrapCivilization(1, { inflateCaps: false });
+      state.tech.primitive = 2;
+      state.tech.axe = 1;
+      state.tech.mining = 1;
+      state.resource.Food.amount = 0;
+      state.resource.Food.max = 250;
+      state.resource.Lumber.amount = 0;
+      state.resource.Lumber.max = 200;
+      state.resource.Stone.amount = 0;
+      state.resource.Stone.max = 200;
+      return state;
+    },
+    actual: (state) => {
+      let next = manualGather(state, 'Food') ?? state;
+      next = manualGather(next, 'Lumber') ?? next;
+      next = manualGather(next, 'Stone') ?? next;
+      return {
+        resources: {
+          Food: round(next.resource.Food.amount),
+          Lumber: round(next.resource.Lumber.amount),
+          Stone: round(next.resource.Stone.amount),
+        },
+      };
+    },
+    expected: () => ({
+      resources: {
+        Food: 1,
+        Lumber: 1,
+        Stone: 1,
+      },
+    }),
   },
   {
     id: 'tax-core-output',
@@ -912,6 +1577,7 @@ export const legacyCoreDifferentialScenarios: DifferentialScenario[] = [
       const globalMultiplier = morale / 100;
       const farmerOutput =
         (model.jobs.farmerImpact + model.food.farmBonusLowTech)
+        * model.food.grasslandFarmMultiplier
         * model.food.weatherColdRainMultiplier
         * globalMultiplier;
       const foodConsumption = 1;
