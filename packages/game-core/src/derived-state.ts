@@ -33,6 +33,8 @@ export function applyDerivedStateInPlace(state: GameState): void {
     (s.city[id] as { count: number } | undefined)?.count ?? 0;
   const getSpaceCount = (id: string): number =>
     (s.space[id] as { count?: number } | undefined)?.count ?? 0;
+  const getInterstellarCount = (id: string): number =>
+    (s.interstellar[id] as { count?: number } | undefined)?.count ?? 0;
 
   const setJobMax = (jobId: string, max: number): void => {
     const job = s.civic[jobId] as { max: number } | undefined;
@@ -269,6 +271,15 @@ export function applyDerivedStateInPlace(state: GameState): void {
   }
   if ((s.tech['alumina'] ?? 0) >= 1) {
     s.resource['Aluminium'].display = true;
+  }
+  if ((s.tech['nano'] ?? 0) >= 1) {
+    s.resource['Nano_Tube'].display = true;
+  }
+  if ((s.tech['stanene'] ?? 0) >= 1) {
+    s.resource['Stanene'].display = true;
+  }
+  if (getInterstellarCount('mining_droid') > 0) {
+    s.resource['Adamantite'].display = true;
   }
 
   const foundries = getStructCount('foundry');

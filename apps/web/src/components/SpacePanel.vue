@@ -25,12 +25,37 @@ const structureLabels: Record<string, string> = {
   red_factory: '太空工厂',
   biodome: '生物穹顶',
   exotic_lab: '异星实验室',
+  geothermal: '地热发电站',
+  swarm_control: '虫群控制站',
+  swarm_satellite: '虫群卫星',
+  gas_mining: '气体采集站',
+  gas_storage: '轨道储存站',
+  outpost: '前哨站',
+  oil_extractor: '石油提取器',
+  space_station: '太空站',
+  elerium_ship: '超铀采矿船',
+  iridium_ship: '铱矿采矿船',
+  iron_ship: '铁矿采矿船',
+  elerium_contain: '超铀容器',
+  e_reactor: '超铀反应堆',
+  world_collider: '世界对撞机',
+  world_controller: '世界控制器',
+  starport: '星港',
+  mining_droid: '采矿无人机',
+  habitat: '定居点',
 }
 
 const regionLabels: Record<string, string> = {
   spc_home: '近地轨道',
   spc_moon: '月球',
   spc_red: '红色行星',
+  spc_hell: '地狱行星',
+  spc_sun: '恒星',
+  spc_gas: '气态巨行星',
+  spc_gas_moon: '气态卫星',
+  spc_belt: '小行星带',
+  spc_dwarf: '矮行星',
+  int_alpha: '半人马座 Alpha',
 }
 
 const highTech = computed(() => game.state.tech['high_tech'] ?? 0)
@@ -38,6 +63,8 @@ const spaceLevel = computed(() => game.state.tech['space'] ?? 0)
 const spaceExplore = computed(() => game.state.tech['space_explore'] ?? 0)
 const luna = computed(() => game.state.tech['luna'] ?? 0)
 const mars = computed(() => game.state.tech['mars'] ?? 0)
+const ftl = computed(() => game.state.tech['ftl'] ?? 0)
+const alpha = computed(() => game.state.tech['alpha'] ?? 0)
 
 const actionCards = computed(() => {
   return game.SPACE_ACTIONS.map((action) => {
@@ -54,7 +81,14 @@ const actionCards = computed(() => {
     const completed =
       (action.id === 'test_launch' && spaceLevel.value >= 2) ||
       (action.id === 'moon_mission' && spaceLevel.value >= 3) ||
-      (action.id === 'red_mission' && spaceLevel.value >= 4)
+      (action.id === 'red_mission' && spaceLevel.value >= 4) ||
+      (action.id === 'hell_mission' && (game.state.tech['hell'] ?? 0) >= 1) ||
+      (action.id === 'sun_mission' && (game.state.tech['solar'] ?? 0) >= 1) ||
+      (action.id === 'gas_mission' && spaceLevel.value >= 5) ||
+      (action.id === 'gas_moon_mission' && spaceLevel.value >= 6) ||
+      (action.id === 'belt_mission' && (game.state.tech['asteroid'] ?? 0) >= 1) ||
+      (action.id === 'dwarf_mission' && (game.state.tech['dwarf'] ?? 0) >= 1) ||
+      (action.id === 'alpha_mission' && (game.state.tech['alpha'] ?? 0) >= 1)
 
     return {
       ...action,
@@ -69,6 +103,7 @@ const actionCards = computed(() => {
 
 interface BuildCard {
   id: string
+  scope: 'space' | 'interstellar'
   region: string
   name: string
   description: string
@@ -98,9 +133,14 @@ interface RegionGroup {
  */
 const regionGroups = computed<RegionGroup[]>(() => {
   const groups: Record<string, RegionGroup> = {}
+  const allStructures = [
+    ...game.SPACE_STRUCTURES.map((def) => ({ ...def, scope: 'space' as const })),
+    ...game.INTERSTELLAR_STRUCTURES.map((def) => ({ ...def, scope: 'interstellar' as const })),
+  ]
 
-  for (const def of game.SPACE_STRUCTURES) {
-    const struct = game.state.space[def.id] as
+  for (const def of allStructures) {
+    const bucket = def.scope === 'space' ? game.state.space : game.state.interstellar
+    const struct = bucket[def.id] as
       | { count?: number; on?: number; support?: number; s_max?: number }
       | undefined
 
@@ -157,6 +197,7 @@ const regionGroups = computed<RegionGroup[]>(() => {
 
     groups[def.region].items.push({
       id: def.id,
+      scope: def.scope,
       region: def.region,
       name: structureLabels[def.id] ?? def.name,
       description: def.description,
@@ -166,15 +207,19 @@ const regionGroups = computed<RegionGroup[]>(() => {
       on: struct?.on ?? 0,
       support: struct?.support ?? 0,
       sMax: struct?.s_max ?? 0,
-      costs: techUnlocked ? game.getSpaceBuildCost(def.id) : {},
+      costs: techUnlocked
+        ? (def.scope === 'space' ? game.getSpaceBuildCost(def.id) : game.getInterstellarBuildCost(def.id))
+        : {},
       techUnlocked,
       spaceReqsOk,
       traitOk,
-      canBuild: game.canBuildSpaceStructure(def.id),
+      canBuild: def.scope === 'space'
+        ? game.canBuildSpaceStructure(def.id)
+        : game.canBuildInterstellarStructure(def.id),
     })
   }
 
-  const order = ['spc_home', 'spc_moon', 'spc_red']
+  const order = ['spc_home', 'spc_moon', 'spc_red', 'spc_hell', 'spc_sun', 'spc_gas', 'spc_gas_moon', 'spc_belt', 'spc_dwarf', 'int_alpha']
   return order.filter((r) => groups[r]).map((r) => groups[r])
 })
 
@@ -182,8 +227,12 @@ function performAction(actionId: string) {
   game.runSpaceAction(actionId)
 }
 
-function buildStructure(id: string) {
-  game.buildSpaceStructure(id)
+function buildStructure(item: BuildCard) {
+  if (item.scope === 'space') {
+    game.buildSpaceStructure(item.id)
+    return
+  }
+  game.buildInterstellarStructure(item.id)
 }
 
 function formatAmount(amount: number): string {
@@ -224,6 +273,14 @@ function resourceName(id: string): string {
         <div class="stat">
           <span class="stat-label">mars</span>
           <span class="stat-value">{{ mars }}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">ftl</span>
+          <span class="stat-value">{{ ftl }}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">alpha</span>
+          <span class="stat-value">{{ alpha }}</span>
         </div>
       </div>
     </section>
@@ -301,7 +358,7 @@ function resourceName(id: string): string {
           <button
             class="btn primary build-btn"
             :disabled="!item.canBuild"
-            @click="buildStructure(item.id)"
+            @click="buildStructure(item)"
           >
             {{ !item.techUnlocked ? '未解锁' : !item.spaceReqsOk ? '前置不足' : item.canBuild ? '建造一座' : '资源不足' }}
           </button>

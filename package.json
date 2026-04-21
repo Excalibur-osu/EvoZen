@@ -1,6 +1,6 @@
 {
   "name": "evozen",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "EvoZen",
   "private": true,
   "workspaces": [
@@ -12,7 +12,7 @@
     "build": "npm run build --workspace=@evozen/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
-    "version:sync": "node scripts/sync-version.mjs"
+    "version": "node scripts/sync-version.mjs"
   },
   "keywords": [
     "EvoZen"

@@ -17,8 +17,14 @@ import {
   canBuildSpaceStructure,
   getSpaceBuildCost,
 } from './space';
+import {
+  INTERSTELLAR_STRUCTURES,
+  canBuildInterstellarStructure,
+  getInterstellarBuildCost,
+} from './interstellar';
 
 const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
+export type FactoryLineId = 'Lux' | 'Furs' | 'Alloy' | 'Polymer' | 'Nano' | 'Stanene';
 
 function cloneState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
@@ -27,6 +33,12 @@ function cloneState(state: GameState): GameState {
 function ensureSpaceStructure(state: GameState, id: string): void {
   if (!state.space[id]) {
     state.space[id] = { count: 0 };
+  }
+}
+
+function ensureInterstellarStructure(state: GameState, id: string): void {
+  if (!state.interstellar[id]) {
+    state.interstellar[id] = { count: 0 };
   }
 }
 
@@ -157,8 +169,109 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       next.tech['asteroid'] = 3;
     }
   }
+  if (structureId === 'world_collider') {
+    const collider = next.space['world_collider'] as { count: number } | undefined;
+    if (collider && collider.count >= 1859) {
+      next.tech['science'] = Math.max(next.tech['science'] ?? 0, 11);
+      if (!next.space['world_controller']) {
+        next.space['world_controller'] = { count: 0, on: 0 };
+      }
+      const controller = next.space['world_controller'] as { count: number; on?: number };
+      if (controller.count < 1) {
+        controller.count = 1;
+        controller.on = Math.max(controller.on ?? 0, 1);
+      }
+    }
+  }
 
   applyDerivedStateInPlace(next);
+  return next;
+}
+
+export function buildInterstellarStructure(state: GameState, structureId: string): GameState | null {
+  if (!canBuildInterstellarStructure(state, structureId)) return null;
+
+  const def = INTERSTELLAR_STRUCTURES.find((structure) => structure.id === structureId);
+  if (!def) return null;
+
+  const next = cloneState(state);
+  const costs = getInterstellarBuildCost(next, structureId);
+  for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
+    if (!next.resource[resId]) return null;
+    next.resource[resId].amount -= cost;
+  }
+
+  ensureInterstellarStructure(next, structureId);
+  const building = next.interstellar[structureId] as {
+    count: number;
+    on?: number;
+    support?: number;
+    s_max?: number;
+    adam?: number;
+    uran?: number;
+    coal?: number;
+    alum?: number;
+  };
+  building.count++;
+
+  const needsOnTracking =
+    (def.powerCost ?? 0) > 0 ||
+    def.support !== undefined ||
+    def.supportFuel !== undefined;
+  if (needsOnTracking) {
+    building.on = (building.on ?? 0) + 1;
+    if (structureId === 'starport' && def.support && def.support.amount > 0) {
+      building.support = building.support ?? 0;
+      building.s_max = building.s_max ?? 0;
+    }
+  } else if (building.on !== undefined) {
+    building.on++;
+  }
+
+  if (structureId === 'starport') {
+    next.tech['alpha'] = Math.max(next.tech['alpha'] ?? 0, 2);
+    ensureInterstellarStructure(next, 'mining_droid');
+  }
+  if (structureId === 'mining_droid') {
+    building.adam = (building.adam ?? 0) + 1;
+    building.uran = building.uran ?? 0;
+    building.coal = building.coal ?? 0;
+    building.alum = building.alum ?? 0;
+    next.tech['droids'] = Math.max(next.tech['droids'] ?? 0, 1);
+  }
+
+  applyDerivedStateInPlace(next);
+  return next;
+}
+
+export function assignFactoryLine(state: GameState, lineId: FactoryLineId): GameState | null {
+  const next = cloneState(state);
+  const factory = next.city['factory'] as Record<FactoryLineId | 'count' | 'on', number> | undefined;
+  if (!factory) return null;
+
+  const totalAssigned =
+    (factory.Lux ?? 0)
+    + (factory.Furs ?? 0)
+    + (factory.Alloy ?? 0)
+    + (factory.Polymer ?? 0)
+    + (factory.Nano ?? 0)
+    + (factory.Stanene ?? 0);
+  const redFactoryLines = (next.space['red_factory'] as { count?: number } | undefined)?.count ?? 0;
+  const maxLines = (factory.count ?? 0) + redFactoryLines;
+  if (totalAssigned >= maxLines) return null;
+
+  factory[lineId] = (factory[lineId] ?? 0) + 1;
+  return next;
+}
+
+export function removeFactoryLine(state: GameState, lineId: FactoryLineId): GameState | null {
+  const next = cloneState(state);
+  const factory = next.city['factory'] as Record<FactoryLineId | 'count' | 'on', number> | undefined;
+  if (!factory) return null;
+  if ((factory[lineId] ?? 0) <= 0) return null;
+
+  factory[lineId] = (factory[lineId] ?? 0) - 1;
   return next;
 }
 
@@ -344,6 +457,18 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'elerium_reactor':
       // elerium:2 → 解锁超铀反应堆
       ensureSpaceStructure(next, 'e_reactor');
+      break;
+    case 'world_collider':
+      ensureSpaceStructure(next, 'world_collider');
+      if (!next.space['world_controller']) {
+        next.space['world_controller'] = { count: 0, on: 0 };
+      }
+      break;
+    case 'warp_drive':
+      ensureInterstellarStructure(next, 'starport');
+      break;
+    case 'habitat':
+      ensureInterstellarStructure(next, 'habitat');
       break;
   }
 

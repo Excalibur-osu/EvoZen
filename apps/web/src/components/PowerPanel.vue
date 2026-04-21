@@ -4,61 +4,87 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import {
+  listPowerGenerators,
+  listPowerConsumers,
+  type PowerGeneratorDef,
+} from '@evozen/game-core'
 import { useGameStore } from '../stores/game'
 
 const game = useGameStore()
 
-const power = computed(() => game.state.city.power ?? { generated: 0, consumed: 0, surplus: 0 })
+const power = computed(() => game.state.city.power ?? {
+  generated: 0,
+  consumed: 0,
+  surplus: 0,
+  activeGenerators: {},
+  activeConsumers: {},
+})
 const hasPower = computed(() => power.value.generated > 0 || power.value.consumed > 0)
+const locationLabel: Record<'city' | 'space' | 'interstellar', string> = {
+  city: '城市',
+  space: '太空',
+  interstellar: '星际',
+}
 
 /** 发电站列表 */
 const generators = computed(() => {
-  const list: Array<{ id: string; name: string; count: number; on: number; power: number; fuel: string; fuelRate: number }> = []
-  
-  const coalPower = game.state.city['coal_power'] as { count: number; on?: number } | undefined
-  if (coalPower && coalPower.count > 0) {
-    list.push({
-      id: 'coal_power', name: '燃煤发电站',
-      count: coalPower.count, on: coalPower.on ?? coalPower.count,
-      power: 5, fuel: '煤', fuelRate: 0.35,
-    })
-  }
+  return listPowerGenerators()
+    .map((def) => {
+      const bucket = def.location === 'space'
+        ? game.state.space
+        : (def.location === 'interstellar' ? game.state.interstellar : game.state.city)
+      const struct = bucket[def.id] as { count?: number; on?: number } | undefined
+      const count = struct?.count ?? 0
+      const configuredOn = struct?.on ?? count
+      const activeOn = power.value.activeGenerators?.[def.id] ?? 0
 
-  const oilPower = game.state.city['oil_power'] as { count: number; on?: number } | undefined
-  if (oilPower && oilPower.count > 0) {
-    list.push({
-      id: 'oil_power', name: '石油发电站',
-      count: oilPower.count, on: oilPower.on ?? oilPower.count,
-      power: 6, fuel: '石油', fuelRate: 0.65,
+      return {
+        ...def,
+        count,
+        configuredOn,
+        activeOn,
+      }
     })
-  }
-
-  return list
+    .filter((gen) => gen.count > 0)
 })
 
 /** 用电建筑列表 */
 const consumers = computed(() => {
-  const defs = [
-    { id: 'mine', name: '矿井', powerCost: 1 },
-    { id: 'coal_mine', name: '煤矿', powerCost: 1 },
-    { id: 'wardenclyffe', name: '沃登克里弗塔', powerCost: 2 },
-    { id: 'metal_refinery', name: '金属精炼厂', powerCost: 2 },
-  ]
-  return defs.filter(d => {
-    const s = game.state.city[d.id] as { count: number } | undefined
-    return s && s.count > 0
-  }).map(d => {
-    const s = game.state.city[d.id] as { count: number; on?: number }
-    return { ...d, count: s.count, on: s.on ?? s.count }
-  })
+  return listPowerConsumers()
+    .map((def) => {
+      const bucket = def.location === 'space'
+        ? game.state.space
+        : (def.location === 'interstellar' ? game.state.interstellar : game.state.city)
+      const struct = bucket[def.id] as { count?: number; on?: number } | undefined
+      const count = struct?.count ?? 0
+      const configuredOn = struct?.on ?? count
+      const activeOn = power.value.activeConsumers?.[def.id] ?? 0
+
+      return {
+        ...def,
+        count,
+        configuredOn,
+        activeOn,
+      }
+    })
+    .filter((consumer) => consumer.count > 0)
 })
 
 
-function adjustGeneratorOn(id: string, delta: number) {
-  const struct = game.state.city[id] as { count: number; on?: number } | undefined
+function adjustGeneratorOn(generator: PowerGeneratorDef, delta: number) {
+  const bucket = generator.location === 'space'
+    ? game.state.space
+    : (generator.location === 'interstellar' ? game.state.interstellar : game.state.city)
+  const struct = bucket[generator.id] as { count: number; on?: number } | undefined
   if (!struct) return
   const current = struct.on ?? struct.count
   struct.on = Math.max(0, Math.min(struct.count, current + delta))
+}
+
+function fuelText(generator: { fuel?: { resource: string; amountPerTick: number } }): string {
+  if (!generator.fuel) return '无需燃料'
+  return `${generator.fuel.resource} ${generator.fuel.amountPerTick}/tick`
 }
 </script>
 
@@ -96,12 +122,12 @@ function adjustGeneratorOn(id: string, delta: number) {
         <div class="power-row-info">
           <span class="power-row-name">{{ gen.name }}</span>
           <span class="power-row-detail font-mono">
-            {{ gen.on }}/{{ gen.count }} · +{{ gen.on * gen.power }}MW
+            {{ locationLabel[gen.location] }} · {{ gen.activeOn }}/{{ gen.configuredOn }} on · +{{ gen.activeOn * gen.power }}MW · {{ fuelText(gen) }}
           </span>
         </div>
         <div class="power-row-controls">
-          <button class="ctrl-btn" @click="adjustGeneratorOn(gen.id, -1)" :disabled="(gen.on ?? 0) <= 0" data-tooltip="关闭一台">−</button>
-          <button class="ctrl-btn" @click="adjustGeneratorOn(gen.id, 1)" :disabled="gen.on >= gen.count" data-tooltip="开启一台">+</button>
+          <button class="ctrl-btn" @click="adjustGeneratorOn(gen, -1)" :disabled="gen.configuredOn <= 0" data-tooltip="关闭一台">−</button>
+          <button class="ctrl-btn" @click="adjustGeneratorOn(gen, 1)" :disabled="gen.configuredOn >= gen.count" data-tooltip="开启一台">+</button>
         </div>
       </div>
     </div>
@@ -113,7 +139,7 @@ function adjustGeneratorOn(id: string, delta: number) {
         <div class="power-row-info">
           <span class="power-row-name">{{ con.name }}</span>
           <span class="power-row-detail font-mono">
-            {{ con.count }}座 · -{{ con.count * con.powerCost }}MW
+            {{ locationLabel[con.location] }} · {{ con.activeOn }}/{{ con.configuredOn }} on · -{{ con.activeOn * con.powerCost }}MW
           </span>
         </div>
       </div>

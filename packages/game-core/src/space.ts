@@ -47,6 +47,8 @@ export interface SpaceStructureDefinition {
   costs: Record<string, SpaceCostFunction>;
   /** 简要效果（UI 文案） */
   effect: string;
+  /** 额外建造条件 */
+  condition?: (state: GameState) => boolean;
   /**
    * 供电需求（MW/座）。建造此建筑后 `state.space[id].on` 会参与电力分配。
    * 对标 legacy action.powered() 返回的基础值（不含 powerCostMod 修饰）。
@@ -691,6 +693,35 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     powerCost: -25,
     supportFuel: { resource: 'Elerium', amountPerTick: 0.05 },
   },
+  {
+    id: 'world_collider',
+    region: 'spc_dwarf',
+    name: '世界对撞机',
+    description: '在矮行星上分段建造超大型对撞机阵列，作为 science:10→11 的关键里程碑。',
+    reqs: { science: 10 },
+    condition: (state) =>
+      ((state.space['world_collider'] as { count?: number } | undefined)?.count ?? 0) < 1859,
+    costs: {
+      Money: (_state, count) => (count < 1859 ? 25000 : 0),
+      Copper: (_state, count) => (count < 1859 ? 750 : 0),
+      Alloy: (_state, count) => (count < 1859 ? 125 : 0),
+      Neutronium: (_state, count) => (count < 1859 ? 12 : 0),
+      Elerium: (_state, count) => (count < 1859 ? 1 : 0),
+      Mythril: (_state, count) => (count < 1859 ? 10 : 0),
+    },
+    effect: '共需建造 1859 段；建成后自动生成世界控制器，并把 science 推进到 Lv.11。',
+  },
+  {
+    id: 'world_controller',
+    region: 'spc_dwarf',
+    name: '世界控制器',
+    description: '世界对撞机完工后生成的控制核心。通电时大幅提高知识容量上限。',
+    reqs: { science: 11 },
+    condition: () => false,
+    costs: {},
+    effect: '通电后知识上限 +25%。后续可被更远区域进一步放大。',
+    powerCost: 20,
+  },
 ];
 
 // ============================================================
@@ -746,6 +777,8 @@ export function canBuildSpaceStructure(state: GameState, id: string): boolean {
       if ((state.race as Record<string, unknown>)[trait] !== undefined) return false;
     }
   }
+
+  if (def.condition && !def.condition(state)) return false;
 
   const costs = getSpaceBuildCost(state, id);
   for (const [resId, cost] of Object.entries(costs)) {

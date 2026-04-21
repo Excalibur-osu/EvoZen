@@ -43,6 +43,7 @@ import {
   getSatelliteScientistImpactMultiplier,
   getObservatoryKnowledgeCapBonus,
 } from './space';
+import { resolveInterstellarSupport } from './interstellar';
 import { resolveSpaceSupport } from './space-support';
 import {
   getCasinoIncomePerActive,
@@ -122,6 +123,23 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // tick.ts 在后面对所有 deltas 统一乘 TIME_MULTIPLIER。
   for (const [resId, drain] of Object.entries(spaceSupport.fuelDrain)) {
     deltas[resId] = (deltas[resId] ?? 0) - drain;
+  }
+  const interstellarSupport = resolveInterstellarSupport(state, poweredOn);
+  for (const [resId, drain] of Object.entries(interstellarSupport.fuelDrain)) {
+    deltas[resId] = (deltas[resId] ?? 0) - drain;
+  }
+  const habitatPowered = interstellarSupport.supplierEffectiveOn['habitat'] ?? 0;
+  const miningDroidSupported = interstellarSupport.supportOn['mining_droid'] ?? 0;
+  const miningDroid = state.interstellar['mining_droid'] as
+    | { count?: number; on?: number; adam?: number }
+    | undefined;
+  if (miningDroidSupported > 0 && miningDroid) {
+    const requestedMiningDroids = miningDroid.on ?? miningDroid.count ?? 0;
+    const supportEff = requestedMiningDroids > 0 ? miningDroidSupported / requestedMiningDroids : 0;
+    const adamantiteDroids = (miningDroid.adam ?? 0) * supportEff;
+    if (adamantiteDroids > 0) {
+      deltas['Adamantite'] = (deltas['Adamantite'] ?? 0) + adamantiteDroids * 0.075;
+    }
   }
 
   // 月球采矿产出（对标 legacy prod.js L62-92 + main.js L6796-6884）：
@@ -541,7 +559,6 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
       const disableIron = Math.min(overage, ironSmelter);
       ironSmelter -= disableIron;
-      overage -= disableIron;
 
       // 极端情况：iridium 也不够
     } else if (overage < 0) {
@@ -946,6 +963,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (activeBiolabs > 0 && newState.resource['Knowledge']) {
     newState.resource['Knowledge'].max += activeBiolabs * 3000;
   }
+  const activeWorldControllers = powerResult.activeConsumers['world_controller'] ?? 0;
+  if (activeWorldControllers > 0 && newState.resource['Knowledge']) {
+    let worldControllerBoost = 0.25;
+    if ((newState.tech['science'] ?? 0) >= 19) {
+      worldControllerBoost += 0.15;
+    }
+    const bonus = Math.round(newState.resource['Knowledge'].max * worldControllerBoost * activeWorldControllers);
+    newState.resource['Knowledge'].max += bonus;
+    newState.tech['wsc'] = 1;
+  } else if ((newState.tech['wsc'] ?? 0) !== 0) {
+    newState.tech['wsc'] = 0;
+  }
   if (exoticLabSupported > 0 && newState.resource['Knowledge']) {
     let exoticScience = 500;
     if (newState.race['cataclysm'] && observatorySupported > 0) {
@@ -992,6 +1021,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       popRes.max += Math.round(livingQuartersSupported * citizensPerQuarter);
     }
   }
+  if (habitatPowered > 0) {
+    const speciesId = newState.race.species;
+    const popRes = newState.resource[speciesId];
+    if (popRes) {
+      popRes.max += habitatPowered;
+    }
+  }
 
   // 对标 legacy/src/main.js L9769-9770：fabrication 每座获得支援使 craftsman.max +1。
   // craftsman.max 已在 applyDerivedStateInPlace 中被重置为 foundries 数，故此处 += 安全。
@@ -1014,6 +1050,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     generated: powerResult.totalGenerated,
     consumed: powerResult.totalConsumed,
     surplus: powerResult.totalGenerated - powerResult.totalConsumed,
+    activeGenerators: powerResult.activeGenerators,
+    activeConsumers: powerResult.activeConsumers,
   };
 
   // ============================================================
@@ -1251,6 +1289,8 @@ export function factoryTick(
     Furs?: number;
     Alloy: number;
     Polymer: number;
+    Nano?: number;
+    Stanene?: number;
   } | undefined;
   if (!factory) return;
 
@@ -1270,6 +1310,8 @@ export function factoryTick(
   const allocFurs = allocate(factory.Furs);
   const allocAlloy = allocate(factory.Alloy);
   const allocPolymer = allocate(factory.Polymer);
+  const allocNano = allocate(factory.Nano);
+  const allocStanene = allocate(factory.Stanene);
 
   const assembly = Math.min(state.tech['factory'] ?? 0, 4);
   const outputMultiplier = getFactoryOutputMultiplier(state);
@@ -1424,6 +1466,92 @@ export function factoryTick(
       if (actual > 0) {
         polymer.amount += actual;
         deltas['Polymer'] = (deltas['Polymer'] ?? 0) + actual;
+      }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // 纳米管 (Nano_Tube) 产线
+  // 对标 f_rate.Nano_Tube: coal[0]=8, neutronium[0]=0.05, output[0]=0.2
+  // ----------------------------------------------------------
+  if (allocNano > 0 && state.resource['Nano_Tube']) {
+    const coalPerLine = [8, 12, 16, 20, 24][assembly] * eff * timeMul;
+    const neutroniumPerLine = [0.05, 0.075, 0.1, 0.125, 0.15][assembly] * eff * timeMul;
+    let workDone = allocNano;
+    let coalCost = workDone * coalPerLine;
+    let neutroniumCost = workDone * neutroniumPerLine;
+
+    while (workDone > 0 && neutroniumCost > (state.resource['Neutronium']?.amount ?? 0)) {
+      workDone--;
+      coalCost = workDone * coalPerLine;
+      neutroniumCost = workDone * neutroniumPerLine;
+    }
+    while (workDone > 0 && coalCost > (state.resource['Coal']?.amount ?? 0)) {
+      workDone--;
+      coalCost = workDone * coalPerLine;
+      neutroniumCost = workDone * neutroniumPerLine;
+    }
+
+    if (workDone > 0) {
+      if (state.resource['Coal']) state.resource['Coal'].amount -= coalCost;
+      if (state.resource['Neutronium']) state.resource['Neutronium'].amount -= neutroniumCost;
+      deltas['Coal'] = (deltas['Coal'] ?? 0) - coalCost;
+      deltas['Neutronium'] = (deltas['Neutronium'] ?? 0) - neutroniumCost;
+
+      const output = workDone
+        * [0.2, 0.3, 0.4, 0.5, 0.6][assembly]
+        * outputMultiplier
+        * prodMultiplier
+        * timeMul;
+      const nano = state.resource['Nano_Tube'];
+      const maxNano = nano.max >= 0 ? nano.max : Infinity;
+      const actual = Math.min(output, maxNano - nano.amount);
+      if (actual > 0) {
+        nano.amount += actual;
+        deltas['Nano_Tube'] = (deltas['Nano_Tube'] ?? 0) + actual;
+      }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // 锡烯 (Stanene) 产线
+  // 对标 f_rate.Stanene: aluminium[0]=30, nano[0]=0.02, output[0]=0.6
+  // ----------------------------------------------------------
+  if (allocStanene > 0 && state.resource['Stanene']) {
+    const aluminiumPerLine = [30, 45, 60, 75, 90][assembly] * eff * timeMul;
+    const nanoPerLine = [0.02, 0.03, 0.04, 0.05, 0.06][assembly] * eff * timeMul;
+    let workDone = allocStanene;
+    let aluminiumCost = workDone * aluminiumPerLine;
+    let nanoCost = workDone * nanoPerLine;
+
+    while (workDone > 0 && aluminiumCost > (state.resource['Aluminium']?.amount ?? 0)) {
+      workDone--;
+      aluminiumCost = workDone * aluminiumPerLine;
+      nanoCost = workDone * nanoPerLine;
+    }
+    while (workDone > 0 && nanoCost > (state.resource['Nano_Tube']?.amount ?? 0)) {
+      workDone--;
+      aluminiumCost = workDone * aluminiumPerLine;
+      nanoCost = workDone * nanoPerLine;
+    }
+
+    if (workDone > 0) {
+      if (state.resource['Aluminium']) state.resource['Aluminium'].amount -= aluminiumCost;
+      if (state.resource['Nano_Tube']) state.resource['Nano_Tube'].amount -= nanoCost;
+      deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) - aluminiumCost;
+      deltas['Nano_Tube'] = (deltas['Nano_Tube'] ?? 0) - nanoCost;
+
+      const output = workDone
+        * [0.6, 0.9, 1.2, 1.5, 1.8][assembly]
+        * outputMultiplier
+        * prodMultiplier
+        * timeMul;
+      const stanene = state.resource['Stanene'];
+      const maxStanene = stanene.max >= 0 ? stanene.max : Infinity;
+      const actual = Math.min(output, maxStanene - stanene.amount);
+      if (actual > 0) {
+        stanene.amount += actual;
+        deltas['Stanene'] = (deltas['Stanene'] ?? 0) + actual;
       }
     }
   }

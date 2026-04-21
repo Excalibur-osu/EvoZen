@@ -138,6 +138,9 @@ export function createNewGame(): GameState {
       Elerium: { ...makeResource('超铀', 0, 0), value: 297.115 },
       Neutronium: { ...makeResource('中子素', 0, 0), value: 150 },
       Mythril: { ...makeResource('秘银', -1, 0), value: 94.239 },
+      Nano_Tube: { ...makeResource('纳米管', -1, 0), value: 15.083 },
+      Adamantite: { ...makeResource('精金', -1, 0), value: 178.803 },
+      Stanene: { ...makeResource('锡烯', -1, 0), value: 33.9615 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },
       Brick: { ...makeResource('砖', -1, 0), value: 0 },
@@ -164,7 +167,7 @@ export function createNewGame(): GameState {
       // 铸造厂产线分配（工匠 → 合成品）
       foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0, Mythril: 0 },
       // 工厂产线分配（需要 high_tech:3 科技）
-      factory: { count: 0, on: 0, Alloy: 0, Polymer: 0, Lux: 0, Furs: 0 } as FactoryState,
+      factory: { count: 0, on: 0, Alloy: 0, Polymer: 0, Nano: 0, Stanene: 0, Lux: 0, Furs: 0 } as FactoryState,
       // 熔炉多燃料生产状态
       smelter: { count: 0, on: 0, Wood: 0, Coal: 0, Oil: 0, Inferno: 0, Iron: 0, Steel: 0, Iridium: 0 } as SmelterState,
       // 自动贸易路线

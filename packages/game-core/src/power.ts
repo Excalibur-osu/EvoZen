@@ -3,81 +3,188 @@
  * 对标 legacy/src/main.js L1857-2165
  *
  * 每 tick 执行一次：
- * 1. 计算发电量（coal_power / oil_power），扣除燃料
+ * 1. 计算发电量（city + space 发电设施），扣除燃料
  * 2. 按优先级分配电力给消费建筑
  */
 
 import type { GameState } from '@evozen/shared-types';
-import { listSpacePowerConsumers } from './space-support';
+import { BASIC_STRUCTURES } from './structures';
+import { SPACE_STRUCTURES } from './space';
+import { INTERSTELLAR_STRUCTURES } from './interstellar';
 
 const TIME_MULTIPLIER = 0.25;
 
-/**
- * 发电站定义
- * 简化版：不包含 environmentalist / magic universe 变体
- */
-interface GeneratorDef {
+interface FuelDef {
+  resource: string;
+  amountPerTick: number;
+}
+
+export interface PowerGeneratorDef {
   id: string;
-  /** 每座产出的 MW（正值）*/
+  name: string;
   power: number;
-  /** 燃料资源 ID */
-  fuelResource: string;
-  /** 每座每 tick 消耗的燃料量（应用 TIME_MULTIPLIER 前） */
-  fuelPerTick: number;
+  location: 'city' | 'space' | 'interstellar';
+  fuel?: FuelDef;
 }
 
-const GENERATORS: GeneratorDef[] = [
-  { id: 'coal_power', power: 5, fuelResource: 'Coal', fuelPerTick: 0.35 },
-  { id: 'oil_power', power: 6, fuelResource: 'Oil', fuelPerTick: 0.65 },
-  { id: 'fission_power', power: 14, fuelResource: 'Uranium', fuelPerTick: 0.1 },
-];
-
-/**
- * 用电建筑定义
- * powered / powerCost 已在 structures.ts 的 StructureDefinition 中定义
- * 这里用优先级顺序列出（越靠前越优先获得电力）
- */
-interface ConsumerDef {
+export interface PowerConsumerDef {
   id: string;
-  /** 每座耗电 (MW) */
+  name: string;
   powerCost: number;
-  /**
-   * 建筑所在集合。'city' 读取 state.city，'space' 读取 state.space。
-   * 未指定时视为 'city'，保证原有 city 消费者枚举不变。
-   */
-  location?: 'city' | 'space';
+  location: 'city' | 'space' | 'interstellar';
 }
 
-const CITY_CONSUMERS: ConsumerDef[] = [
-  { id: 'sawmill', powerCost: 1 },
-  { id: 'rock_quarry', powerCost: 1 },
-  { id: 'mine', powerCost: 1 },
-  { id: 'coal_mine', powerCost: 1 },
-  { id: 'cement_plant', powerCost: 2 },
-  { id: 'wardenclyffe', powerCost: 2 },
-  { id: 'metal_refinery', powerCost: 2 },
-  { id: 'biolab', powerCost: 2 },
-  { id: 'factory', powerCost: 3 },
-  { id: 'casino', powerCost: 3 },
+const CITY_GENERATORS: PowerGeneratorDef[] = [
+  {
+    id: 'coal_power',
+    name: '燃煤发电站',
+    location: 'city',
+    power: 5,
+    fuel: { resource: 'Coal', amountPerTick: 0.35 },
+  },
+  {
+    id: 'oil_power',
+    name: '石油发电站',
+    location: 'city',
+    power: 6,
+    fuel: { resource: 'Oil', amountPerTick: 0.65 },
+  },
+  {
+    id: 'fission_power',
+    name: '核电站',
+    location: 'city',
+    power: 14,
+    fuel: { resource: 'Uranium', amountPerTick: 0.1 },
+  },
 ];
 
-/**
- * 太空消费者按 SPACE_STRUCTURES 声明顺序、由 listSpacePowerConsumers() 动态列出。
- * 排在 city 消费者之后（legacy 风格：太空核心设施通电等级较低，晚于轻工与科研）。
- * 当前 scope：moon_base (4MW), nav_beacon (2MW)。
- */
-function getAllConsumers(): ConsumerDef[] {
-  const spaceConsumers: ConsumerDef[] = listSpacePowerConsumers().map((d) => ({
-    id: d.id,
-    powerCost: d.powerCost ?? 0,
-    location: 'space' as const,
+const CITY_CONSUMER_PRIORITY = [
+  'sawmill',
+  'rock_quarry',
+  'mine',
+  'coal_mine',
+  'cement_plant',
+  'wardenclyffe',
+  'metal_refinery',
+  'biolab',
+  'factory',
+  'casino',
+] as const;
+
+const CITY_CONSUMERS: PowerConsumerDef[] = CITY_CONSUMER_PRIORITY.map((id) => {
+  const def = BASIC_STRUCTURES.find((structure) => structure.id === id);
+  if (!def || (def.powerCost ?? 0) <= 0) {
+    throw new Error(`Missing city power consumer definition for ${id}`);
+  }
+  return {
+    id,
+    name: def.name,
+    location: 'city',
+    powerCost: def.powerCost!,
+  };
+});
+
+const SPACE_GENERATORS: PowerGeneratorDef[] = SPACE_STRUCTURES
+  .filter((def) => (def.powerCost ?? 0) < 0)
+  .map((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'space',
+    power: Math.abs(def.powerCost ?? 0),
+    fuel: def.supportFuel
+      ? {
+        resource: def.supportFuel.resource,
+        amountPerTick: def.supportFuel.amountPerTick,
+      }
+      : undefined,
   }));
-  return [...CITY_CONSUMERS, ...spaceConsumers];
+
+const SPACE_CONSUMERS: PowerConsumerDef[] = SPACE_STRUCTURES
+  .filter((def) => (def.powerCost ?? 0) > 0)
+  .map((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'space',
+    powerCost: def.powerCost ?? 0,
+  }));
+
+const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
+  .filter((def) => (def.powerCost ?? 0) > 0)
+  .map((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'interstellar',
+    powerCost: def.powerCost ?? 0,
+  }));
+
+export function listPowerGenerators(): PowerGeneratorDef[] {
+  return [...CITY_GENERATORS, ...SPACE_GENERATORS];
+}
+
+export function listPowerConsumers(): PowerConsumerDef[] {
+  return [...CITY_CONSUMERS, ...SPACE_CONSUMERS, ...INTERSTELLAR_CONSUMERS];
+}
+
+function getStructBucket(
+  state: GameState,
+  location: 'city' | 'space' | 'interstellar',
+): Record<string, unknown> {
+  if (location === 'space') return state.space;
+  if (location === 'interstellar') return state.interstellar;
+  return state.city;
+}
+
+function getRequestedOn(
+  state: GameState,
+  id: string,
+  location: 'city' | 'space' | 'interstellar',
+): number {
+  const bucket = getStructBucket(state, location);
+  const struct = bucket[id] as { count?: number; on?: number } | undefined;
+  if (!struct || (struct.count ?? 0) <= 0) return 0;
+  return struct.on ?? struct.count ?? 0;
+}
+
+function getFuelLimitedOn(
+  requestedOn: number,
+  state: GameState,
+  fuel: FuelDef | undefined,
+): number {
+  if (!fuel || requestedOn <= 0) return requestedOn;
+
+  const fuelRes = state.resource[fuel.resource];
+  if (!fuelRes || fuelRes.amount <= 0) return 0;
+
+  const fuelPerUnit = fuel.amountPerTick * TIME_MULTIPLIER;
+  let actualOn = 0;
+  let availableFuel = fuelRes.amount;
+
+  for (let i = 0; i < requestedOn; i++) {
+    if (availableFuel >= fuelPerUnit) {
+      availableFuel -= fuelPerUnit;
+      actualOn++;
+    } else {
+      break;
+    }
+  }
+
+  return actualOn;
+}
+
+function applyFuelDelta(
+  fuelDeltas: Record<string, number>,
+  actualOn: number,
+  fuel: FuelDef | undefined,
+): void {
+  if (!fuel || actualOn <= 0) return;
+  fuelDeltas[fuel.resource] = (fuelDeltas[fuel.resource] ?? 0) - actualOn * fuel.amountPerTick;
 }
 
 export interface PowerTickResult {
-  /** 各资源的燃料消耗 delta（负值）*/
+  /** 各资源的燃料消耗 delta（负值） */
   fuelDeltas: Record<string, number>;
+  /** 发电建筑的实际开启数 */
+  activeGenerators: Record<string, number>;
   /** 用电建筑的实际开启数 */
   activeConsumers: Record<string, number>;
   /** 总发电量 MW */
@@ -91,39 +198,20 @@ export interface PowerTickResult {
  */
 export function powerTick(state: GameState): PowerTickResult {
   const fuelDeltas: Record<string, number> = {};
+  const activeGenerators: Record<string, number> = {};
   const activeConsumers: Record<string, number> = {};
   let totalGenerated = 0;
 
   // ============================================================
   // 1. 发电阶段 — 逐座检查燃料是否充足
   // ============================================================
-  for (const gen of GENERATORS) {
-    const struct = state.city[gen.id] as { count: number; on?: number } | undefined;
-    if (!struct || struct.count === 0) continue;
+  for (const generator of listPowerGenerators()) {
+    const requestedOn = getRequestedOn(state, generator.id, generator.location);
+    const actualOn = getFuelLimitedOn(requestedOn, state, generator.fuel);
 
-    const maxOn = struct.on ?? struct.count;
-    if (maxOn <= 0) continue;
-
-    const fuelRes = state.resource[gen.fuelResource];
-    if (!fuelRes) continue;
-
-    // 逐座检查，确保燃料充足
-    // 对标 legacy main.js L1884-1890
-    const fuelPerUnit = gen.fuelPerTick * TIME_MULTIPLIER;
-    let actualOn = 0;
-    let availableFuel = fuelRes.amount;
-
-    for (let i = 0; i < maxOn; i++) {
-      if (availableFuel >= fuelPerUnit) {
-        availableFuel -= fuelPerUnit;
-        actualOn++;
-      } else {
-        break;
-      }
-    }
-
-    totalGenerated += actualOn * gen.power;
-    fuelDeltas[gen.fuelResource] = (fuelDeltas[gen.fuelResource] ?? 0) - actualOn * gen.fuelPerTick;
+    activeGenerators[generator.id] = actualOn;
+    totalGenerated += actualOn * generator.power;
+    applyFuelDelta(fuelDeltas, actualOn, generator.fuel);
   }
 
   // ============================================================
@@ -133,22 +221,13 @@ export function powerTick(state: GameState): PowerTickResult {
   let remainingPower = totalGenerated;
   let totalConsumed = 0;
 
-  for (const consumer of getAllConsumers()) {
-    const bucket: Record<string, unknown> =
-      consumer.location === 'space' ? state.space : state.city;
-    const struct = bucket[consumer.id] as { count: number; on?: number } | undefined;
-    if (!struct || struct.count === 0) {
-      activeConsumers[consumer.id] = 0;
-      continue;
-    }
-
-    const maxOn = struct.on ?? struct.count;
+  for (const consumer of listPowerConsumers()) {
+    const maxOn = getRequestedOn(state, consumer.id, consumer.location);
     if (maxOn <= 0) {
       activeConsumers[consumer.id] = 0;
       continue;
     }
 
-    // 尝试分配尽可能多的电力
     let powered = 0;
     for (let i = 0; i < maxOn; i++) {
       if (remainingPower >= consumer.powerCost) {
@@ -165,6 +244,7 @@ export function powerTick(state: GameState): PowerTickResult {
 
   return {
     fuelDeltas,
+    activeGenerators,
     activeConsumers,
     totalGenerated,
     totalConsumed,
@@ -175,5 +255,5 @@ export function powerTick(state: GameState): PowerTickResult {
  * 检查某个建筑是否需要电力
  */
 export function isPoweredBuilding(id: string): boolean {
-  return getAllConsumers().some(c => c.id === id);
+  return listPowerConsumers().some((consumer) => consumer.id === id);
 }

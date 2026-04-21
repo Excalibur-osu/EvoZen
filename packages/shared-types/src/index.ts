@@ -39,7 +39,15 @@ export type BasicResourceId =
 export type EvoResourceId = 'RNA' | 'DNA';
 
 /** 空间阶段关键资源 */
-export type SpaceResourceId = 'Iridium' | 'Helium_3' | 'Mythril';
+export type SpaceResourceId =
+  | 'Iridium'
+  | 'Helium_3'
+  | 'Mythril'
+  | 'Elerium'
+  | 'Neutronium'
+  | 'Nano_Tube'
+  | 'Adamantite'
+  | 'Stanene';
 
 export type ResourceId = BasicResourceId | EvoResourceId | SpaceResourceId | string;
 
@@ -269,6 +277,10 @@ export interface FactoryState {
   Alloy: number;
   /** 分配给聚合物产线的工厂数 */
   Polymer: number;
+  /** 分配给纳米管产线的工厂数 */
+  Nano: number;
+  /** 分配给锡烯产线的工厂数 */
+  Stanene: number;
   /** 分配给奢侈品产线的工厂数 */
   Lux: number;
   /** 分配给合成毛皮产线的工厂数（需 synthetic_fur 科技） */
@@ -453,6 +465,10 @@ export interface PowerState {
   consumed: number;
   /** 净余电力 (MW) */
   surplus: number;
+  /** 各发电建筑本 tick 实际运行座数 */
+  activeGenerators?: Record<string, number>;
+  /** 各耗电建筑本 tick 实际获得电力的座数 */
+  activeConsumers?: Record<string, number>;
 }
 
 export interface CityState {

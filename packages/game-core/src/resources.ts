@@ -22,6 +22,9 @@ export const RESOURCE_VALUES: Record<string, number> = {
   Polymer: 250,
   Iridium: 420,
   Mythril: 94.239,
+  Nano_Tube: 750,
+  Adamantite: 2250,
+  Stanene: 3600,
 };
 
 /** 贸易比率 */

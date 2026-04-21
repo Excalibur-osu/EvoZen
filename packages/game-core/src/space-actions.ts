@@ -89,6 +89,14 @@ export const SPACE_ACTIONS: SpaceActionDefinition[] = [
     reqs: { asteroid: 1, elerium: 1 },
     costs: { Helium_3: 45000 },
   },
+  {
+    id: 'alpha_mission',
+    name: '半人马座 Alpha 任务',
+    description: '派遣首支超光速远征队前往半人马座 Alpha，确认首个星际殖民落点。',
+    effect: '完成后推进到 alpha:1，正式开启 Alpha 星港建造入口。',
+    reqs: { ftl: 2 },
+    costs: { Helium_3: 40000 },
+  },
 ];
 
 function cloneState(state: GameState): GameState {
@@ -98,6 +106,12 @@ function cloneState(state: GameState): GameState {
 function ensureSpaceStructure(state: GameState, id: string): void {
   if (!state.space[id]) {
     state.space[id] = { count: 0 };
+  }
+}
+
+function ensureInterstellarStructure(state: GameState, id: string): void {
+  if (!state.interstellar[id]) {
+    state.interstellar[id] = { count: 0 };
   }
 }
 
@@ -124,6 +138,7 @@ export function canRunSpaceAction(state: GameState, actionId: string): boolean {
   if (actionId === 'gas_moon_mission' && (state.tech['space'] ?? 0) >= 6) return false;
   if (actionId === 'belt_mission' && (state.tech['asteroid'] ?? 0) >= 1) return false;
   if (actionId === 'dwarf_mission' && (state.tech['dwarf'] ?? 0) >= 1) return false;
+  if (actionId === 'alpha_mission' && (state.tech['alpha'] ?? 0) >= 1) return false;
 
   const costs = getSpaceActionCost(state, actionId);
   for (const [resId, cost] of Object.entries(costs)) {
@@ -184,6 +199,10 @@ export function runSpaceAction(state: GameState, actionId: string): GameState | 
     case 'dwarf_mission':
       next.tech['dwarf'] = Math.max(next.tech['dwarf'] ?? 0, 1);
       ensureSpaceStructure(next, 'elerium_contain');
+      return next;
+    case 'alpha_mission':
+      next.tech['alpha'] = Math.max(next.tech['alpha'] ?? 0, 1);
+      ensureInterstellarStructure(next, 'starport');
       return next;
     default:
       return null;

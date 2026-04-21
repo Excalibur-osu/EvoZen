@@ -98,6 +98,13 @@ import {
   getSpaceBuildCost as coreGetSpaceBuildCost,
   canBuildSpaceStructure as coreCanBuildSpaceStructure,
   buildSpaceStructure as coreBuildSpaceStructure,
+  INTERSTELLAR_STRUCTURES,
+  getInterstellarBuildCost as coreGetInterstellarBuildCost,
+  canBuildInterstellarStructure as coreCanBuildInterstellarStructure,
+  buildInterstellarStructure as coreBuildInterstellarStructure,
+  assignFactoryLine as coreAssignFactoryLine,
+  removeFactoryLine as coreRemoveFactoryLine,
+  type FactoryLineId,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
@@ -625,6 +632,20 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  function assignFactoryLine(lineId: FactoryLineId) {
+    const result = coreAssignFactoryLine(state.value, lineId)
+    if (result) {
+      state.value = result
+    }
+  }
+
+  function removeFactoryLine(lineId: FactoryLineId) {
+    const result = coreRemoveFactoryLine(state.value, lineId)
+    if (result) {
+      state.value = result
+    }
+  }
+
   // ---- 熔炉操作 ----
   function assignSmelter(category: 'fuel', type: SmelterFuelId): void
   function assignSmelter(category: 'output', type: SmelterOutputId): void
@@ -898,6 +919,25 @@ export const useGameStore = defineStore('game', () => {
     addMessage(`🛰️ 建造完成：${def?.name ?? structureId}`, 'success', 'progress')
   }
 
+  function getInterstellarBuildCost(structureId: string): Record<string, number> {
+    return coreGetInterstellarBuildCost(state.value, structureId)
+  }
+
+  function canBuildInterstellarStructure(structureId: string): boolean {
+    return coreCanBuildInterstellarStructure(state.value, structureId)
+  }
+
+  function buildInterstellarStructure(structureId: string) {
+    const result = coreBuildInterstellarStructure(state.value, structureId)
+    if (!result) {
+      addMessage('星际建筑建造条件未满足或资源不足。', 'warning', 'progress')
+      return
+    }
+    state.value = result
+    const def = INTERSTELLAR_STRUCTURES.find((d) => d.id === structureId)
+    addMessage(`🌌 建造完成：${def?.name ?? structureId}`, 'success', 'progress')
+  }
+
   return {
     state,
     messages,
@@ -952,6 +992,8 @@ export const useGameStore = defineStore('game', () => {
     doCraft,
     assignCraftLine,
     removeCraftLine,
+    assignFactoryLine,
+    removeFactoryLine,
     // 熔炉系统
     assignSmelter,
     removeSmelter,
@@ -1020,8 +1062,12 @@ export const useGameStore = defineStore('game', () => {
     runSpaceAction,
     // 太空建筑
     SPACE_STRUCTURES,
+    INTERSTELLAR_STRUCTURES,
     getSpaceBuildCost,
     canBuildSpaceStructure,
     buildSpaceStructure,
+    getInterstellarBuildCost,
+    canBuildInterstellarStructure,
+    buildInterstellarStructure,
   }
 })

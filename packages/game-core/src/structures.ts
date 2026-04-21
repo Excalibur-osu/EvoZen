@@ -398,6 +398,8 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Nanite: scaleConditionalCost(50, 1.18, (state) => Boolean(state.race['deconstructor'])),
     },
     effect: '科学家上限 +1，知识上限 +1000。',
+    powered: true,
+    powerCost: 2,
   },
 
   // ---- 军事 ----

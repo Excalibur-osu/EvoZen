@@ -10,6 +10,7 @@ export {
   canBuildStructure,
   buildStructure,
   buildSpaceStructure,
+  buildInterstellarStructure,
   enqueueStructure,
   dequeueStructure,
   isTechAvailable,
@@ -19,8 +20,11 @@ export {
   assignWorker,
   removeWorker,
   setTaxRate,
+  assignFactoryLine,
+  removeFactoryLine,
   assignSmelter,
   removeSmelter,
+  type FactoryLineId,
 } from './actions';
 export {
   SPACE_STRUCTURES,
@@ -49,6 +53,15 @@ export {
   type SpaceCostFunction,
   type SupportPool,
 } from './space';
+export {
+  INTERSTELLAR_STRUCTURES,
+  getInterstellarBuildCost,
+  canBuildInterstellarStructure,
+  resolveInterstellarSupport,
+  type InterstellarStructureDefinition,
+  type InterstellarSupportPool,
+  type InterstellarSupportResult,
+} from './interstellar';
 export {
   SPACE_ACTIONS,
   getSpaceActionCost,
@@ -100,6 +113,7 @@ export {
   type CraftableId,
   type FoundryState,
 } from './crafting';
+export type { FactoryState } from '@evozen/shared-types';
 export {
   buyResource,
   sellResource,
@@ -164,7 +178,11 @@ export {
 } from './morale';
 export {
   powerTick,
+  listPowerGenerators,
+  listPowerConsumers,
   isPoweredBuilding,
+  type PowerGeneratorDef,
+  type PowerConsumerDef,
   type PowerTickResult,
 } from './power';
 export {
