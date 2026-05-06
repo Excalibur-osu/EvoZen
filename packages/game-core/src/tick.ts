@@ -42,6 +42,7 @@ import { arpaTick } from './arpa';
 import {
   getSatelliteScientistImpactMultiplier,
   getObservatoryKnowledgeCapBonus,
+  SPACE_BARRACKS_OIL_PER_TICK,
 } from './space';
 import { resolveInterstellarSupport } from './interstellar';
 import { resolveSpaceSupport } from './space-support';
@@ -315,8 +316,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 对标 legacy/src/main.js L1286-3290:
   // morale 决定 global_multiplier，影响所有工人产出
+  // 计算所有通电的赌场（包括 city.casino 和 space.spc_casino）
+  const cityCasinoOn = poweredOn['casino'] ?? 0;
+  const spcCasinoOn = (state.space['spc_casino'] as { on?: number } | undefined)?.on ?? 0;
   const moraleResult = calculateMorale(state, {
-    activeCasinos: poweredOn['casino'] ?? 0,
+    activeCasinos: cityCasinoOn + spcCasinoOn,
     supportedVrCenters: vrCenterSupported,
   });
   const prodMult = moraleResult.globalMultiplier;
@@ -711,7 +715,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     deltas['Money'] = incomeBase * templeTaxMult * taxMoneyMult;
 
     // 赌场收入 — 对标 legacy main.js L7674-7684
-    const activeCasinos = poweredOn['casino'] ?? 0;
+    // 计算所有通电的赌场（包括 city.casino 和 space.spc_casino）
+    const cityCasinoOn = poweredOn['casino'] ?? 0;
+    const spcCasinoOn = (state.space['spc_casino'] as { on?: number } | undefined)?.on ?? 0;
+    const activeCasinos = cityCasinoOn + spcCasinoOn;
     if (techLevel('gambling') >= 1 && activeCasinos > 0) {
       deltas['Money'] += activeCasinos
         * getCasinoIncomePerActive(state)
@@ -910,6 +917,47 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
           category: 'progress',
         });
       }
+    }
+  }
+
+  // elerium_ship — 对标 legacy prod.js L168-171
+  const eleriumShipSupported = spaceSupport.supportOn['elerium_ship'] ?? 0;
+  if (eleriumShipSupported > 0) {
+    const asteroidTech = techLevel('asteroid');
+    let eleriumRate = 0.005;
+    if (asteroidTech >= 6) eleriumRate = 0.0075;
+    if (asteroidTech >= 7) eleriumRate = 0.009;
+    deltas['Elerium'] = (deltas['Elerium'] ?? 0) + eleriumShipSupported * eleriumRate;
+  }
+
+  // iridium_ship — 对标 legacy prod.js L172-175
+  const iridiumShipSupported = spaceSupport.supportOn['iridium_ship'] ?? 0;
+  if (iridiumShipSupported > 0) {
+    const asteroidTech = techLevel('asteroid');
+    let iridiumRate = 0.055;
+    if (asteroidTech >= 6) iridiumRate = 0.08;
+    if (asteroidTech >= 7) iridiumRate = 0.1;
+    deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumShipSupported * iridiumRate;
+  }
+
+  // iron_ship — 对标 legacy prod.js L176-179
+  const ironShipSupported = spaceSupport.supportOn['iron_ship'] ?? 0;
+  if (ironShipSupported > 0) {
+    const asteroidTech = techLevel('asteroid');
+    let ironRate = 2;
+    if (asteroidTech >= 6) ironRate = 3;
+    if (asteroidTech >= 7) ironRate = 4;
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironShipSupported * ironRate;
+  }
+
+  // space_barracks Oil 消耗 — 对标 legacy main.js L2393-2403
+  // 每座 on 消耗 2 Oil/tick
+  if (!state.race['fasting']) {
+    const spaceBarracks = state.space['space_barracks'] as { count?: number; on?: number } | undefined;
+    if (spaceBarracks && (spaceBarracks.on ?? 0) > 0) {
+      const oilCost = SPACE_BARRACKS_OIL_PER_TICK;
+      const oilConsume = (spaceBarracks.on ?? 0) * oilCost;
+      deltas['Oil'] = (deltas['Oil'] ?? 0) - oilConsume;
     }
   }
 

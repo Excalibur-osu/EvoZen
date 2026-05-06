@@ -21,6 +21,10 @@ import {
   getGarageCount,
   GARAGE_STORAGE_PER_BUILDING,
   GARAGE_CONTAINERS_PER_BUILDING,
+  getGasStorageOilCapBonus,
+  getGasStorageHeliumCapBonus,
+  getGasStorageUraniumCapBonus,
+  getEleriumContainCapBonus,
 } from './space';
 
 export function applyDerivedStateInPlace(state: GameState): void {
@@ -163,6 +167,22 @@ export function applyDerivedStateInPlace(state: GameState): void {
   }
   if (s.resource['Mythril'] && getSpaceCount('iridium_mine') > 0) {
     s.resource['Mythril'].display = true;
+  }
+
+  // 对标 legacy main.js L9195-9209：gas_storage 容量上限
+  if (s.resource['Oil']) {
+    s.resource['Oil'].max += getGasStorageOilCapBonus(s);
+  }
+  if (s.resource['Helium_3']) {
+    s.resource['Helium_3'].max += getGasStorageHeliumCapBonus(s);
+  }
+  if (s.resource['Uranium']) {
+    s.resource['Uranium'].max += getGasStorageUraniumCapBonus(s);
+  }
+
+  // 对标 legacy main.js L9746-9749：elerium_contain 容量上限
+  if (s.resource['Elerium']) {
+    s.resource['Elerium'].max += getEleriumContainCapBonus(s);
   }
 
   let titaniumMax = 50;

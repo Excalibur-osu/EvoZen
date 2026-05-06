@@ -23,7 +23,7 @@ import type { GameState } from '@evozen/shared-types';
 export type SpaceCostFunction = (state: GameState, count: number) => number;
 
 /** 支援池标识。单独抽象方便未来新增 belt/alpha 等。 */
-export type SupportPool = 'moon' | 'red' | 'belt';
+export type SupportPool = 'moon' | 'red' | 'belt' | 'swarm';
 
 export interface SpaceStructureDefinition {
   /** 建筑 ID，与 state.space[id] 对应 */
@@ -493,6 +493,21 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     supportFuel: { resource: 'Helium_3', amountPerTick: 0.5 },
   },
   {
+    id: 'spc_casino',
+    region: 'spc_hell',
+    name: '地狱赌场',
+    description: '在地狱行星建立娱乐设施，提高士气上限并产生收入。',
+    reqs: { hell: 1, gambling: 1 },
+    costs: {
+      Money: spaceCost(400000, 1.35),
+      Furs: spaceCost(75000, 1.35),
+      Cement: spaceCost(100000, 1.35),
+      Plywood: spaceCost(20000, 1.35),
+    },
+    effect: '每座提供 1 娱乐岗位、+1 士气上限。消耗 3 电力。',
+    powerCost: 3,
+  },
+  {
     id: 'swarm_plant',
     region: 'spc_hell',
     name: '虫群工厂',
@@ -527,6 +542,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     },
     effect: '每座提供 10 虫群支援上限（swarm >= 2 时提升至 12）。',
     // swarm_control 是 spc_sun 的支援池提供者，不消耗电力。
+    support: { pool: 'swarm', amount: 10 },
   },
   {
     id: 'swarm_satellite',
@@ -542,6 +558,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     },
     effect: '每座产出 0.35 电力，消耗 1 虫群支援。',
     // 无 powerCost（产电），支援由 swarm_control 管理。
+    support: { pool: 'swarm', amount: -1 },
   },
 
   // ===== spc_gas =====
@@ -632,6 +649,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     powerCost: 3,
     // space_station 是 spc_belt 的支援池提供者（support: 'belt'）。
     // 但它自身也是消费者（电力 + 燃料 + 食物），与 moon_base/spaceport 类似。
+    support: { pool: 'belt', amount: 3 },
   },
   {
     id: 'elerium_ship',
@@ -1029,3 +1047,44 @@ export const SPACE_BARRACKS_OIL_PER_TICK = 2;
  * 对标 legacy/src/main.js L3759-3761：space_marines = barracks.on * 10
  */
 export const SPACE_BARRACKS_FOOD_PER_TICK = 10;
+
+// --- gas_storage 容量上限 ---
+
+/**
+ * gas_storage 对 Oil 上限的加成（对标 legacy main.js L9195-9198）：
+ *   Oil.max += count * spatialReasoning(3500)
+ *   简化：不实现 spatialReasoning，直接返回 3500 * count
+ */
+export function getGasStorageOilCapBonus(state: GameState): number {
+  return getSpaceCount(state, 'gas_storage') * 3500;
+}
+
+/**
+ * gas_storage 对 Helium_3 上限的加成（对标 legacy main.js L9201-9204）：
+ *   Helium_3.max += count * spatialReasoning(2500)
+ */
+export function getGasStorageHeliumCapBonus(state: GameState): number {
+  return getSpaceCount(state, 'gas_storage') * 2500;
+}
+
+/**
+ * gas_storage 对 Uranium 上限的加成（对标 legacy main.js L9206-9209）：
+ *   Uranium.max += count * spatialReasoning(1000)
+ */
+export function getGasStorageUraniumCapBonus(state: GameState): number {
+  return getSpaceCount(state, 'gas_storage') * 1000;
+}
+
+// --- elerium_contain 容量上限 ---
+
+/**
+ * elerium_contain 对 Elerium 上限的加成（对标 legacy main.js L9746-9749）：
+ *   Elerium.max += p_on['elerium_contain'] * spatialReasoning(100)
+ *   简化：使用 count 而非 p_on（需要电力的建筑）
+ */
+export function getEleriumContainCapBonus(state: GameState): number {
+  const contain = state.space['elerium_contain'] as { count?: number; on?: number } | undefined;
+  if (!contain) return 0;
+  // 需要电力，使用 on（实际通电数）
+  return (contain.on ?? 0) * 100;
+}

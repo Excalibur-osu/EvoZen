@@ -93,6 +93,7 @@ function resolvePool(
     moon: 'spc_moon',
     red: 'spc_red',
     belt: 'spc_belt',
+    swarm: 'spc_sun',
   };
   const primaryRegion = PRIMARY_REGIONS[pool];
 
@@ -191,6 +192,8 @@ export function resolveSpaceSupport(
   };
   resolvePool(state, 'moon', powerOn, result);
   resolvePool(state, 'red', powerOn, result);
+  resolvePool(state, 'belt', powerOn, result);
+  resolvePool(state, 'swarm', powerOn, result);
   return result;
 }
 

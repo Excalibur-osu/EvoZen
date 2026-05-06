@@ -229,6 +229,26 @@ export function powerTick(state: GameState): PowerTickResult {
     applyFuelDelta(fuelDeltas, actualOn, generator.fuel);
   }
 
+  // swarm_satellite 特殊处理 — 对标 legacy main.js L1978-1997
+  // 需要支援才能工作，每座产出 0.35 电力（tech.swarm >= 4 时递增）
+  const swarmControl = state.space['swarm_control'] as { count?: number; s_max?: number } | undefined;
+  const swarmSatellite = state.space['swarm_satellite'] as { count?: number } | undefined;
+  if (swarmControl && swarmSatellite && (swarmControl.count ?? 0) > 0 && (swarmSatellite.count ?? 0) > 0) {
+    let active = swarmSatellite.count ?? 0;
+    if (active > (swarmControl.s_max ?? 0)) {
+      active = swarmControl.s_max ?? 0;
+    }
+    let solar = 0.35;
+    const swarmTech = state.tech['swarm'] ?? 0;
+    if (swarmTech >= 4) {
+      solar += 0.15 * (swarmTech - 3);
+    }
+    solar = +solar.toFixed(2);
+    const output = active * solar;
+    activeGenerators['swarm_satellite'] = active;
+    totalGenerated += output;
+  }
+
   // ============================================================
   // 2. 用电阶段 — 按优先级分配电力
   // ============================================================
