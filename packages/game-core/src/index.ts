@@ -23,9 +23,12 @@ export {
   setTaxRate,
   assignFactoryLine,
   removeFactoryLine,
+  assignMiningDroid,
+  removeMiningDroid,
   assignSmelter,
   removeSmelter,
   type FactoryLineId,
+  type MiningDroidTargetId,
 } from './actions';
 export {
   SPACE_STRUCTURES,

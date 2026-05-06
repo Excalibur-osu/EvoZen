@@ -721,6 +721,18 @@ export const BASIC_TECHS: TechDefinition[] = [
     costs: { Knowledge: 3600 },
     effect: '解锁茅屋建筑，每座提供 +2 人口上限。',
   },
+  // legacy tech.js L350-369: apartment → housing:3
+  {
+    id: 'apartment_tech',
+    name: '城市化',
+    description: '通过建造高密度的公寓楼来容纳更多人口。',
+    category: 'housing',
+    era: '发现',
+    reqs: { housing: 2, high_tech: 2 },
+    grant: ['housing', 3],
+    costs: { Knowledge: 15750 },
+    effect: '解锁公寓建筑，提供大量人口上限。',
+  },
   // legacy tech.js L490-502: aphrodisiac → reproduction:1
   {
     id: 'aphrodisiac',

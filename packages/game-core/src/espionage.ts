@@ -27,10 +27,12 @@ export function trainSpy(state: GameState, govIndex: number): { success: boolean
     state.resource.Money.amount -= cost;
     
     let time = 300;
+    // 对标 legacy civics.js L774-779: spy>=3 时 time -= bootCamp.count * 10，min 10
     if (techLvl >= 3) {
       const bootCampCount = (state.city['boot_camp'] as { count?: number })?.count ?? 0;
       if (bootCampCount > 0) {
-        time = Math.round(time / 1.5);
+        time -= bootCampCount * 10;
+        if (time < 10) time = 10;
       }
     }
     gov.trn = time;
@@ -66,18 +68,52 @@ export function startSpyAction(state: GameState, govIndex: number, action: strin
     }
   }
 
-  const timer = techLvl >= 4 ? 150 : 300;
-  gov.sab = timer;
+  // 对标 legacy civics.js L812-857 spyAction():
+  // influence: spy>=4?200:300, spy=1:*1.5, spy>=3: -(spy-2)*50, min 50
+  // sabotage:  spy>=4?400:600, spy>=2: -(spy-1)*50, min 50
+  // incite:    spy>=4?600:900, spy<=2:*1.5, spy>=4: -(spy-3)*100, min 100
+  // annex/purchase: spy>=4?150:300
+  const numSpies = gov.spy;
+  let timer: number;
+  switch (action) {
+    case 'influence': {
+      timer = techLvl >= 4 ? 200 : 300;
+      if (numSpies === 1) { timer = Math.round(timer * 1.5); }
+      else if (numSpies >= 3) { timer -= (numSpies - 2) * 50; }
+      timer = Math.max(timer, 50);
+      break;
+    }
+    case 'sabotage': {
+      timer = techLvl >= 4 ? 400 : 600;
+      if (numSpies >= 2) { timer -= (numSpies - 1) * 50; }
+      timer = Math.max(timer, 50);
+      break;
+    }
+    case 'incite': {
+      timer = techLvl >= 4 ? 600 : 900;
+      if (numSpies <= 2) { timer = Math.round(timer * 1.5); }
+      else if (numSpies >= 4) { timer -= (numSpies - 3) * 100; }
+      timer = Math.max(timer, 100);
+      break;
+    }
+    default: // annex / purchase
+      timer = techLvl >= 4 ? 150 : 300;
+  }
+  gov.sab = Math.ceil(timer);
   gov.act = action;
 
   return { success: true, messages };
 }
 
 export function getGovPurchasePrice(state: GameState, govIndex: number): number {
+  // 对标 legacy civics.js L789-793 govPrice():
+  //   price = eco * 15384 * (1 + hstl*1.6/100) * (1 - unrest*0.25/100)
   const gov = getForeignGov(state, govIndex);
   if (!gov) return Infinity;
-  const price = Math.round(Math.pow(1.15, gov.eco / 2.5) * 2500000);
-  return price;
+  let price = gov.eco * 15384;
+  price *= 1 + gov.hstl * 1.6 / 100;
+  price *= 1 - gov.unrest * 0.25 / 100;
+  return Math.round(price);
 }
 
 export function resolveSpyActionTick(state: GameState, govIndex: number, _: number): GameMessage[] {
@@ -114,7 +150,9 @@ export function resolveSpyActionTick(state: GameState, govIndex: number, _: numb
           if (Math.floor(Math.random() * (4 + spyCatchMod)) === 0) {
             messages.push(...handleSpyCaught(state, govIndex));
           } else {
-            const covert = Math.floor((techLvl >= 5 ? 2 : 1) + Math.random() * (techLvl >= 5 ? 7 : 6));
+            // 对标 legacy L10545: seededRandom(spy>=5?2:1, spy>=5?8:6)
+            // seededRandom(min,max)=[min,max)，等价：low: 1~5，high: 2~7
+            const covert = (techLvl >= 5 ? 2 : 1) + Math.floor(Math.random() * (techLvl >= 5 ? 6 : 5));
             gov.hstl = Math.max(0, gov.hstl - covert);
             messages.push({
               text: `影响行动成功！该国对我们的敌意降低了 ${covert} 点。`,
@@ -128,7 +166,8 @@ export function resolveSpyActionTick(state: GameState, govIndex: number, _: numb
           if (Math.floor(Math.random() * (3 + spyCatchMod)) === 0) {
             messages.push(...handleSpyCaught(state, govIndex));
           } else {
-            const covert = Math.floor((techLvl >= 5 ? 2 : 1) + Math.random() * (techLvl >= 5 ? 7 : 6));
+            // 对标 legacy L10561: seededRandom(spy>=5?2:1, spy>=5?8:6)
+            const covert = (techLvl >= 5 ? 2 : 1) + Math.floor(Math.random() * (techLvl >= 5 ? 6 : 5));
             gov.mil = Math.max(50, gov.mil - covert);
             messages.push({
               text: `破坏成功！该国军事实力被削弱了。`,
@@ -142,7 +181,8 @@ export function resolveSpyActionTick(state: GameState, govIndex: number, _: numb
           if (Math.floor(Math.random() * (2 + Math.floor(spyCatchMod / 2))) === 0) {
             messages.push(...handleSpyCaught(state, govIndex));
           } else {
-            const covert = Math.floor((techLvl >= 5 ? 2 : 1) + Math.random() * (techLvl >= 5 ? 7 : 6));
+            // 对标 legacy L10577: seededRandom(spy>=5?2:1, spy>=5?8:6)
+            const covert = (techLvl >= 5 ? 2 : 1) + Math.floor(Math.random() * (techLvl >= 5 ? 6 : 5));
             gov.unrest = Math.min(100, gov.unrest + covert);
             messages.push({
               text: `煽动成功！该国暴乱率上升了 ${covert}%。`,
@@ -195,9 +235,12 @@ function handleSpyCaught(state: GameState, govIndex: number): GameMessage[] {
       category: 'spy'
     });
     
-    // 25% 间谍招供
+    // 对标 legacy L12961-12967: Math.floor(seededRandom(0,4))===0 → hstl += seededRandom(1, max)
+    // max = mistrustful ? 5+trait_val : 5, Phase 1 简化 max=5
+    // seededRandom(1,5)=[1,5) → 1~4
     if (Math.floor(Math.random() * 4) === 0) {
-      gov.hstl = Math.min(100, gov.hstl + 10);
+      const hstlInc = 1 + Math.floor(Math.random() * 4); // [1,4]
+      gov.hstl = Math.min(100, gov.hstl + hstlInc);
       msgs.push({
         text: `被捕间谍出卖了情报，该国敌意加剧！`,
         type: 'danger',

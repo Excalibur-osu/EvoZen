@@ -322,6 +322,11 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
   if (army > enemy) {
     // === 胜利 ===
     let deathCap = Math.floor(garrison.raid / (5 - garrison.tactic));
+    // 对标 legacy civics.js L1633: deathCap += wounded
+    const woundedInRaid = garrison.raid > garrison.workers - garrison.crew - garrison.wounded
+      ? garrison.raid - (garrison.workers - garrison.crew - garrison.wounded)
+      : 0;
+    deathCap += woundedInRaid;
     if (deathCap < 1) deathCap = 1;
     if (deathCap > garrison.raid) deathCap = garrison.raid;
     // rage 行星特性：额外死亡上限 +1
@@ -346,27 +351,86 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
     );
 
     // 战利品
+    // 对标 legacy civics.js L2041-2111 lootModify / looters()
+    // looters = min(garrison.raid, cap_per_tactic)
+    // loot = base * Math.log(looters+1) * tactic_mult * gov.eco/100
+    const looterCaps = [5, 10, 25, 50, 999];
+    const looters = Math.min(garrison.raid, looterCaps[garrison.tactic]);
+    const lootLogMult = Math.log(looters + 1);
+
+    /**
+     * 对标 legacy lootModify:
+     *   loot = val * Math.log(looters+1) * tactic_mult * eco/100
+     */
+    function applyLootModify(val: number): number {
+      const ecoFrac = (gov!.eco ?? 75) / 100;
+      return Math.floor(val * lootLogMult * ecoFrac);
+    }
+
     const loot: Record<string, number> = {};
-    const lootMul = [1, 2.5, 5, 10, 25][garrison.tactic];
-    const moneyLoot = Math.floor((100 + Math.random() * 275) * lootMul * (gov.eco || 75) / 100);
-    loot.Money = moneyLoot;
 
-    // 基础资源随机掠夺
-    const basicRes = ['Food', 'Lumber', 'Stone'];
-    const commonRes = ['Copper', 'Iron', 'Aluminium', 'Coal'];
+    // Money — seededRandom(100, 375)
+    const moneyBase = 100 + Math.floor(Math.random() * 276);
+    loot['Money'] = applyLootModify(moneyBase);
+
+    // 资源列表对标 legacy L1701-1715（基础 Phase 1：非 truepath，非特殊种族）
+    const basic = ['Food', 'Lumber', 'Stone'];
+    const common = ['Copper', 'Iron', 'Aluminium', 'Coal'];
+    const rare = ['Cement', 'Steel'];
+
+    /**
+     * 各资源基础范围对标 legacy L1786-1826
+     */
+    function rollResource(res: string): number {
+      switch (res) {
+        case 'Food': return 40 + Math.floor(Math.random() * 136);    // seededRandom(40,175)
+        case 'Lumber':
+        case 'Stone': return 50 + Math.floor(Math.random() * 201);   // seededRandom(50,250)
+        case 'Copper':
+        case 'Iron':
+        case 'Aluminium': return 35 + Math.floor(Math.random() * 91); // seededRandom(35,125)
+        case 'Coal':
+        case 'Cement': return 25 + Math.floor(Math.random() * 76);   // seededRandom(25,100)
+        case 'Steel': return 20 + Math.floor(Math.random() * 46);    // seededRandom(20,65)
+        case 'Titanium': return 12 + Math.floor(Math.random() * 21); // seededRandom(12,32)
+        default: return 10 + Math.floor(Math.random() * 41);
+      }
+    }
+
     const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    const addLoot = (res: string) => {
+      if (!state.resource[res]?.display && res !== 'Steel' && res !== 'Titanium') return;
+      const rolled = rollResource(res);
+      loot[res] = (loot[res] ?? 0) + applyLootModify(rolled);
+    };
 
-    if (garrison.tactic >= 0) {
-      const r = pick(basicRes);
-      loot[r] = (loot[r] ?? 0) + Math.floor(40 + Math.random() * 135);
-    }
-    if (garrison.tactic >= 1) {
-      const r = pick(commonRes);
-      loot[r] = (loot[r] ?? 0) + Math.floor(20 + Math.random() * 80);
-    }
-    if (garrison.tactic >= 2) {
-      const r = pick([...basicRes, ...commonRes]);
-      loot[r] = (loot[r] ?? 0) + Math.floor(30 + Math.random() * 100);
+    // tactic 0: basic×1 + (Money∪basic∪common)×1
+    // tactic 1: basic×1 + common×1 + (all)×1
+    // tactic 2: basic×1 + common×1 + (all)×1 + (common∪rare)×1
+    // tactic 3/4: basic×1 + common×1 + rare×1 + (all)×1
+    switch (garrison.tactic) {
+      case 0:
+        addLoot(pick(basic));
+        addLoot(pick([...basic, ...common]));
+        break;
+      case 1:
+        addLoot(pick(basic));
+        addLoot(pick(common));
+        addLoot(pick([...basic, ...common, ...rare]));
+        break;
+      case 2:
+        addLoot(pick(basic));
+        addLoot(pick(common));
+        addLoot(pick([...basic, ...common, ...rare]));
+        addLoot(pick([...common, ...rare]));
+        break;
+      case 3:
+      case 4:
+        addLoot(pick(basic));
+        addLoot(pick(common));
+        addLoot(pick(rare));
+        addLoot(pick([...basic, ...common, ...rare]));
+        break;
     }
 
     // 分配战利品到资源

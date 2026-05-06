@@ -44,9 +44,11 @@ export function applyDerivedStateInPlace(state: GameState): void {
   let popCap = 0;
   const basicHousing = getStructCount('basic_housing');
   const cottages = getStructCount('cottage');
+  const apartments = getStructCount('apartment');
   const farms = getStructCount('farm');
   popCap += basicHousing;
   popCap += cottages * 2;
+  popCap += apartments * 4;
   if ((s.tech['farm'] ?? 0) >= 1) {
     popCap += farms;
   }

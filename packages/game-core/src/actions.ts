@@ -25,6 +25,7 @@ import {
 
 const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
 export type FactoryLineId = 'Lux' | 'Furs' | 'Alloy' | 'Polymer' | 'Nano' | 'Stanene';
+export type MiningDroidTargetId = 'adam' | 'uran' | 'coal' | 'alum';
 
 function cloneState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
@@ -286,6 +287,30 @@ export function removeFactoryLine(state: GameState, lineId: FactoryLineId): Game
   if ((factory[lineId] ?? 0) <= 0) return null;
 
   factory[lineId] = (factory[lineId] ?? 0) - 1;
+  return next;
+}
+
+export function assignMiningDroid(state: GameState, targetId: MiningDroidTargetId): GameState | null {
+  const next = cloneState(state);
+  const droid = next.interstellar['mining_droid'] as Record<MiningDroidTargetId | 'count' | 'on', number> | undefined;
+  if (!droid) return null;
+
+  const totalAssigned =
+    (droid.adam ?? 0) + (droid.uran ?? 0) + (droid.coal ?? 0) + (droid.alum ?? 0);
+  const maxDroids = droid.on ?? droid.count ?? 0;
+  if (totalAssigned >= maxDroids) return null;
+
+  droid[targetId] = (droid[targetId] ?? 0) + 1;
+  return next;
+}
+
+export function removeMiningDroid(state: GameState, targetId: MiningDroidTargetId): GameState | null {
+  const next = cloneState(state);
+  const droid = next.interstellar['mining_droid'] as Record<MiningDroidTargetId | 'count' | 'on', number> | undefined;
+  if (!droid) return null;
+  if ((droid[targetId] ?? 0) <= 0) return null;
+
+  droid[targetId] = (droid[targetId] ?? 0) - 1;
   return next;
 }
 

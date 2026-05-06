@@ -105,7 +105,10 @@ import {
   buildInterstellarStructure as coreBuildInterstellarStructure,
   assignFactoryLine as coreAssignFactoryLine,
   removeFactoryLine as coreRemoveFactoryLine,
+  assignMiningDroid as coreAssignMiningDroid,
+  removeMiningDroid as coreRemoveMiningDroid,
   type FactoryLineId,
+  type MiningDroidTargetId,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
@@ -643,6 +646,20 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  function assignMiningDroid(targetId: MiningDroidTargetId) {
+    const result = coreAssignMiningDroid(state.value, targetId)
+    if (result) {
+      state.value = result
+    }
+  }
+
+  function removeMiningDroid(targetId: MiningDroidTargetId) {
+    const result = coreRemoveMiningDroid(state.value, targetId)
+    if (result) {
+      state.value = result
+    }
+  }
+
   // ---- 熔炉操作 ----
   function assignSmelter(category: 'fuel', type: SmelterFuelId): void
   function assignSmelter(category: 'output', type: SmelterOutputId): void
@@ -991,6 +1008,8 @@ export const useGameStore = defineStore('game', () => {
     removeCraftLine,
     assignFactoryLine,
     removeFactoryLine,
+    assignMiningDroid,
+    removeMiningDroid,
     // 熔炉系统
     assignSmelter,
     removeSmelter,

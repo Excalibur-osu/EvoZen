@@ -185,12 +185,13 @@ export function createNewGame(): GameState {
 
     civic: {
       taxes: { tax_rate: 20 },
-      govern: { type: 'anarchy', rev: 0, fr: 0 },
+      govern: { type: 'oligarchy', rev: 2000, fr: 0 }, // 对标 legacy vars.js L1686-1690
       garrison: makeGarrison(),
       foreign: {
-        gov0: makeForeignGov(),
-        gov1: makeForeignGov(),
-        gov2: makeForeignGov(),
+        // 对标 legacy vars.js L1709-1754
+        gov0: { unrest: 0, hstl: 100, mil: 100, eco: 75,  spy: 0, esp: 0, trn: 0, sab: 0, act: 'none', occ: false, anx: false, buy: false },
+        gov1: { unrest: 0, hstl: 0,   mil: 150, eco: 100, spy: 0, esp: 0, trn: 0, sab: 0, act: 'none', occ: false, anx: false, buy: false },
+        gov2: { unrest: 0, hstl: 50,  mil: 250, eco: 150, spy: 0, esp: 0, trn: 0, sab: 0, act: 'none', occ: false, anx: false, buy: false },
       },
       d_job: 'unemployed',
       // 基础岗位

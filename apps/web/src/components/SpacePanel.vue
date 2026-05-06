@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
+import MiningDroidPanel from './MiningDroidPanel.vue'
 
 const game = useGameStore()
 
@@ -364,6 +365,10 @@ function resourceName(id: string): string {
           </button>
         </article>
       </div>
+
+      <template v-if="group.id === 'int_alpha'">
+        <MiningDroidPanel />
+      </template>
     </section>
   </div>
 </template>

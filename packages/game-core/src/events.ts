@@ -151,10 +151,11 @@ export const EVENTS: EventDefinition[] = [
       const eAdv = htLevel > 0 ? htLevel + 1 : 1;
       const enemy = rng(25, 50) * eAdv;
 
-      // 士兵伤亡
+      // 对标 legacy L150-152: seededRandom(0,n)=[0,n)，即 Math.floor(Math.random()*n)
       const injured = Math.min(garrison.wounded, gSize);
-      const killed = Math.floor(Math.random() * (injured + 1));
-      const wounded = Math.floor(Math.random() * Math.max(1, gSize - injured));
+      const killed = injured > 0 ? Math.floor(Math.random() * injured) : 0;
+      const availableToWound = Math.max(0, gSize - injured);
+      const wounded = availableToWound > 0 ? Math.floor(Math.random() * availableToWound) : 0;
 
       // 扣除士兵
       if (killed > 0) {
@@ -225,6 +226,89 @@ export const EVENTS: EventDefinition[] = [
     },
   },
 
+  // legacy events.js L187-235: siege（三国联合围城）
+  // 条件：三邦都 hstl > 80 且无 world_control 科技
+  {
+    id: 'siege',
+    type: 'major',
+    reqs: { tech: 'military', notech: 'world_control' },
+    condition(state) {
+      const foreign = state.civic.foreign;
+      if (!foreign) return false;
+      return (
+        foreign.gov0.hstl > 80 &&
+        foreign.gov1.hstl > 80 &&
+        foreign.gov2.hstl > 80
+      );
+    },
+    effect(state) {
+      const garrison: GarrisonState = state.civic.garrison;
+      const gSize = garrisonSize(state);
+      const army = armyRating(gSize, state);
+      const htLevel = techLevel(state, 'high_tech');
+      const eAdv = htLevel > 0 ? htLevel + 1 : 1;
+      // 对标 legacy L202: enemy = (mil0+mil1+mil2) * eAdv
+      const foreign = state.civic.foreign;
+      const enemy = (foreign.gov0.mil + foreign.gov1.mil + foreign.gov2.mil) * eAdv;
+
+      const injured = Math.min(garrison.wounded, gSize);
+      const killed = injured > 0 ? Math.floor(Math.random() * injured) : 0;
+      const availableToWound = Math.max(0, gSize - injured);
+      const wounded = availableToWound > 0 ? Math.floor(Math.random() * availableToWound) : 0;
+
+      if (killed > 0) {
+        garrison.workers = Math.max(0, garrison.workers - killed);
+        const species = state.race.species;
+        const pop = state.resource[species];
+        if (pop) pop.amount = Math.max(0, pop.amount - killed);
+        state.stats.died = (state.stats.died ?? 0) + killed;
+      }
+      garrison.wounded = Math.min(garrison.workers, garrison.wounded + wounded);
+
+      if (army > enemy) {
+        return `🏰 三国联军围城！我方守军奋死抵抗，成功击退敌军。${killed > 0 ? `阵亡 ${killed} 人，` : ''}受伤 ${wounded} 人。`;
+      } else {
+        const loss = rng(1, Math.max(1, Math.floor((state.resource['Money']?.amount ?? 0) / 2)));
+        const actualLoss = clampResource(state, 'Money', -loss);
+        const lossText = actualLoss > 0 ? `损失金钱 ${actualLoss}，` : '';
+        return `🏰 三国联军围城！守军寡不敌众，被迫割地赔款，${lossText}${killed > 0 ? `阵亡 ${killed} 人，` : ''}受伤 ${wounded} 人。`;
+      }
+    },
+  },
+
+  // legacy events.js L491-527: spy（外邦间谍事件——对方暗杀我方间谍）
+  // 条件：某外邦有我方间谍（spy > 0）且未被占领/兼并/收购
+  {
+    id: 'enemy_spy',
+    type: 'major',
+    reqs: { tech: 'primitive', notech: 'world_control' },
+    condition(state) {
+      const foreign = state.civic.foreign;
+      if (!foreign) return false;
+      for (let i = 0; i < 3; i++) {
+        const gov = foreign[`gov${i}` as keyof typeof foreign] as { spy: number; occ: boolean; anx: boolean; buy: boolean } | undefined;
+        if (gov && gov.spy > 0 && !gov.occ && !gov.anx && !gov.buy) return true;
+      }
+      return false;
+    },
+    effect(state) {
+      const foreign = state.civic.foreign;
+      const targets: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const gov = foreign[`gov${i}` as keyof typeof foreign] as { spy: number; occ: boolean; anx: boolean; buy: boolean } | undefined;
+        if (gov && gov.spy > 0 && !gov.occ && !gov.anx && !gov.buy) targets.push(i);
+      }
+      const govIdx = targets[Math.floor(Math.random() * targets.length)];
+      const gov = foreign[`gov${govIdx}` as keyof typeof foreign] as { spy: number; act: string; sab: number };
+      gov.spy = Math.max(0, gov.spy - 1);
+      if (gov.spy === 0) {
+        gov.act = 'none';
+        gov.sab = 0;
+      }
+      return `🕵️ 国家 ${govIdx + 1} 发现了我方间谍并将其逮捕，间谍网络受损！`;
+    },
+  },
+
   // ---- MINOR 事件 ----
 
   // legacy events.js L804-826: heatwave（热浪）
@@ -283,7 +367,7 @@ export const EVENTS: EventDefinition[] = [
     },
   },
 
-  // legacy events.js dollar basicEvent
+  // legacy events.js L865: basicEvent('dollar','currency',...) - reqs: tech:currency
   {
     id: 'dollar',
     type: 'minor',
@@ -295,11 +379,11 @@ export const EVENTS: EventDefinition[] = [
     },
   },
 
-  // legacy events.js pickpocket basicEvent
+  // legacy events.js L873: basicEvent('pickpocket','currency',...) - reqs: tech:currency
   {
     id: 'pickpocket',
     type: 'minor',
-    reqs: { resource: 'Money' },
+    reqs: { tech: 'currency' },
     effect(state) {
       const cash = rng(1, 10);
       clampResource(state, 'Money', -cash);
@@ -431,6 +515,23 @@ export const EVENTS: EventDefinition[] = [
       return omens[rng(0, omens.length)];
     },
   },
+
+  // legacy events.js L935-948: llama（羊驼偷吃食物）
+  // 条件：非肉食/非人工种族（Phase 1 简化：始终可触发）
+  {
+    id: 'llama',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return (state.resource['Food']?.amount ?? 0) > 0;
+    },
+    effect(state) {
+      // 对标 legacy L936: food = Math.rand(25,100)
+      const food = rng(25, 100);
+      clampResource(state, 'Food', -food);
+      return `🦙 一群羊驼闯入粮仓，吃掉了约 ${food} 食物！`;
+    },
+  },
 ];
 
 // ============================================================
@@ -469,10 +570,10 @@ export function tickEvents(state: GameState): GameMessage[] {
   const msgs: GameMessage[] = [];
 
   // --- Major 事件 ---
-  state.event.t = (state.event.t ?? 200) - 1;
-  if (state.event.t <= 0) {
-    // 重置倒计时（200 ± 100）
-    state.event.t = rng(100, 300);
+  // 对标 legacy L12720: Math.rand(0, event.t) === 0，即每 tick 有 1/t 的概率触发
+  // 触发后重置 event.t = 999（legacy L12728）
+  const majorT = state.event.t ?? 999;
+  if (Math.floor(Math.random() * majorT) === 0) {
     const pool = filterEvents(state, 'major', state.event.l as string | false);
     if (pool.length > 0) {
       const ev = pool[rng(0, pool.length)];
@@ -480,13 +581,15 @@ export function tickEvents(state: GameState): GameMessage[] {
       const text = ev.effect(state);
       msgs.push({ text, type: 'warning', category: 'event' });
     }
+    state.event.t = 999;
+  } else {
+    state.event.t = majorT - 1;
   }
 
   // --- Minor 事件 ---
-  state.m_event.t = (state.m_event.t ?? 499) - 1;
-  if (state.m_event.t <= 0) {
-    // 重置倒计时（300 ± 200）
-    state.m_event.t = rng(200, 500);
+  // 对标 legacy L12738: Math.rand(0, m_event.t) === 0，触发后重置 m_event.t = 850
+  const minorT = state.m_event.t ?? 850;
+  if (Math.floor(Math.random() * minorT) === 0) {
     const pool = filterEvents(state, 'minor', state.m_event.l as string | false);
     if (pool.length > 0) {
       const ev = pool[rng(0, pool.length)];
@@ -494,6 +597,9 @@ export function tickEvents(state: GameState): GameMessage[] {
       const text = ev.effect(state);
       msgs.push({ text, type: 'info', category: 'event' });
     }
+    state.m_event.t = 850;
+  } else {
+    state.m_event.t = minorT - 1;
   }
 
   return msgs;

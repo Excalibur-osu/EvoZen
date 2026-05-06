@@ -200,9 +200,7 @@ export function resolveInterstellarSupport(
   const habitat = state.interstellar['habitat'] as
     | { count?: number; on?: number }
     | undefined;
-  const miningDroid = state.interstellar['mining_droid'] as
-    | { count?: number; on?: number }
-    | undefined;
+
 
   const requestedOn = powerOn['starport'] ?? 0;
   

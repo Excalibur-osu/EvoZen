@@ -15,7 +15,7 @@
  *   - 压力（各岗位工人数 / 岗位 stress 容忍度）
  *   - 失业惩罚（每失业 1 人 → -1）
  *
- * 士气上限 = 125 + 剧场数 + VR 中心 + 低税率奖励
+ * 士气上限 = 100 + 赌场通电数 + 圆形剧场数 + vr_center支援数×2 + 纪念碑×2 + 低税率奖励
  *
  * 纯函数模块，零 UI 依赖。
  */
@@ -225,7 +225,7 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
 
   // ----------------------------------------------------------
   // 6. 士气上限 — 对标 legacy main.js L3164-3211
-  // moraleCap = 125 + amphitheatre_count + low_tax_bonus
+  // moraleCap = 100 + 赌场通电数 + 圆形剧场数 + vr_center×2 + 纪念碑×2 + 低税率奖励
   // ----------------------------------------------------------
   let moraleCap = 100;
 
@@ -244,7 +244,13 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
 
   // 低税率奖励 — 对标 legacy main.js L3210-3211
   // 税率 < 20 时：moraleCap += 10 - floor(tax_rate / 2)
+  // 高税率惩罚 — 对标 legacy main.js L3143-3153
+  // 税率直接与 20 比较差值，>40 时额外 ×0.5 惩罚追加
   const taxRate = state.civic.taxes?.tax_rate ?? 20;
+  morale += 20 - taxRate;   // L3144: morale -= tax_rate - 20
+  if (taxRate > 40) {
+    morale -= (taxRate - 40) * 0.5;  // L3146-3148 额外惩罚
+  }
   if (taxRate < 20) {
     moraleCap += 10 - Math.floor(taxRate / 2);
   }

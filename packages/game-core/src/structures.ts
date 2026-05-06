@@ -147,6 +147,23 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '市民上限 +2',
   },
+  // actions.js L1480-1510: apartment
+  {
+    id: 'apartment',
+    name: '公寓',
+    description: '提供大量居住空间的高层建筑。',
+    category: 'housing',
+    reqs: { housing: 3 },
+    powered: true,
+    costs: {
+      Money: (state, count) => Math.max(0, scaleHousingCost(1750, 1.26)(state, count) - 500),
+      Furs: (state, count) => Math.max(0, scaleHousingCost(725, 1.32)(state, count) - 500),
+      Copper: (state, count) => Math.max(0, scaleHousingCost(650, 1.32)(state, count) - 500),
+      Cement: (state, count) => Math.max(0, scaleHousingCost(700, 1.32)(state, count) - 500),
+      Iron: scaleConditionalHousingCost(15, 1.32, (state) => hasCityTrait(state, 'unstable')),
+    },
+    effect: '市民上限 +4',
+  },
 
   // ---- 食物 ----
   // actions.js L1728-1785: farm

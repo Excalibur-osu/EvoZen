@@ -195,6 +195,26 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 用电建筑实际开启数（含 city + space）
   const poweredOn = powerResult.activeConsumers;
 
+  // ============================================================
+  // 0b. 铀灰副产品（Uranium Ash from Coal Power）
+  // ============================================================
+  // 对标 legacy/src/main.js L1916-1930:
+  // 触发条件：uranium >= 3 且有激活的燃煤发电站
+  // ash = p_on['coal_power'] * 0.35 / 65 * (geology['Uranium']+1)
+  // modRes('Uranium', ash * time_multiplier)
+  if ((state.tech['uranium'] ?? 0) >= 3) {
+    const coalPowerOn = powerResult.activeGenerators['coal_power'] ?? 0;
+    if (coalPowerOn > 0) {
+      const coalPerUnit = 0.35; // legacy coal_power.p_fuel().a
+      let ash = coalPowerOn * coalPerUnit / 65;
+      const geoUranium = (state.city.geology as Record<string, number> | undefined)?.['Uranium'] ?? 0;
+      if (geoUranium > 0) {
+        ash *= geoUranium + 1;
+      }
+      deltas['Uranium'] = (deltas['Uranium'] ?? 0) + ash;
+    }
+  }
+
   // 太空支援池解算（当前仅 moon 池）。
   // 对标 legacy/src/main.js L2256-2381 的 "Moon Bases, Spaceports, Etc" 块：
   // 在电力分配之后，燃料预扣 + 支援分配 → 得到 support_on 与燃料 delta。
@@ -211,19 +231,45 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const habitatPowered = interstellarSupport.supplierEffectiveOn['habitat'] ?? 0;
   const miningDroidSupported = interstellarSupport.supportOn['mining_droid'] ?? 0;
   const miningDroid = state.interstellar['mining_droid'] as
-    | { count?: number; on?: number; adam?: number }
+    | { count?: number; on?: number; adam?: number; uran?: number; coal?: number; alum?: number }
     | undefined;
   if (miningDroidSupported > 0 && miningDroid) {
     const requestedMiningDroids = miningDroid.on ?? miningDroid.count ?? 0;
     const supportEff = requestedMiningDroids > 0 ? miningDroidSupported / requestedMiningDroids : 0;
-    const adamantiteDroids = (miningDroid.adam ?? 0) * supportEff;
-    if (adamantiteDroids > 0) {
-      let processingBonus = 0;
-      const processingSupported = interstellarSupport.supportOn['processing'] ?? 0;
-      if (processingSupported > 0) {
-        processingBonus = processingSupported * 0.12;
+    
+    let remaining = requestedMiningDroids;
+    const alloc = { adam: 0, uran: 0, coal: 0, alum: 0 };
+    for (const res of ['adam', 'uran', 'coal', 'alum'] as const) {
+      alloc[res] = miningDroid[res] ?? 0;
+      remaining -= alloc[res];
+      if (remaining < 0) {
+        alloc[res] += remaining;
+        miningDroid[res] = alloc[res];
+        remaining = 0;
       }
+    }
+
+    let processingBonus = 0;
+    const processingSupported = interstellarSupport.supportOn['processing'] ?? 0;
+    if (processingSupported > 0) {
+      processingBonus = processingSupported * 0.12;
+    }
+
+    if (alloc.adam > 0) {
+      const adamantiteDroids = alloc.adam * supportEff;
       deltas['Adamantite'] = (deltas['Adamantite'] ?? 0) + adamantiteDroids * 0.075 * (1 + processingBonus);
+    }
+    if (alloc.uran > 0) {
+      const uraniumDroids = alloc.uran * supportEff;
+      deltas['Uranium'] = (deltas['Uranium'] ?? 0) + uraniumDroids * 0.12;
+    }
+    if (alloc.coal > 0) {
+      const coalDroids = alloc.coal * supportEff;
+      deltas['Coal'] = (deltas['Coal'] ?? 0) + coalDroids * 3.75;
+    }
+    if (alloc.alum > 0) {
+      const alumDroids = alloc.alum * supportEff;
+      deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + alumDroids * 2.75;
     }
   }
 
@@ -285,7 +331,45 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const hungerMult = getHungerMultiplier(state);
   // mellow 行星特性：全局产出 ×0.9
   const planetGlobalMult = getGlobalPlanetMultiplier(state);
-  const effectiveProdMult = prodMult * hungerMult * planetGlobalMult;
+  let effectiveProdMult = prodMult * hungerMult * planetGlobalMult;
+  // 注：occupyUnifyMult 在下方 0c 块计算，最终 effectiveProdMult 将在所有产出计算处乘以 occupyUnifyMult。
+
+  // ============================================================
+  // 0c. 占领 / 世界统一 全局乘数
+  // ============================================================
+  // 对标 legacy main.js L942-972：
+  //   - world_control（unification）解锁：global_multiplier *= 1 + (25 / 100)
+  //     federation 政体时改为 govEffect.federation()[2]，其余固定 +25%
+  //   - 否则：每个被 occ/anx/buy 的外邦政府 += 5%（federation: 5 + govEffect.federation()[0]）
+  let occupyUnifyMult = 1;
+  if ((state.tech['world_control'] ?? 0) >= 1) {
+    // Unification 科技解锁：固定 +25% 全局产出，federation 时用 govEffect
+    // 对标 legacy main.js L948-960
+    const unifyBonus = state.civic?.govern?.type === 'federation' ? 30 : 25;
+    occupyUnifyMult = 1 + (unifyBonus / 100);
+  } else {
+    // 占领/兼并/购买外邦政府时的产出加成
+    // 对标 legacy main.js L963-972
+    const foreign = state.civic?.foreign as
+      | Record<string, { occ?: boolean; anx?: boolean; buy?: boolean }>
+      | undefined;
+    if (foreign) {
+      let occupy = 0;
+      for (let i = 0; i < 3; i++) {
+        const gov = foreign[`gov${i}`];
+        if (gov && (gov.occ || gov.anx || gov.buy)) {
+          // federation: 5 + govEffect.federation()[0]（legacy 约为 8）；其他: 5
+          occupy += state.civic?.govern?.type === 'federation' ? 8 : 5;
+        }
+      }
+      if (occupy > 0) {
+        occupyUnifyMult = 1 + (occupy / 100);
+      }
+    }
+  }
+  // 将占领/统一乘数应用到全局产出乘数
+  // 对标 legacy main.js L960 / L971：global_multiplier *= 1 + (bonus/100)
+  effectiveProdMult *= occupyUnifyMult;
 
   // ============================================================
   // 1. 食物
@@ -566,14 +650,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
   const sciGovMult = getKnowledgeMultiplier(state, 'scientist');
   const scientistBase = scientists * sciImpact * sciGovMult;
-  // 图书馆全局加成 — 原版 main.js L4259
+  // 图书馆全局加成 — 原版 main.js L4261
+  // legacy: delta = (prof+sci)*hunger*global_mult + sundial*global_mult, 然后 delta *= library_mult
+  // library_mult 作用于**包含日晷的整体 delta**，不仅仅是 prof+sci
   const libraryMult = 1 + libraries * 0.05;
   // 教授+科学家受饥饿影响；日晷不受（原版 L4228-4229）
-  const workerKnowledge = (professorsBase + scientistBase) * libraryMult;
-  // legacy 先把教授/科学家与日晷相加，再只对前者套用 library multiplier；
-  // 日晷知识不受图书馆加成影响。
-  const sundialKnowledge = sundialBase + sundialPlanet;
-  deltas['Knowledge'] = workerKnowledge * effectiveProdMult + sundialKnowledge * prodMult * planetGlobalMult;
+  const workerKnowledge = (professorsBase + scientistBase) * effectiveProdMult;
+  const sundialKnowledge = (sundialBase + sundialPlanet) * prodMult * planetGlobalMult;
+  // legacy L4261: delta *= library_mult — 对整体（含日晷）统一乘以图书馆加成
+  deltas['Knowledge'] = (workerKnowledge + sundialKnowledge) * libraryMult;
 
   // ============================================================
   // 8a. 信仰（Faith）— 牧师产出
@@ -659,9 +744,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const availableCoal = (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER;
     const availableOil = (state.resource['Oil']?.amount ?? 0) / TIME_MULTIPLIER;
 
+    // 对标 legacy industry.js L150-181 smelterFuelConfig()
+    // l_cost=3, c_cost=0.25(kindling_kindred/smoldering: 0.15), o_cost=0.35(forge种族: 0)
     const lumberCost = 3;
-    const coalCost = 1;
-    const oilCost = 1;
+    const coalCost = 0.25;   // 原版默认 0.25
+    const oilCost = 0.35;    // 原版默认 0.35
 
     // 处理实际能够工作的燃料槽
     const maxWoodOperable = Math.max(0, Math.floor(availableLumber / lumberCost));
@@ -702,9 +789,22 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     deltas['Oil'] = (deltas['Oil'] ?? 0) - oilFuel * oilCost;
 
     // 产出铁 (不受全员效率影响，定额产出)
+    // 对标 legacy main.js L5007-5022
     const ironBlast = techLevel('smelting') >= 3 ? 1.2 : 1;
     const ironAdvanced = techLevel('smelting') >= 7 ? 1.25 : 1;
-    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironSmelter * ironBlast * ironAdvanced;
+    // oil_bonus: 每个石油燃料槽加成铁/铱产量
+    const oilBonus = oilFuel > 0 ? 1 + (oilFuel / 200) : 1;  // legacy L5019-5022
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironSmelter * ironBlast * ironAdvanced * oilBonus;
+
+    // 产出铱 — 对标 legacy main.js L5008-5021
+    // iridium_smelter *= 0.05（基础铱效率），同样应用 smelting>=7 和 oil_bonus 修正
+    // legacy L5008: iridium_smelter *= 0.05
+    // legacy L5017: iridium_smelter *= 1.25 (smelting>=7)
+    // legacy L5021: iridium_smelter *= 1 + (oil_bonus/200)
+    if (iridiumSmelter > 0 && (state.resource['Iridium']?.display ?? false)) {
+      const iridiumBase = iridiumSmelter * 0.05 * ironAdvanced * oilBonus;
+      deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumBase;
+    }
 
     // 产出钢
     if (techLevel('smelting') >= 2 && steelSmelter > 0) {
@@ -941,12 +1041,17 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   tickPopulationGrowth(newState, TIME_MULTIPLIER, messages);
 
   // ============================================================
-  // 11. 饥荒效果：食物 0 且负产出时人口减少
+  // 11. 饥荒致死（Starvation Death）
   // ============================================================
+  // 对标 legacy/src/main.js L3791-3865:
+  // 触发条件：食物被截断为 0（modRes 返回 false），即 Food.amount==0 且 deltas['Food'] < 0
+  // 在非 fasting 种族下，以 Math.rand(0,10)===0 的 1/11 概率（≈9.09%）减少 1 人口
+  // 相当于：每 11 个 fast-tick（≈2.75s）平均死亡一次
+  // NOTE: fasting / anthropophagite / slow_digestion 等特质 Phase 1 未实装，使用基础逻辑
   if (newState.resource['Food']?.amount === 0 && (deltas['Food'] ?? 0) < 0) {
     if (getPopulation(newState) > 1) {
-      // 每 tick 0.5% 概率死亡
-      if (Math.random() < 0.005) {
+      // 1/11 概率 — 对标 legacy Math.rand(0,10) === 0
+      if (Math.floor(Math.random() * 11) === 0) {
         removeOneCitizen(newState);
         messages.push({
           text: '💀 一名市民因饥饿而死亡！',
