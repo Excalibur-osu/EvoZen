@@ -1,7 +1,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { applySpaceScaling } from './space';
 
-export type InterstellarSupportPool = 'alpha';
+export type InterstellarSupportPool = 'alpha' | 'nebula';
 
 export interface InterstellarStructureDefinition {
   id: string;
@@ -16,6 +16,7 @@ export interface InterstellarStructureDefinition {
   powerCost?: number;
   support?: { pool: InterstellarSupportPool; amount: number };
   supportFuel?: { resource: string; amountPerTick: number };
+  condition?: (state: GameState) => boolean;
 }
 
 function interstellarCost(base: number, mult: number) {
@@ -139,6 +140,307 @@ export const INTERSTELLAR_STRUCTURES: InterstellarStructureDefinition[] = [
     effect: '每座消耗 1 Alpha 支援；大幅提升知识容量上限（基础 +10000）。',
     support: { pool: 'alpha', amount: -1 },
   },
+
+  // ==================== int_proxima: 比邻星 ====================
+  // 对标 legacy/src/space.js interstellarProjects.int_proxima
+  {
+    id: 'xfer_station',
+    region: 'int_proxima',
+    name: '传输站',
+    description: '在比邻星建立物质传输站，为星际运输线提供支援并扩展燃料储备上限。',
+    reqs: { proxima: 1 },
+    costs: {
+      Money: interstellarCost(1_200_000, 1.28),
+      Neutronium: interstellarCost(1_500, 1.28),
+      Adamantite: interstellarCost(6_000, 1.28),
+      Polymer: interstellarCost(12_000, 1.28),
+      Wrought_Iron: interstellarCost(3_500, 1.28),
+    },
+    effect: '每座提供 1 Alpha 支援；提升油料/氦-3/铀上限；消耗 0.28 铀/tick 与 1MW 电力。',
+    powerCost: 1,
+    support: { pool: 'alpha', amount: 1 },
+  },
+  {
+    id: 'cargo_yard',
+    region: 'int_proxima',
+    name: '货运码头',
+    description: '在比邻星建立大型货运码头，扩展板条箱/集装箱与稀有矿物上限。',
+    reqs: { proxima: 2 },
+    costs: {
+      Money: interstellarCost(275_000, 1.28),
+      Graphene: interstellarCost(7_500, 1.28),
+      Mythril: interstellarCost(6_000, 1.28),
+    },
+    effect: '每座 +50 板条箱上限、+50 集装箱上限；+200 中子素上限、+150 炎晶上限。',
+  },
+  {
+    id: 'cruiser',
+    region: 'int_proxima',
+    name: '巡洋舰',
+    description: '在比邻星部署星际巡洋舰，扩充远征军事力量。',
+    reqs: { cruiser: 1 },
+    costs: {
+      Money: interstellarCost(875_000, 1.28),
+      Aluminium: interstellarCost(195_000, 1.28),
+      Neutronium: interstellarCost(2_000, 1.28),
+      Aerogel: interstellarCost(250, 1.28),
+    },
+    effect: '每艘提供 3 驻军上限；每 tick 消耗 6 氦-3。',
+  },
+  {
+    id: 'dyson',
+    region: 'int_proxima',
+    name: '戴森球（建造中）',
+    description: '在比邻星轨道建造戴森球能量收集网络，分 100 段完工。',
+    reqs: { proxima: 3 },
+    condition: (state) => {
+      const d = state.interstellar['dyson'] as { count?: number } | undefined;
+      return (d?.count ?? 0) < 100 || !(state.tech['dyson'] as number | undefined);
+    },
+    costs: {
+      Money:       (_state, count) => count < 100 ? 250_000 : 0,
+      Adamantite:  (_state, count) => count < 100 ? 10_000 : 0,
+      Infernite:   (_state, count) => count < 100 ? 25 : 0,
+      Stanene:     (_state, count) => count < 100 ? 100_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后产出 175MW 电力并解锁戴森球升级。',
+  },
+  {
+    id: 'dyson_sphere',
+    region: 'int_proxima',
+    name: '戴森球（完整）',
+    description: '戴森球完工后的扩展升级，分 100 段将产电量提升至 750MW。',
+    reqs: { proxima: 3, dyson: 1 },
+    condition: (state) => {
+      const d = state.interstellar['dyson'] as { count?: number } | undefined;
+      const ds = state.interstellar['dyson_sphere'] as { count?: number } | undefined;
+      return (d?.count ?? 0) >= 100 && (state.tech['dyson'] as number | undefined) === 1 && (ds?.count ?? 0) < 100;
+    },
+    costs: {
+      Money:     (_state, count) => count < 100 ? 5_000_000 : 0,
+      Bolognium: (_state, count) => count < 100 ? 25_000 : 0,
+      Vitreloy:  (_state, count) => count < 100 ? 1_250 : 0,
+      Aerogel:   (_state, count) => count < 100 ? 75_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后总产电 750MW。',
+  },
+
+  // ==================== int_nebula: 星云 ====================
+  // 对标 legacy/src/space.js interstellarProjects.int_nebula
+  {
+    id: 'nexus',
+    region: 'int_nebula',
+    name: '星云枢纽',
+    description: '在星云中建立资源枢纽，提供星云支援并大幅扩展燃料上限。',
+    reqs: { nebula: 1 },
+    costs: {
+      Money: interstellarCost(900_000, 1.24),
+      Adamantite: interstellarCost(7_500, 1.24),
+      Infernite: interstellarCost(250, 1.24),
+      Sheet_Metal: interstellarCost(14_000, 1.24),
+      Nano_Tube: interstellarCost(17_500, 1.24),
+    },
+    effect: '每座提供 2 星云支援；扩展 Oil/氦-3/氘/超铀上限；消耗 8MW 电力与 350 金/tick。',
+    powerCost: 8,
+    support: { pool: 'nebula', amount: 2 },
+  },
+  {
+    id: 'harvester',
+    region: 'int_nebula',
+    name: '星云收割机',
+    description: '在星云中部署收割机，自动采集氦-3（及氘，需 ram_scoop 科技）。',
+    reqs: { nebula: 2 },
+    costs: {
+      Money: interstellarCost(650_000, 1.28),
+      Copper: interstellarCost(80_000, 1.28),
+      Alloy: interstellarCost(45_000, 1.28),
+      Iridium: interstellarCost(8_000, 1.28),
+    },
+    effect: '每座消耗 1 星云支援；持续产出氦-3（及氘）。',
+    support: { pool: 'nebula', amount: -1 },
+  },
+  {
+    id: 'elerium_prospector',
+    region: 'int_nebula',
+    name: '星云超铀探矿机',
+    description: '在星云中开采超铀元素（Elerium）。',
+    reqs: { nebula: 3 },
+    costs: {
+      Money: interstellarCost(825_000, 1.28),
+      Steel: interstellarCost(18_000, 1.28),
+      Polymer: interstellarCost(22_000, 1.28),
+      Graphene: interstellarCost(82_000, 1.28),
+      Stanene: interstellarCost(57_000, 1.28),
+    },
+    effect: '每座消耗 1 星云支援；持续产出 Elerium。',
+    support: { pool: 'nebula', amount: -1 },
+  },
+
+  // ==================== int_neutron: 中子星 ====================
+  // 对标 legacy/src/space.js interstellarProjects.int_neutron
+  {
+    id: 'neutron_miner',
+    region: 'int_neutron',
+    name: '中子素采矿机',
+    description: '在中子星引力井附近采集中子素，并扩展中子素上限。',
+    reqs: { neutron: 1 },
+    costs: {
+      Money: interstellarCost(1_000_000, 1.32),
+      Titanium: interstellarCost(45_000, 1.32),
+      Stanene: interstellarCost(88_000, 1.32),
+      Elerium: interstellarCost(20, 1.32),
+      Aerogel: interstellarCost(50, 1.32),
+    },
+    effect: '每座产出中子素；+500 中子素上限；消耗 6MW 电力与 3 氦-3/tick。',
+    powerCost: 6,
+  },
+  {
+    id: 'citadel',
+    region: 'int_neutron',
+    name: '量子城堡',
+    description: '在中子星附近建立量子研究堡垒，大幅提升科研产出与建造效率。',
+    reqs: { neutron: 1, high_tech: 15 },
+    costs: {
+      Money: interstellarCost(5_000_000, 1.25),
+      Knowledge: interstellarCost(1_500_000, 1.15),
+      Graphene: interstellarCost(50_000, 1.25),
+      Stanene: interstellarCost(100_000, 1.25),
+      Elerium: interstellarCost(250, 1.25),
+      Soul_Gem: interstellarCost(1, 1.25),
+    },
+    effect: '每座通电 30MW（每多一座额外 +2.5MW）；提升量子等级加成与工匠/科研产出。',
+    powerCost: 30,
+  },
+  {
+    id: 'stellar_forge',
+    region: 'int_neutron',
+    name: '恒星熔炉',
+    description: '在中子星附近建立高能熔炉，大幅扩展工匠上限与冶炼效率。',
+    reqs: { star_forge: 1 },
+    costs: {
+      Money: interstellarCost(1_200_000, 1.25),
+      Iridium: interstellarCost(250_000, 1.25),
+      Bolognium: interstellarCost(35_000, 1.25),
+      Aerogel: interstellarCost(75_000, 1.25),
+    },
+    effect: '每座通电 3MW；工匠上限 +2，熔炉效率 +10%，精炼效率 +5%。',
+    powerCost: 3,
+  },
+
+  // ==================== int_blackhole: 黑洞 ====================
+  // 对标 legacy/src/space.js interstellarProjects.int_blackhole
+  {
+    id: 'far_reach',
+    region: 'int_blackhole',
+    name: '远距探针网络',
+    description: '在黑洞附近部署远距探针，扩展知识控制器加成。',
+    reqs: { blackhole: 1 },
+    costs: {
+      Money: interstellarCost(1_000_000, 1.32),
+      Knowledge: interstellarCost(100_000, 1.32),
+      Neutronium: interstellarCost(2_500, 1.32),
+      Elerium: interstellarCost(100, 1.32),
+      Aerogel: interstellarCost(1_000, 1.32),
+    },
+    effect: '每座通电 5MW；世界控制器知识上限加成 +1%/座。',
+    powerCost: 5,
+  },
+  {
+    id: 'stellar_engine',
+    region: 'int_blackhole',
+    name: '恒星引擎（建造中）',
+    description: '利用黑洞引力建造恒星引擎，分 100 段完工后产生大量电力并为转生积累质量。',
+    reqs: { blackhole: 3 },
+    condition: (state) =>
+      ((state.interstellar['stellar_engine'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:      (_state, count) => count < 100 ? 500_000 : 0,
+      Neutronium: (_state, count) => count < 100 ? 450 : 0,
+      Adamantite: (_state, count) => count < 100 ? 17_500 : 0,
+      Infernite:  (_state, count) => count < 100 ? 225 : 0,
+      Graphene:   (_state, count) => count < 100 ? 45_000 : 0,
+      Mythril:    (_state, count) => count < 100 ? 250 : 0,
+      Aerogel:    (_state, count) => count < 100 ? 75 : 0,
+    },
+    effect: '共需建造 100 段；完工后产生大量电力（基础 20MW + 质量加成）并积累转生质量。',
+  },
+  {
+    id: 'mass_ejector',
+    region: 'int_blackhole',
+    name: '质量喷射器',
+    description: '向黑洞喷射物质以增加恒星引擎质量，为大爆炸转生积累奇异质量。',
+    reqs: { blackhole: 5 },
+    costs: {
+      Money: interstellarCost(750_000, 1.25),
+      Adamantite: interstellarCost(125_000, 1.25),
+      Infernite: interstellarCost(275, 1.25),
+      Elerium: interstellarCost(100, 1.25),
+      Mythril: interstellarCost(10_000, 1.25),
+    },
+    effect: '每座通电 3MW；开启质量喷射界面，可消耗各类资源积累恒星引擎质量。',
+    powerCost: 3,
+  },
+  {
+    id: 'stargate',
+    region: 'int_blackhole',
+    name: '星门（建造中）',
+    description: '在黑洞附近建造通往银河系的星门，分 200 段完工后连通银河系区域。',
+    reqs: { stargate: 3 },
+    condition: (state) =>
+      ((state.interstellar['stargate'] as { count?: number } | undefined)?.count ?? 0) < 200,
+    costs: {
+      Money:      (_state, count) => count < 200 ? 1_000_000 : 0,
+      Neutronium: (_state, count) => count < 200 ? 4_800 : 0,
+      Infernite:  (_state, count) => count < 200 ? 666 : 0,
+      Elerium:    (_state, count) => count < 200 ? 75 : 0,
+      Nano_Tube:  (_state, count) => count < 200 ? 12_000 : 0,
+      Stanene:    (_state, count) => count < 200 ? 60_000 : 0,
+      Mythril:    (_state, count) => count < 200 ? 3_200 : 0,
+    },
+    effect: '共需建造 200 段；完工后生成通电版星门（s_gate）并开启银河系区域。',
+  },
+  {
+    id: 's_gate',
+    region: 'int_blackhole',
+    name: '星门',
+    description: '星门完工后的激活形态；通电 250MW 后连通银河系，解锁 gxy_stargate 区域。',
+    reqs: { stargate: 4 },
+    condition: (state) =>
+      ((state.interstellar['stargate'] as { count?: number } | undefined)?.count ?? 0) >= 200,
+    costs: {},
+    effect: '通电 250MW；维持星门连接，允许进入银河系区域。',
+    powerCost: 250,
+  },
+
+  // ==================== int_sirius: 天狼星 ====================
+  // 对标 legacy/src/space.js interstellarProjects.int_sirius
+  {
+    id: 'space_elevator',
+    region: 'int_sirius',
+    name: '太空电梯（建造中）',
+    description: '在天狼星卫星建造太空电梯，分 100 段完工后开启终局升天系统。',
+    reqs: { ascension: 4 },
+    condition: (state) =>
+      ((state.interstellar['space_elevator'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:     (_state, count) => count < 100 ? 20_000_000 : 0,
+      Nano_Tube: (_state, count) => count < 100 ? 500_000 : 0,
+      Bolognium: (_state, count) => count < 100 ? 100_000 : 0,
+      Mythril:   (_state, count) => count < 100 ? 125_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后开启升天触发器，可选择终局转生路线。',
+  },
+  {
+    id: 'ascension_trigger',
+    region: 'int_sirius',
+    name: '升天触发器',
+    description: '太空电梯完工后解锁的终局建筑，触发后执行升天转生。',
+    reqs: { ascension: 5 },
+    condition: (state) =>
+      ((state.interstellar['space_elevator'] as { count?: number } | undefined)?.count ?? 0) >= 100,
+    costs: {},
+    effect: '触发后选择升天路线（大爆炸 / 播种 / 黑洞 等），执行终局转生并获得永久加成。',
+  },
 ];
 
 function getInterstellarCount(state: GameState, id: string): number {
@@ -164,6 +466,8 @@ export function canBuildInterstellarStructure(state: GameState, id: string): boo
   for (const [reqKey, reqLevel] of Object.entries(def.reqs)) {
     if ((state.tech[reqKey] ?? 0) < reqLevel) return false;
   }
+
+  if (def.condition && !def.condition(state)) return false;
 
   const costs = getInterstellarBuildCost(state, id);
   for (const [resId, cost] of Object.entries(costs)) {

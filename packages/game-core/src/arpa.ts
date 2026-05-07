@@ -38,9 +38,14 @@ export interface ArpaState {
   /** 纪念碑类型（Obelisk/Statue/Sculpture/Monolith/Pillar） */
   m_type: MonumentType;
   /** 各项目状态 */
+  lhc: ArpaProjectState;
+  stock_exchange: ArpaProjectState;
+  tp_depot: ArpaProjectState;
   launch_facility: ArpaProjectState;
   monument: ArpaProjectState;
-  stock_exchange: ArpaProjectState;
+  railway: ArpaProjectState;
+  roid_eject: ArpaProjectState;
+  nexus: ArpaProjectState;
   [key: string]: ArpaProjectState | MonumentType;
 }
 
@@ -49,7 +54,8 @@ export type MonumentType =
   | 'Statue'
   | 'Sculpture'
   | 'Monolith'
-  | 'Pillar';
+  | 'Pillar'
+  | 'Megalith';  // magic 宇宙专属（legacy arpa.js L1662）
 
 // ============================================================
 // 项目定义
@@ -81,6 +87,7 @@ export const MONUMENT_NAMES: Record<MonumentType, string> = {
   Sculpture: '雕刻',
   Monolith: '独石',
   Pillar: '柱廊',
+  Megalith: '巨石阵',  // magic 宇宙专属
 };
 
 /** 纪念碑各类型的基础费用（legacy arpa.js L1652-1664） */
@@ -91,10 +98,73 @@ function monumentBaseCost(mType: MonumentType): Record<string, number> {
     case 'Sculpture':return { Steel: 300_000 };
     case 'Monolith': return { Cement: 300_000 };
     case 'Pillar':   return { Lumber: 1_000_000 };
+    case 'Megalith': return { Crystal: 55_000 }; // magic 宇宙（legacy arpa.js L1662）
   }
 }
 
 export const ARPA_PROJECTS: ArpaProjectDef[] = [
+  // ===== lhc（大型强子对撞机 / 超导粒子对撞机） =====
+  // 对标 legacy/src/arpa.js L38-77
+  // grant: supercollider；每次完成提升 particles tech，可多次建造
+  {
+    id: 'lhc',
+    name: '大型强子对撞机',
+    desc: '建造超大型粒子加速器，推进高能物理研究，解锁粒子科技与存储扩展。',
+    reqs: { high_tech: 6 },
+    grantKey: 'supercollider',
+    effectText:
+      '每次完成：粒子科技 +1（supercollider rank 提升）；存储 Lv.6+ 时同步提升卫星/Wardenclyffe 知识加成。',
+    baseCost: () => ({
+      Money:     2_500_000,
+      Knowledge:   500_000,
+      Copper:      125_000,
+      Cement:      250_000,
+      Aluminium:   350_000,
+      Titanium:     50_000,
+      Polymer:      12_000,
+    }),
+    mult: 1.05,
+  },
+
+  // ===== stock_exchange（证券交易所） =====
+  // 对标 legacy/src/arpa.js L78-109
+  {
+    id: 'stock_exchange',
+    name: '证券交易所',
+    desc: '建立现代金融市场，大幅提升银行盈利能力。',
+    reqs: { banking: 9 },
+    grantKey: 'stock_exchange',
+    effectText: '银行收益 +10%；banking Lv.10+ 时银行家 +2 收益；gambling Lv.4+ 时赌场额外 +5%/+1 点。',
+    baseCost: () => ({
+      Money:       3_000_000,
+      Plywood:        25_000,
+      Brick:          20_000,
+      Wrought_Iron:   10_000,
+    }),
+    mult: 1.06,
+  },
+
+  // ===== tp_depot（真实路径补给站） =====
+  // 对标 legacy/src/arpa.js L110-125，path: ['truepath']
+  {
+    id: 'tp_depot',
+    name: '星际补给站',
+    desc: '仅限真实路径宇宙；建造跨星系物资中转站，扩大贸易路线容量。',
+    reqs: { high_tech: 6, storage: 4 },
+    condition: (state) => Boolean(state.race['truepath']),
+    grantKey: 'tp_depot',
+    effectText: '每次完成：贸易路线上限 +5，贸易利润 +50%。',
+    baseCost: () => ({
+      Money:   1_800_000,
+      Stone:     750_000,
+      Iron:      250_000,
+      Alloy:      30_000,
+    }),
+    mult: 1.08,
+  },
+
+  // ===== launch_facility（航天发射设施） =====
+  // 对标 legacy/src/arpa.js L126-148，rank: 1（只建一次）
   {
     id: 'launch_facility',
     name: '发射设施',
@@ -104,40 +174,85 @@ export const ARPA_PROJECTS: ArpaProjectDef[] = [
     grantKey: 'launch_facility',
     effectText: '完成后建立 space:1，为试验发射与后续太空任务解锁正式入口。',
     baseCost: () => ({
-      Money: 2_000_000,
-      Knowledge: 500_000,
-      Cement: 150_000,
-      Oil: 20_000,
-      Sheet_Metal: 15_000,
-      Alloy: 25_000,
+      Money:     2_000_000,
+      Knowledge:   500_000,
+      Cement:      150_000,
+      Oil:          20_000,
+      Sheet_Metal:  15_000,
+      Alloy:        25_000,
     }),
     mult: 1.1,
     maxRank: 1,
   },
+  // ===== monument（纪念碑） =====
+  // 对标 legacy/src/arpa.js L149-185
   {
     id: 'monument',
     name: '纪念碑',
     desc: '建造宏大的纪念性建筑，提振民众士气。',
     reqs: { monument: 1 },
     grantKey: 'monuments',
-    effectText: '士气上限 +2（每座纪念碑）。',
+    effectText: '每座士气上限 +2。',
     baseCost: (mType = 'Obelisk') => monumentBaseCost(mType),
     mult: 1.1,
   },
+
+  // ===== railway（铁路网络） =====
+  // 对标 legacy/src/arpa.js L186-221
+  // grant: railway；每次完成增加贸易路线上限（与 storage_yard count 相关）
   {
-    id: 'stock_exchange',
-    name: '证券交易所',
-    desc: '建立现代金融市场，大幅提升银行盈利能力。',
-    reqs: { banking: 9 },
-    grantKey: 'stock_exchange',
-    effectText: '银行收益 +10%，解锁更多金融科技。',
+    id: 'railway',
+    name: '铁路网络',
+    desc: '铺设大规模铁路系统，扩大贸易路线容量与贸易利润。',
+    reqs: { high_tech: 6, trade: 3 },
+    grantKey: 'railway',
+    effectText:
+      '每次完成：贸易路线上限 +2（每 6 座仓库额外 +1）；贸易利润 +3/tick。cataclysm 路线：GPS 每 3 座贡献 +1 路线。',
     baseCost: () => ({
-      Money: 3_000_000,
-      Plywood: 25_000,
-      Brick: 20_000,
-      Wrought_Iron: 10_000,
+      Money:   2_500_000,
+      Lumber:    750_000,
+      Iron:      300_000,
+      Steel:     450_000,
     }),
-    mult: 1.06,
+    mult: 1.08,
+  },
+
+  // ===== roid_eject（小行星弹射器） =====
+  // 对标 legacy/src/arpa.js L222-241
+  // grant: roid_eject；可多次建造，质量递增，最终可弹射星球级天体
+  {
+    id: 'roid_eject',
+    name: '小行星弹射器',
+    desc: '建造巨型电磁弹射系统，向黑洞喂入小行星（乃至星球）以榨取暗能量。',
+    reqs: { blackhole: 6, gateway: 3 },
+    grantKey: 'roid_eject',
+    effectText:
+      '每次完成：rank 累计质量 ≈ 0.225×rank×(1+rank/12)；质量越大，暗能量产出越高。',
+    baseCost: () => ({
+      Money:      18_750_000,
+      Deuterium:     375_000,
+      Bolognium:      15_000,
+    }),
+    mult: 1.075,
+  },
+
+  // ===== nexus（魔法枢纽） =====
+  // 对标 legacy/src/arpa.js L242-258
+  // grant: nexus；magic Lv.5+ 解锁；每次完成 +5 Mana 上限
+  {
+    id: 'nexus',
+    name: '魔法枢纽',
+    desc: '在城市中建造魔力聚合核心，大幅扩展魔法能量上限。',
+    reqs: { magic: 5 },
+    grantKey: 'nexus',
+    effectText:
+      '每次完成：+5 Mana 上限（spatialReasoning 加成后）；roguemagic Lv.7+ 时额外 +4 女巫加成。',
+    baseCost: () => ({
+      Money:   5_000_000,
+      Crystal:    60_000,
+      Iridium:    35_000,
+    }),
+    mult: 1.12,
   },
 ];
 
@@ -153,17 +268,19 @@ function techLevel(state: GameState, id: string): number {
 /** 读取 ARPA 状态（兼容旧存档）*/
 function getArpaState(state: GameState): ArpaState {
   if (!state.arpa) {
-    state.arpa = {
-      m_type: 'Obelisk',
-      launch_facility: { rank: 0, progress: 0, active: false },
-      monument: { rank: 0, progress: 0, active: false },
-      stock_exchange: { rank: 0, progress: 0, active: false },
-    };
+    state.arpa = { m_type: 'Obelisk' };
   }
   const arpa = state.arpa as ArpaState;
-  arpa.launch_facility = arpa.launch_facility ?? { rank: 0, progress: 0, active: false };
-  arpa.monument = arpa.monument ?? { rank: 0, progress: 0, active: false };
-  arpa.stock_exchange = arpa.stock_exchange ?? { rank: 0, progress: 0, active: false };
+  // 动态补全所有项目默认状态，兼容旧存档和新增项目
+  for (const def of ARPA_PROJECTS) {
+    if (!arpa[def.id]) {
+      (arpa as Record<string, ArpaProjectState | MonumentType>)[def.id] = {
+        rank: 0,
+        progress: 0,
+        active: false,
+      };
+    }
+  }
   return arpa;
 }
 

@@ -762,6 +762,244 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     effect: '通电后知识上限 +25%。后续可被更远区域进一步放大。',
     powerCost: 20,
   },
+
+  // ===== spc_dwarf: shipyard（真实路径专属，仅建 1 座） =====
+  // 对标 legacy/src/space.js L2548-2603
+  {
+    id: 'shipyard',
+    region: 'spc_dwarf',
+    name: '造船厂',
+    description: '在矮行星轨道建造庞大的星舰制造设施，开启星际战舰建造系统。',
+    reqs: { shipyard: 1 },
+    condition: (state) =>
+      ((state.space['shipyard'] as { count?: number } | undefined)?.count ?? 0) < 1,
+    costs: {
+      Money: (_state, count) => (count < 1 ? 10_000_000 : 0),
+      Aluminium: (_state, count) => (count < 1 ? 1_000_000 : 0),
+      Titanium: (_state, count) => (count < 1 ? 650_000 : 0),
+      Iridium: (_state, count) => (count < 1 ? 250_000 : 0),
+      Neutronium: (_state, count) => (count < 1 ? 10_000 : 0),
+      Mythril: (_state, count) => (count < 1 ? 500_000 : 0),
+    },
+    effect: '仅可建造 1 座；通电 50MW 后开启星舰建造界面。',
+    powerCost: 50,
+  },
+
+  // ===== spc_dwarf: mass_relay（分段建造，100 段后生成 m_relay） =====
+  // 对标 legacy/src/space.js L2604-2658
+  {
+    id: 'mass_relay',
+    region: 'spc_dwarf',
+    name: '质量中继器（建造中）',
+    description: '在矮行星建造质量中继器，需分 100 段完工后才能通电启用。',
+    reqs: { outer: 5 },
+    condition: (state) =>
+      ((state.space['mass_relay'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:       (_state, count) => count < 100 ? 10_000_000 : 0,
+      Neutronium:  (_state, count) => count < 100 ? 7_500 : 0,
+      Adamantite:  (_state, count) => count < 100 ? 18_000 : 0,
+      Elerium:     (_state, count) => count < 100 ? 125 : 0,
+      Stanene:     (_state, count) => count < 100 ? 100_000 : 0,
+      Quantium:    (_state, count) => count < 100 ? 25_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后自动解锁并激活质量中继器（m_relay）。',
+  },
+
+  // ===== spc_dwarf: m_relay（mass_relay 完工后出现的通电版） =====
+  // 对标 legacy/src/space.js L2660-2690
+  {
+    id: 'm_relay',
+    region: 'spc_dwarf',
+    name: '质量中继器',
+    description: '质量中继器完工后的激活形态；通电后为矮行星区充能，每 tick 积累能量。',
+    reqs: { outer: 6 },
+    condition: (state) =>
+      ((state.space['mass_relay'] as { count?: number } | undefined)?.count ?? 0) >= 100,
+    costs: {},
+    effect: '通电 100MW；每 tick 积累中继能量（charged），达到阈值后触发终局传送。',
+    powerCost: 100,
+  },
+
+  // ===== spc_red: terraformer（分段建造，100 段后生成 atmo_terraformer） =====
+  // 对标 legacy/src/space.js L585-644
+  {
+    id: 'terraformer',
+    region: 'spc_red',
+    name: '地球化改造仪（建造中）',
+    description: '在红色行星建造大气改造装置，需分 100 段完工后才能通电激活。',
+    reqs: { terraforming: 1 },
+    condition: (state) =>
+      ((state.space['terraformer'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:       (_state, count) => count < 100 ? 75_000_000 : 0,
+      Alloy:       (_state, count) => count < 100 ? 750_000 : 0,
+      Neutronium:  (_state, count) => count < 100 ? 125_000 : 0,
+      Elerium:     (_state, count) => count < 100 ? 1_000 : 0,
+      Bolognium:   (_state, count) => count < 100 ? 100_000 : 0,
+      Orichalcum:  (_state, count) => count < 100 ? 250_000 : 0,
+      Soul_Gem:    (_state, count) => count < 100 ? 1 : 0,
+      Nanoweave:   (_state, count) => count < 100 ? 75_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后自动解锁大气改造通电建筑（atmo_terraformer）。',
+  },
+
+  // ===== spc_red: atmo_terraformer（terraformer 完工后出现的通电版） =====
+  // 对标 legacy/src/space.js L646-687
+  {
+    id: 'atmo_terraformer',
+    region: 'spc_red',
+    name: '大气改造仪',
+    description: '地球化改造仪完工后的激活形态；通电后开始改造红色行星大气层。',
+    reqs: { terraforming: 2 },
+    condition: (state) =>
+      ((state.space['terraformer'] as { count?: number } | undefined)?.count ?? 0) >= 100,
+    costs: {},
+    effect: '通电 5000MW（非真实路径），或 500MW（真实路径）；通电后 terraforming 科技升至 Lv.3 并解锁 terraform。',
+    powerCost: 5000,
+  },
+
+  // ===== spc_red: terraform（terra 完成后的最终一键改造） =====
+  // 对标 legacy/src/space.js L688-707
+  {
+    id: 'terraform',
+    region: 'spc_red',
+    name: '一键改造',
+    description: '大气改造完成后，执行最终的地球化改造，将红色行星永久变成宜居星球。',
+    reqs: { terraforming: 3 },
+    condition: () => false, // 由 atmo_terraformer 通电时动态显示
+    costs: {},
+    effect: '执行后永久改变红星行星特性，大幅提升产出与居住能力。',
+  },
+
+  // ===== spc_red: pylon（火星能量塔，仅魔法/cataclysm 宇宙） =====
+  // 对标 legacy/src/space.js L774-805
+  {
+    id: 'pylon',
+    region: 'spc_red',
+    name: '能量塔',
+    description: '在火星地表建立魔法能量塔，产出法力值并扩展法力上限（仅限魔法/浩劫宇宙）。',
+    reqs: { magic: 2 },
+    condition: (state) =>
+      Boolean(state.race['cataclysm']) || Boolean(state.race['orbit_decayed']),
+    costs: {
+      Money: spaceCost(10, 1.48),
+      Stone: spaceCost(12, 1.42),
+      Crystal: (_state, count) => Math.max(0, spaceCost(8, 1.42)(_state, count) - 3),
+    },
+    effect: '每座产出 0.005 法力/tick，并提供 +2 法力上限（spatialReasoning 修饰后）。',
+  },
+
+  // ===== spc_sun: jump_gate（恒星跳跃门，仅真实路径，100 段） =====
+  // 对标 legacy/src/space.js L1774-1822
+  {
+    id: 'jump_gate',
+    region: 'spc_sun',
+    name: '跳跃门（建造中）',
+    description: '在恒星轨道建造星系跳跃门，分 100 段完工后开启跨恒星系旅行（仅真实路径）。',
+    reqs: { tauceti: 3 },
+    condition: (state) =>
+      ((state.space['jump_gate'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:       (_state, count) => count < 100 ? 1_000_000 : 0,
+      Alloy:       (_state, count) => count < 100 ? 50_000 : 0,
+      Adamantite:  (_state, count) => count < 100 ? 12_500 : 0,
+      Graphene:    (_state, count) => count < 100 ? 42_000 : 0,
+      Orichalcum:  (_state, count) => count < 100 ? 35_000 : 0,
+      Quantium:    (_state, count) => count < 100 ? 25_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后开启 tauceti 阶段，配合 mass_relay 触发终局传送。',
+  },
+
+  // ===== spc_gas: star_dock（星际飞船船坞，仅建 1 座） =====
+  // 对标 legacy/src/space.js L1930-1967
+  {
+    id: 'star_dock',
+    region: 'spc_gas',
+    name: '星际船坞',
+    description: '在气态行星轨道建造星际飞船出发船坞，仅可建造 1 座，触发播种系统。',
+    reqs: { genesis: 3 },
+    condition: (state) =>
+      ((state.space['star_dock'] as { count?: number } | undefined)?.count ?? 0) < 1,
+    costs: {
+      Money:     (_state, count) => count < 1 ? 1_500_000 : 0,
+      Steel:     (_state, count) => count < 1 ? 500_000 : 0,
+      Helium_3:  (_state, count) => count < 1 ? 10_000 : 0,
+      Nano_Tube: (_state, count) => count < 1 ? 250_000 : 0,
+      Mythril:   (_state, count) => count < 1 ? 10_000 : 0,
+    },
+    effect: '仅可建造 1 座；建成后开启星际飞船建造与播种任务界面（genesis 终局系统）。',
+  },
+
+  // ===== spc_red: red_university（火星大学，仅 orbit_decayed 宇宙） =====
+  // 对标 legacy/src/space.js L1201-1235
+  // 注意：原版中此建筑与城市 university 共享 count，
+  //       effect 等同于城市大学，特意设计为 orbit_decayed 路线的替代品。
+  {
+    id: 'red_university',
+    region: 'spc_red',
+    name: '火星大学',
+    description: '在红色行星上建造大学，效果与城市大学相同，专为 orbit_decayed 宇宙类型设计。',
+    reqs: { mars: 1 },
+    condition: (state) => Boolean(state.race['orbit_decayed']),
+    costs: {
+      // 原版与城市 university 共享 count（action 中同步），传入的 count 即 city.university.count
+      Money:  (_state, count) => Math.max(0, Math.round((900 * Math.pow(1.5, count)) - 500)),
+      Lumber: (_state, count) => Math.max(0, Math.round((500 * Math.pow(1.36, count)) - 200)),
+      Stone:  (_state, count) => Math.max(0, Math.round((750 * Math.pow(1.36, count)) - 350)),
+    },
+    effect: '效果同城市大学：+500 知识上限（科学 Lv.8+ 时为 +700）；+1 教授上限。',
+  },
+
+  // ===== spc_red: wonder_statue（wish 种族专属奇观，不可主动建造） =====
+  // 对标 legacy/src/space.js L1431-1452
+  {
+    id: 'wonder_statue',
+    region: 'spc_red',
+    name: '奇观雕像',
+    description: '由 wish 种族特质解锁的特殊奇观，不可主动建造，由特殊事件给予。',
+    reqs: {},
+    condition: (state) =>
+      Boolean(state.race['wish']) &&
+      Boolean((state.space['wonder_statue'] as { count?: number } | undefined)?.count),
+    costs: {},
+    effect: '+5 全员士气（city_wonder_effect）。',
+  },
+
+  // ===== spc_hell: hell_smelter（炼狱冶炼厂，真实路径专属） =====
+  // 对标 legacy/src/space.js L1546-1581
+  {
+    id: 'hell_smelter',
+    region: 'spc_hell',
+    name: '炼狱冶炼厂',
+    description: '在炼狱星球建造高温冶炼厂，每座添加 2 个冶炼炉槽（仅真实路径）。',
+    reqs: { hell: 1, m_smelting: 1 },
+    // legacy: path: ['truepath'] —— 仅在 truepath 宇宙下显示
+    condition: (state) => Boolean(state.race['truepath']),
+    costs: {
+      Money:      spaceCost(250_000, 1.24),
+      Adamantite: spaceCost(15_000, 1.24),
+    },
+    effect: '每座提供 2 个冶炼炉槽（Steel 类型）；无电力需求，无支援占用。',
+  },
+
+  // ===== spc_gas_moon: drone（气态行星月球采矿无人机） =====
+  // 对标 legacy/src/space.js L2048-2079
+  {
+    id: 'drone',
+    region: 'spc_gas_moon',
+    name: '采矿无人机',
+    description: '在气态行星月球部署采矿无人机，每座提升 oil_extractor 的产油速率。',
+    reqs: { gas_moon: 1, drone: 1 },
+    costs: {
+      Money:     spaceCost(250_000, 1.3),
+      Steel:     spaceCost(20_000, 1.3),
+      Neutronium: spaceCost(500, 1.3),
+      Elerium:   spaceCost(25, 1.3),
+      Nano_Tube: spaceCost(45_000, 1.3),
+    },
+    effect: '每座提供 +6 产油速率（achieve iron_will Lv.3+ 时为 +12）；无电力需求，无支援占用。',
+  },
 ];
 
 // ============================================================

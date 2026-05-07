@@ -794,4 +794,251 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     },
     effect: '每座 +14MW 电力，每秒消耗 0.1 铀。',
   },
+
+  // ==================== 缺失的城市建筑 ====================
+  // 对标 legacy/src/actions.js，严格按原版 costMultiplier 数值
+
+  // ----- 住房 -----
+  {
+    id: 'lodge',
+    name: '小屋',
+    description: '为狩猎/灵魂食者/腐食者/人工种族提供额外住宅（需 hunting Lv.2 或特殊种族科技）。',
+    category: 'housing',
+    reqs: { housing: 1, currency: 1 },
+    costs: {
+      Money:  scaleCost(50,  1.32),
+      Lumber: scaleCost(20,  1.36),
+      Stone:  scaleCost(10,  1.36),
+    },
+    effect: '每座 +1 人口上限（carnivore 种族额外 +5 士气）。',
+  },
+  {
+    id: 'soul_well',
+    name: '灵魂之泉',
+    description: '灵魂食者种族专属，每座提升灵魂食量并扩展灵魂上限。',
+    category: 'housing',
+    reqs: { soul_eater: 1 },
+    costs: {
+      // 前 3 座免金钱
+      Money:  (_state, count) => count >= 3 ? Math.round(50 * Math.pow(1.32, count)) : 0,
+      Lumber: scaleCost(20,  1.36),
+      Stone:  scaleCost(10,  1.36),
+    },
+    effect: '每座 +2 灵魂/tick；+500 灵魂上限（spatialReasoning 加成后）。',
+  },
+  {
+    id: 'slave_pen',
+    name: '奴隶围栏',
+    description: '奴隶主种族专属住房，每座提供 4 个奴隶上限。',
+    category: 'housing',
+    reqs: { slaves: 1 },
+    costs: {
+      Money:  scaleCost(250,  1.32),
+      Lumber: scaleCost(100,  1.36),
+      Stone:  scaleCost(75,   1.36),
+      Copper: scaleCost(10,   1.36),
+    },
+    effect: '每座 +4 奴隶上限。',
+  },
+  {
+    id: 'transmitter',
+    name: '信号发射器',
+    description: '人工智能种族专属，通电后持续产出"信号"资源（映射为 Food），并扩展信号上限。',
+    category: 'housing',
+    reqs: { high_tech: 4 },
+    costs: {
+      // 前 3 座免金钱
+      Money:  (_state, count) => count >= 3 ? Math.round(50 * Math.pow(1.32, count)) : 0,
+      Copper: scaleCost(20,  1.36),
+      Steel:  scaleCost(10,  1.36),
+    },
+    effect: '每座耗电 0.5MW；持续产出信号（Food）并 +100 信号上限（spatialReasoning 加成后）。',
+    powered: true,
+    powerCost: 0.5,
+  },
+
+  // ----- 生产 -----
+  {
+    id: 'compost',
+    name: '堆肥场',
+    description: '腐食者种族专属，通电后每 tick 产出食物，每座也扩展食物上限。',
+    category: 'food',
+    reqs: { compost: 1 },
+    costs: {
+      // 前 3 座免金钱
+      Money:  (_state, count) => count >= 3 ? Math.round(50 * Math.pow(1.32, count)) : 0,
+      Lumber: scaleCost(12, 1.36),
+      Stone:  scaleCost(12, 1.36),
+    },
+    effect: '每座产出约 2 食物/tick（科技加成后可达 4+）；+200 食物上限。',
+  },
+  {
+    id: 'windmill',
+    name: '风车',
+    description: '替代磨坊（mill）的风力发电建筑；研究 wind_plant 科技后解锁，持续产出 1MW 电力。',
+    category: 'power',
+    reqs: { wind_plant: 1 },
+    costs: {
+      Money:  scaleCost(1000, 1.31),
+      Lumber: scaleCost(600,  1.33),
+      Iron:   scaleCost(150,  1.33),
+      Cement: scaleCost(125,  1.33),
+    },
+    effect: '每座产出 1MW 电力（environmentalist 种族为 1.5MW）。',
+    powered: true,
+    powerCost: -1,  // 产出电力
+  },
+
+  // ----- 魔法 / 特殊 -----
+  {
+    id: 'conceal_ward',
+    name: '隐蔽结界',
+    description: '流氓魔法科技解锁；每座为城市额外提供 1（roguemagic Lv.8+ 时 1.25）倍城市伪装加成。',
+    category: 'resource',
+    reqs: { roguemagic: 3 },
+    costs: {
+      Money:   scaleCost(500,  1.25),
+      Mana:    scaleCost(42,   1.25),  // conceal_adjust(42) 近似
+      Crystal: scaleCost(5,   1.25),
+    },
+    effect: '每座提升城市伪装值 1 倍（roguemagic Lv.8+ 时 1.25 倍）。',
+  },
+  {
+    id: 'graveyard',
+    name: '墓地',
+    description: '亡灵收集科技解锁；每座 +8 复活槽（未来功能）并扩展木材上限。',
+    category: 'resource',
+    reqs: { reclaimer: 1 },
+    costs: {
+      // 前 5 座免金钱
+      Money:  (_state, count) => count >= 5 ? Math.round(5 * Math.pow(1.85, count)) : 0,
+      Lumber: scaleCost(2,  1.95),
+      Stone:  scaleCost(6,  1.90),
+    },
+    effect: '每座 +8 复活槽；+100 木材上限（spatialReasoning 加成后）。',
+  },
+
+  // ----- 奇观（wish 种族专属，不可主动建造） -----
+  {
+    id: 'wonder_lighthouse',
+    name: '灯塔奇观',
+    description: 'wish 种族特质解锁的奇观，由特殊事件赋予，不可主动建造。',
+    category: 'commerce',
+    reqs: {},
+    costs: {},
+    effect: '+5 全员士气（city_wonder_effect）。',
+  },
+  {
+    id: 'wonder_pyramid',
+    name: '金字塔奇观',
+    description: 'wish 种族特质解锁的奇观，由特殊事件赋予，不可主动建造。',
+    category: 'commerce',
+    reqs: {},
+    costs: {},
+    effect: '+5 全员士气（city_wonder_effect）。',
+  },
+
+  // ----- 后期解锁建筑 -----
+  {
+    id: 'banquet',
+    name: '盛宴',
+    description: '需要 endless_hunger 成就；每级显著提升食物产出，共 5 级，每级成本递增。',
+    category: 'food',
+    reqs: { banquet: 1 },
+    costs: {
+      // banquet 是 leveled 建筑，cost 按 level（即 count）切换（0-4）
+      Money: (_state, count) => {
+        switch (count) {
+          case 0: return 45_000;
+          case 1: return 180_000;
+          case 2: return 2_400_000;
+          case 3: return 30_000_000;
+          case 4: return 140_000_000;
+          default: return 0;
+        }
+      },
+      Food: (_state, count) => {
+        switch (count) {
+          case 0: return 40_000;
+          case 1: return 124_000;
+          case 2: return 300_000;
+          case 3: return 720_000;
+          case 4: return 1_200_000;
+          default: return 0;
+        }
+      },
+      Brick: (_state, count) => {
+        switch (count) {
+          case 0: return 1_600;
+          case 1: return 18_000;
+          case 2: return 75_000;
+          default: return 0;
+        }
+      },
+      Wrought_Iron: (_state, count) => {
+        switch (count) {
+          case 1: return 26_000;
+          case 2: return 88_000;
+          case 3: return 144_000;
+          case 4: return 240_000;
+          default: return 0;
+        }
+      },
+      Iridium: (_state, count) => {
+        switch (count) {
+          case 2: return 50_000;
+          case 3: return 270_000;
+          case 4: return 700_000;
+          default: return 0;
+        }
+      },
+      // Aerogel：非 truepath 时 level 3/4 需要；Quantium：truepath 时 level 3/4 需要
+      // 简化：非 truepath 路径使用 Aerogel，truepath 路径使用 Quantium；引擎层二选一
+      Aerogel: (state, count) => {
+        if (state.race['truepath']) return 0;
+        switch (count) {
+          case 3: return 40_000;
+          case 4: return 150_000;
+          default: return 0;
+        }
+      },
+      Quantium: (state, count) => {
+        if (!state.race['truepath']) return 0;
+        switch (count) {
+          case 3: return 40_000;
+          case 4: return 150_000;
+          default: return 0;
+        }
+      },
+      Bolognium: (_state, count) => (count === 4 ? 150_000 : 0),
+    },
+    effect: '每级大幅提升城市食物产量；共 5 级，由 endless_hunger 成就等级控制。',
+  },
+  {
+    id: 'mass_driver',
+    name: '质量驱动器',
+    description: '需要 mass 科技；通电后提升知识上限（mass Lv.2+ 起每座额外加成科学家产出）。',
+    category: 'science',
+    reqs: { mass: 1 },
+    costs: {
+      Money:   scaleCost(375_000, 1.32),
+      Copper:  scaleCost(33_000,  1.32),
+      Iron:    scaleCost(42_500,  1.32),
+      Iridium: scaleCost(2_200,   1.32),
+    },
+    effect: '每座耗电 5MW（mass Lv.2+ 为 4MW）；+5 知识产出倍数，truepath 为 +6；mass Lv.2+ 额外加成科学家知识产出。',
+    powered: true,
+    powerCost: 5,
+  },
+  {
+    id: 'replicator',
+    name: '复制机',
+    description: '特殊 hack 成就解锁的伪建筑（fake structure）；耗电 1MW，记录于建筑列表但无实质产出。',
+    category: 'resource',
+    reqs: { special_hack: 1 },
+    costs: {},
+    effect: '特殊 hack 类伪建筑；耗电 1MW，无实质产出。',
+    powered: true,
+    powerCost: 1,
+  },
 ];
