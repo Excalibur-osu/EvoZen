@@ -25,10 +25,26 @@ import SpacePanel from './components/SpacePanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 import MobileNotSupported from './components/MobileNotSupported.vue'
+// Phase 3 新增面板
+import PortalPanel from './components/PortalPanel.vue'
+import GovernorPanel from './components/GovernorPanel.vue'
+import MagicPanel from './components/MagicPanel.vue'
+import AchievementsPanel from './components/AchievementsPanel.vue'
+import RacesPanel from './components/RacesPanel.vue'
+import TruepathPanel from './components/TruepathPanel.vue'
+import EdenicPanel from './components/EdenicPanel.vue'
+import PrestigePanel from './components/PrestigePanel.vue'
+// Phase 5 新增面板
+import MechPanel from './components/MechPanel.vue'
+import WomlingPanel from './components/WomlingPanel.vue'
+import CrisprPanel from './components/CrisprPanel.vue'
+import CustomRacePanel from './components/CustomRacePanel.vue'
 
 
 const game = useGameStore()
 type TabId = 'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'
+  | 'portal' | 'governor' | 'magic' | 'achievements' | 'races' | 'truepath' | 'edenic' | 'prestige'
+  | 'mech' | 'womling' | 'crispr' | 'custom_race'
 
 const activeTab = ref<TabId>('evolution')
 /** 市政 Tab 下的子 Tab */
@@ -82,9 +98,21 @@ const tabs = computed(() => {
       { id: 'civic', label: '市政', visible: game.state.settings.showCivic },
       { id: 'arpa', label: 'ARPA', visible: (game.state.tech['monument'] ?? 0) >= 1 },
       { id: 'space', label: '太空', visible: (game.state.tech['high_tech'] ?? 0) >= 7 || (game.state.tech['space_explore'] ?? 0) >= 1 || (game.state.tech['mars'] ?? 0) >= 1 },
+      { id: 'truepath', label: '🛸 真相', visible: !!game.state.race['truepath'] && (game.state.tech['outer'] ?? 0) >= 1 },
+      { id: 'portal', label: '🔥 地狱门', visible: (game.state.tech['portal'] ?? 0) >= 2 },
+      { id: 'mech', label: '🤖 机甲', visible: (game.state.tech['hell_spire'] ?? 0) >= 4 || (game.state.tech['edenic'] ?? 0) >= 5 },
+      { id: 'edenic', label: '🌟 伊甸园', visible: (game.state.tech['edenic'] ?? 0) >= 1 },
+      { id: 'womling', label: '🧟 Womling', visible: game.canUseWomling() },
       { id: 'industry', label: '工坊', visible: (game.state.tech['foundry'] ?? 0) >= 1 },
       { id: 'market', label: '贸易', visible: game.state.settings.showMarket },
-      { id: 'storage', label: '仓储', visible: game.state.settings.showStorage }
+      { id: 'storage', label: '仓储', visible: game.state.settings.showStorage },
+      { id: 'magic', label: '✨ 魔法', visible: game.state.race.universe === 'magic' && (game.state.tech['magic'] ?? 0) >= 1 },
+      { id: 'governor', label: '👔 总督', visible: !!(game.state.genes as Record<string, number>)['governor'] && !!game.state.tech['governor'] },
+      { id: 'prestige', label: '♻️ 转生', visible: (game.state.tech['mad'] ?? 0) >= 1 || (game.state.tech['genesis'] ?? 0) >= 7 || (game.state.tech['blackhole'] ?? 0) >= 5 || (game.state.tech['ascension'] ?? 0) >= 1 },
+      { id: 'crispr', label: '🧬 CRISPR', visible: (game.state.tech['genetics'] ?? 0) >= 1 && (((game.state.prestige as Record<string, { count?: number }>)?.['Plasmid']?.count ?? 0) > 0) },
+      { id: 'achievements', label: '🏆 成就', visible: true },
+      { id: 'races', label: '🧬 种族', visible: true },
+      { id: 'custom_race', label: '🛠️ 编辑种族', visible: (game.state.tech['genetics'] ?? 0) >= 4 },
     )
   }
   return list.filter(t => t.visible)
@@ -178,6 +206,19 @@ const cityTabLabel = computed(() => {
             </template>
             <TradePanel v-if="activeTab === 'market'" />
             <StoragePanel v-if="activeTab === 'storage'" />
+            <!-- Phase 3 新增面板 -->
+            <PortalPanel v-if="activeTab === 'portal'" />
+            <MechPanel v-if="activeTab === 'mech'" />
+            <TruepathPanel v-if="activeTab === 'truepath'" />
+            <EdenicPanel v-if="activeTab === 'edenic'" />
+            <WomlingPanel v-if="activeTab === 'womling'" />
+            <MagicPanel v-if="activeTab === 'magic'" />
+            <GovernorPanel v-if="activeTab === 'governor'" />
+            <PrestigePanel v-if="activeTab === 'prestige'" />
+            <CrisprPanel v-if="activeTab === 'crispr'" />
+            <CustomRacePanel v-if="activeTab === 'custom_race'" />
+            <AchievementsPanel v-if="activeTab === 'achievements'" />
+            <RacesPanel v-if="activeTab === 'races'" />
           </template>
         </div>
       </main>

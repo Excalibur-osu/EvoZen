@@ -22,10 +22,17 @@ export function trainSpy(state: GameState, govIndex: number): { success: boolean
     return { success: false, cost: 0, messages };
   }
 
-  const cost = getSpyCost(state, govIndex);
+  let cost = getSpyCost(state, govIndex);
+  // infiltrator (moldling)：间谍费用降低
+  if (state.race['infiltrator']) {
+    const rank = (state.race['infiltrator'] as number) || 1;
+    const v = rank === 0.1 ? 120 : rank === 0.25 ? 110 : rank === 0.5 ? 100 : rank === 1 ? 90 : rank === 2 ? 85 : rank === 3 ? 80 : 75;
+    cost = Math.ceil(cost * v / 100);
+  }
+
   if (state.resource.Money.amount >= cost) {
     state.resource.Money.amount -= cost;
-    
+
     let time = 300;
     // 对标 legacy civics.js L774-779: spy>=3 时 time -= bootCamp.count * 10，min 10
     if (techLvl >= 3) {
@@ -35,11 +42,35 @@ export function trainSpy(state: GameState, govIndex: number): { success: boolean
         if (time < 10) time = 10;
       }
     }
+    // befuddle (dryad)：间谍训练耗时减半
+    if (state.race['befuddle']) {
+      const rank = (state.race['befuddle'] as number) || 1;
+      const v = rank === 0.1 ? 10 : rank === 0.25 ? 20 : rank === 0.5 ? 30 : rank === 1 ? 50 : rank === 2 ? 75 : rank === 3 ? 85 : 90;
+      time = Math.max(10, Math.round(time * (1 - v / 100)));
+    }
     gov.trn = time;
     return { success: true, cost, messages };
   }
 
   return { success: false, cost: 0, messages };
+}
+
+/** 间谍成功率乘数（用于行动结算）*/
+export function getSpySuccessMul(state: GameState): number {
+  let mul = 1;
+  // elusive (fey)：间谍永不被抓 = 成功率 +X%
+  if (state.race['elusive']) {
+    const rank = (state.race['elusive'] as number) || 1;
+    const v = rank === 0.1 ? 5 : rank === 0.25 ? 10 : rank === 0.5 ? 15 : rank === 1 ? 20 : rank === 2 ? 25 : rank === 3 ? 30 : 35;
+    mul *= 1 + v / 100;
+  }
+  // blurry (yeti)：间谍成功率提升
+  if (state.race['blurry']) {
+    const rank = (state.race['blurry'] as number) || 1;
+    const v = rank === 0.1 ? 5 : rank === 0.25 ? 10 : rank === 0.5 ? 15 : rank === 1 ? 25 : rank === 2 ? 35 : rank === 3 ? 40 : 45;
+    mul *= 1 + v / 100;
+  }
+  return mul;
 }
 
 export function startSpyAction(state: GameState, govIndex: number, action: string): { success: boolean; messages: GameMessage[] } {

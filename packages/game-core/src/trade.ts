@@ -273,6 +273,14 @@ export function getMaxTradeRoutes(state: GameState): number {
   // 对标 main.js L9885-9889: GPS >=4 座时每座 +2 贸易路线
   totalRoutes += getGpsTradeRouteBonus(state);
 
+  // ARPA: railway 每次完成 +2 路线
+  const railway = (state.arpa as Record<string, { rank?: number } | unknown>)?.['railway'] as { rank?: number } | undefined;
+  if (railway?.rank) totalRoutes += railway.rank * 2;
+
+  // ARPA: tp_depot 每次完成 +5 路线（truepath 专属）
+  const tpDepot = (state.arpa as Record<string, { rank?: number } | unknown>)?.['tp_depot'] as { rank?: number } | undefined;
+  if (tpDepot?.rank && state.race['truepath']) totalRoutes += tpDepot.rank * 5;
+
   return totalRoutes;
 }
 

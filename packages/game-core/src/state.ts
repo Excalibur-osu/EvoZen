@@ -152,6 +152,37 @@ export function createNewGame(): GameState {
       // 容器
       Crates: { ...makeResource('板条箱', 0, 0) },
       Containers: { ...makeResource('集装箱', 0, 0) },
+      // 魔法宇宙资源
+      Mana: { ...makeResource('魔力', 0, 0), value: 0 },
+      Crystal: { ...makeResource('水晶', 0, 0), value: 0 },
+      // Portal / 地狱资源
+      Soul_Gem: { ...makeResource('灵魂宝石', 0, 0), value: 0 },
+      Demonic_Essence: { ...makeResource('恶魔精华', 0, 0), value: 0 },
+      Codex: { ...makeResource('法典', 0, 0), value: 0 },
+      Infernite: { ...makeResource('炼狱矿', 0, 0), value: 0 },
+      Sus: { ...makeResource('疑虑', 0, 0), value: 0 },
+      // Edenic 资源
+      Asphodel_Powder: { ...makeResource('阿斯福德尔粉末', 0, 0), value: 0 },
+      Ectoplasm: { ...makeResource('幽质', 0, 0), value: 0 },
+      Elysanite: { ...makeResource('极乐石', 0, 0), value: 0 },
+      Omniscience: { ...makeResource('全知', 0, 0), value: 0 },
+      // Truepath 资源
+      Hydrogen: { ...makeResource('氢', 0, 0), value: 0 },
+      Oxygen: { ...makeResource('氧', 0, 0), value: 0 },
+      Water: { ...makeResource('水', 0, 0), value: 0 },
+      Orichalcum: { ...makeResource('黄金矿', 0, 0), value: 250 },
+      Quantium: { ...makeResource('量子素', 0, 0), value: 800 },
+      Bolognium: { ...makeResource('博洛尼亚合金', 0, 0), value: 1200 },
+      Vitreloy: { ...makeResource('玻璃合金', 0, 0), value: 600 },
+      Aerogel: { ...makeResource('气凝胶', 0, 0), value: 400 },
+      Nanoweave: { ...makeResource('纳米织物', 0, 0), value: 800 },
+      Scarletite: { ...makeResource('猩红石', 0, 0), value: 1500 },
+      Deuterium: { ...makeResource('氘', 0, 0), value: 0 },
+      Graphene: { ...makeResource('石墨烯', 0, 0), value: 0 },
+      Chrysotile: { ...makeResource('温石棉', 0, 0), value: 0 },
+      // 血脉资源
+      Blood_Stone: { ...makeResource('血石', 0, 0), value: 0 },
+      Corrupt_Gem: { ...makeResource('腐败宝石', 0, 0), value: 0 },
     },
 
     evolution: {},
@@ -272,19 +303,3 @@ function makeGarrison(): GarrisonState {
   };
 }
 
-function makeForeignGov() {
-  return {
-    unrest: 0,
-    hstl: 10,
-    mil: 0,
-    eco: 0,
-    spy: 0,
-    esp: 0,
-    trn: 0,
-    sab: 0,
-    act: 'none',
-    occ: false,
-    anx: false,
-    buy: false,
-  };
-}

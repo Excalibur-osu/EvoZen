@@ -532,6 +532,735 @@ export const EVENTS: EventDefinition[] = [
       return `🦙 一群羊驼闯入粮仓，吃掉了约 ${food} 食物！`;
     },
   },
+
+  // ==========================================================
+  // 扩展事件（追加自 legacy events.js）
+  // ==========================================================
+
+  // legacy events.js L14-26: dna_replication
+  {
+    id: 'dna_replication',
+    type: 'major',
+    reqs: { resource: 'DNA' },
+    condition(state) {
+      return state.race.species === 'protoplasm';
+    },
+    effect(state) {
+      const dna = state.resource['DNA'];
+      if (!dna) return '🧬 DNA 复制错误。';
+      const gain = rng(1, Math.max(1, Math.round(dna.max / 3)));
+      dna.amount = Math.min(dna.max, dna.amount + gain);
+      return `🧬 DNA 自我复制！获得 ${gain} DNA。`;
+    },
+  },
+
+  // legacy events.js L28-40: rna_meteor
+  {
+    id: 'rna_meteor',
+    type: 'major',
+    reqs: { resource: 'RNA' },
+    condition(state) {
+      return state.race.species === 'protoplasm';
+    },
+    effect(state) {
+      const rna = state.resource['RNA'];
+      if (!rna) return '☄️ 富含 RNA 的陨石撞击。';
+      const gain = rng(1, Math.max(1, Math.round(rna.max / 2)));
+      rna.amount = Math.min(rna.max, rna.amount + gain);
+      return `☄️ 富含 RNA 的陨石撞击地球！获得 ${gain} RNA。`;
+    },
+  },
+
+  // legacy events.js L77-131: flare（行星耀斑，要求 ptrait:flare）
+  {
+    id: 'flare',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      const ptrait = (state.city as { ptrait?: string | string[] }).ptrait;
+      if (Array.isArray(ptrait)) return ptrait.includes('flare');
+      return ptrait === 'flare';
+    },
+    effect(state) {
+      const species = state.race.species;
+      const pop = state.resource[species];
+      if (!pop) return '☀️ 恒星耀斑爆发！';
+      const lost = Math.max(1, Math.floor(pop.amount * 0.05));
+      pop.amount = Math.max(0, pop.amount - lost);
+      state.stats.died = (state.stats.died ?? 0) + lost;
+      return `☀️ 恒星耀斑爆发！强烈辐射导致 ${lost} 名市民死亡。`;
+    },
+  },
+
+  // legacy events.js L300-332: terrorist
+  {
+    id: 'terrorist',
+    type: 'major',
+    reqs: { tech: 'world_control' },
+    effect(state) {
+      const garrison = state.civic.garrison;
+      const wounded = Math.floor(Math.random() * Math.max(1, garrison.workers - garrison.wounded));
+      const killed = Math.floor(Math.random() * Math.max(1, garrison.wounded));
+      garrison.workers = Math.max(0, garrison.workers - killed);
+      garrison.wounded = Math.min(garrison.workers, garrison.wounded + wounded);
+      state.stats.died = (state.stats.died ?? 0) + killed;
+      return killed > 0
+        ? `💣 恐怖袭击！${killed} 名士兵阵亡，${wounded} 名受伤。`
+        : `💣 恐怖袭击！${wounded} 名士兵受伤，无人阵亡。`;
+    },
+  },
+
+  // legacy events.js L334-348: quake（地震，需 ptrait:unstable 且 notech:quaked）
+  {
+    id: 'quake',
+    type: 'major',
+    reqs: { tech: 'wsc', notech: 'quaked' },
+    condition(state) {
+      const ptrait = (state.city as { ptrait?: string | string[] }).ptrait;
+      if (Array.isArray(ptrait)) return ptrait.includes('unstable');
+      return ptrait === 'unstable';
+    },
+    effect(state) {
+      state.tech['quaked'] = 1;
+      return `🌋 灾难性大地震！整个星球摇晃不止，文明命悬一线（解锁 Cataclysm 转生）。`;
+    },
+  },
+
+  // legacy events.js L349-363: doom（深井入侵）
+  {
+    id: 'doom',
+    type: 'major',
+    reqs: { tech: 'wsc', notech: 'portal_guard' },
+    condition(state) {
+      const sb = (state.space as Record<string, { on?: number }>)['space_barracks'];
+      return !!(sb && (sb.on ?? 0) > 0);
+    },
+    effect(state) {
+      (state.stats as Record<string, number>).portals = ((state.stats as Record<string, number>).portals ?? 0) + 1;
+      return `👹 地狱深渊裂开！恶魔从异世界涌出，地狱门已开启！`;
+    },
+  },
+
+  // legacy events.js L364-374: demon_influx（恶魔潮）
+  {
+    id: 'demon_influx',
+    type: 'major',
+    reqs: { tech: 'portal_guard' },
+    effect(state) {
+      const surge = rng(2500, 5000);
+      const portal = state.portal as Record<string, Record<string, number>>;
+      if (!portal['fortress']) portal['fortress'] = { threat: 0 };
+      portal['fortress'].threat = (portal['fortress'].threat ?? 0) + surge;
+      return `👹 恶魔潮汐！堡垒威胁等级 +${surge.toLocaleString()}。`;
+    },
+  },
+
+  // legacy events.js L375-396: ruins（古代遗迹）
+  {
+    id: 'ruins',
+    type: 'major',
+    reqs: { resource: 'Knowledge' },
+    condition(state) {
+      return !!state.race['ancient_ruins'];
+    },
+    effect(state) {
+      const resources = ['Iron', 'Copper', 'Steel', 'Cement'];
+      const gains: string[] = [];
+      for (const r of resources) {
+        const res = state.resource[r];
+        if (res?.display) {
+          const gain = rng(1, Math.max(1, Math.round(res.max / 4)));
+          res.amount = Math.min(res.max, res.amount + gain);
+          gains.push(`${gain} ${r}`);
+        }
+      }
+      return `🏛️ 探险队发现了古代遗迹！获得：${gains.join(', ') || '（无显著收获）'}`;
+    },
+  },
+
+  // legacy events.js L420-456: protest（抗议，republic 政体下）
+  {
+    id: 'protest',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return state.civic.govern?.type === 'republic';
+    },
+    effect(state) {
+      const duration = rng(30, 60);
+      (state.civic.govern as unknown as Record<string, unknown>)['protest'] = duration;
+      const reasons = ['住房', '工资', '言论', '环保', '反战', '反税', '反腐', '宗教', '工作', '权利'];
+      const reason = reasons[rng(0, reasons.length)];
+      return `📢 抗议活动！市民走上街头要求${reason}改革，将持续 ${ticksToTime(duration)}。`;
+    },
+  },
+
+  // legacy events.js L457-490: scandal（政治丑闻）
+  {
+    id: 'scandal',
+    type: 'major',
+    reqs: { tech: 'govern' },
+    effect(state) {
+      const duration = rng(15, 90);
+      (state.civic.govern as unknown as Record<string, unknown>)['scandal'] = duration;
+      const scandals = [
+        '贪污受贿', '婚外情', '滥用职权', '逃税', '诽谤政敌',
+        '徇私舞弊', '骗取选票', '私人飞机', '违反规定', '泄密',
+      ];
+      const scandal = scandals[rng(0, scandals.length)];
+      return `📰 政坛丑闻！高官${scandal}案件曝光，民意大跌！`;
+    },
+  },
+
+  // legacy events.js L547-583: klepto（盗贼，rogue trait）
+  {
+    id: 'klepto',
+    type: 'major',
+    reqs: { resource: 'Money' },
+    condition(state) {
+      return !!state.race['rogue'];
+    },
+    effect(state) {
+      const candidates = ['Money', 'Food', 'Lumber', 'Stone', 'Iron', 'Coal', 'Steel'];
+      const stealList = candidates.filter((r) => state.resource[r]?.display);
+      if (stealList.length === 0) return '🦝 盗贼一无所获。';
+      const res = stealList[rng(0, stealList.length)];
+      const target = state.resource[res];
+      const maxGain = Math.max(1, Math.round((state.stats['know'] as number ?? 0) / 25));
+      const gain = rng(1, maxGain);
+      if (target) {
+        target.amount = target.max < 0 ? target.amount + gain : Math.min(target.max, target.amount + gain);
+      }
+      return `🦝 我们的盗贼带回了 ${gain} ${res}！`;
+    },
+  },
+
+  // legacy events.js L288-298: witch_hunt_crusade（魔女审判）
+  {
+    id: 'witch_hunt_crusade',
+    type: 'major',
+    reqs: { tech: 'magic' },
+    condition(state) {
+      const sus = state.resource['Sus']?.amount ?? 0;
+      return !!state.race['witch_hunter'] && sus >= 100;
+    },
+    effect(_state) {
+      return `🔥 魔女狩猎十字军！邻邦被指控藏匿魔女，圣战开始！`;
+    },
+  },
+
+  // legacy events.js L608-625: brawl（aggressive trait 主战）
+  {
+    id: 'brawl',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['aggressive'];
+    },
+    effect(state) {
+      const garrison = state.civic.garrison;
+      const dead = Math.min(garrison.workers, rng(1, 11));
+      garrison.workers = Math.max(0, garrison.workers - dead);
+      state.stats.died = (state.stats.died ?? 0) + dead;
+      return `🥊 士兵爆发斗殴！${dead} 名士兵在混战中身亡。`;
+    },
+  },
+
+  // legacy events.js L627-717: m_curious（好奇，curious trait）
+  {
+    id: 'm_curious',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return !!state.race['curious'] && (state.resource[species]?.amount ?? 0) >= 40;
+    },
+    effect(state) {
+      const path = rng(0, 5);
+      switch (path) {
+        case 0: {
+          const vol = rng(50000, 5_000_000);
+          clampResource(state, 'Money', vol);
+          return `🔍 一位市民找到了一笔财富！获得 ${vol.toLocaleString()} 金钱。`;
+        }
+        case 1: {
+          const species = state.race.species;
+          const pop = state.resource[species];
+          if (pop) pop.amount = Math.max(0, pop.amount - 10);
+          return `🔍 10 名市民因好奇心丧命。`;
+        }
+        case 2:
+          state.race['inspired'] = rng(600, 1200);
+          return `🔍 一位市民的探索带来了灵感爆发！`;
+        case 3:
+          state.race['distracted'] = rng(200, 600);
+          return `🔍 市民们被一件趣事分心了。`;
+        case 4:
+          return `🔍 一位市民发现了奇怪的东西，但什么也没发生。`;
+        default:
+          return `🔍 没有什么有趣的发生。`;
+      }
+    },
+  },
+
+  // ---- 追加 minor 事件 ----
+
+  // basicEvent: flashmob
+  {
+    id: 'flashmob',
+    type: 'minor',
+    reqs: { tech: 'high_tech' },
+    effect(_state) {
+      return `📱 市中心广场出现了一场快闪表演，市民们纷纷拍照留念。`;
+    },
+  },
+
+  // basicEvent: cucumber
+  {
+    id: 'cucumber',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🥒 集市上出现了一根超大黄瓜，引来众人围观。`;
+    },
+  },
+
+  // basicEvent: planking
+  {
+    id: 'planking',
+    type: 'minor',
+    reqs: { tech: 'high_tech' },
+    effect(_state) {
+      return `🪵 网络流行"平板挑战"，市民纷纷在奇怪地方躺平拍照。`;
+    },
+  },
+
+  // basicEvent: furryfish
+  {
+    id: 'furryfish',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🐟 渔夫捞起一条长着毛皮的奇怪鱼，被博物馆征用。`;
+    },
+  },
+
+  // basicEvent: hum
+  {
+    id: 'hum',
+    type: 'minor',
+    reqs: { tech: 'high_tech' },
+    effect(_state) {
+      return `🔊 整座城市听到一种神秘嗡嗡声，原因不明。`;
+    },
+  },
+
+  // basicEvent: bloodrain
+  {
+    id: 'bloodrain',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🩸 天降血雨！这绝对不是什么好兆头。`;
+    },
+  },
+
+  // basicEvent: haunting
+  {
+    id: 'haunting',
+    type: 'minor',
+    reqs: { tech: 'science' },
+    effect(_state) {
+      return `👻 城中传言某栋建筑闹鬼，市民们议论纷纷。`;
+    },
+  },
+
+  // basicEvent: mothman
+  {
+    id: 'mothman',
+    type: 'minor',
+    reqs: { tech: 'science' },
+    effect(_state) {
+      return `🦋 有人在夜里目击到了天蛾人，引发了一阵恐慌。`;
+    },
+  },
+
+  // basicEvent: dejavu
+  {
+    id: 'dejavu',
+    type: 'minor',
+    reqs: { tech: 'theology' },
+    effect(_state) {
+      return `🌀 整个城市的居民同时感受到了强烈的似曾相识感。`;
+    },
+  },
+
+  // basicEvent: cloud
+  {
+    id: 'cloud',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      const shapes = ['一只兔子', '一艘飞船', '一头巨龙', '一张人脸', '一个王冠', '一颗心', '一座城堡', '一只猫', '一柄宝剑', '一颗树', '一辆马车'];
+      return `☁️ 一朵奇特的云像极了${shapes[rng(0, shapes.length)]}。`;
+    },
+  },
+
+  // basicEvent: tracks
+  {
+    id: 'tracks',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🐾 城外发现了奇怪的足迹，没有人能识别。`;
+    },
+  },
+
+  // basicEvent: hoax
+  {
+    id: 'hoax',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🃏 有人散布了一个大型恶作剧，让全城上当。`;
+    },
+  },
+
+  // basicEvent: burial
+  {
+    id: 'burial',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `⚱️ 考古发现了一座古老的墓地，引发了学术争议。`;
+    },
+  },
+
+  // basicEvent: artifacts
+  {
+    id: 'artifacts',
+    type: 'minor',
+    reqs: { tech: 'high_tech' },
+    effect(_state) {
+      return `📜 考古队挖出一批古代文物，每件都让人困惑。`;
+    },
+  },
+
+  // basicEvent: parade
+  {
+    id: 'parade',
+    type: 'minor',
+    reqs: { tech: 'world_control' },
+    effect(_state) {
+      return `🎉 城市举办了盛大游行，市民们欢欣鼓舞。`;
+    },
+  },
+
+  // basicEvent: cat
+  {
+    id: 'cat',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🐱 一只流浪猫在市政厅前赖着不走，被市民收养。`;
+    },
+  },
+
+  // basicEvent: theft
+  {
+    id: 'theft',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      const things = ['一袋面粉', '半罐糖', '一双鞋', '一面旗帜', '一袋金币', '一个雕像', '一本日记', '一把斧头', '一桶水', '一根胡萝卜'];
+      return `🚨 有人偷走了${things[rng(0, things.length)]}！警卫正在调查。`;
+    },
+  },
+
+  // basicEvent: bone
+  {
+    id: 'bone',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `🦴 考古队挖出了奇怪的骨头碎片，专家们正在鉴定。`;
+    },
+  },
+
+  // basicEvent: delicacy
+  {
+    id: 'delicacy',
+    type: 'minor',
+    reqs: { tech: 'high_tech' },
+    effect(_state) {
+      return `🍱 一道珍贵的料理风靡全城，餐厅排起长龙。`;
+    },
+  },
+
+  // basicEvent: prank
+  {
+    id: 'prank',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      return `😜 几个年轻人搞了恶作剧，引来一阵笑声。`;
+    },
+  },
+
+  // basicEvent: graffiti
+  {
+    id: 'graffiti',
+    type: 'minor',
+    reqs: { tech: 'science' },
+    effect(_state) {
+      return `🖌️ 市政大楼出现了神秘涂鸦，引发讨论。`;
+    },
+  },
+
+  // basicEvent: soul
+  {
+    id: 'soul',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['soul_eater'];
+    },
+    effect(_state) {
+      return `👁️ 黑暗中飘过几缕灵魂气息，让食魂者垂涎欲滴。`;
+    },
+  },
+
+  // legacy events.js L964-980: cheese
+  {
+    id: 'cheese',
+    type: 'minor',
+    reqs: { tech: 'banking' },
+    condition(state) {
+      return (state.tech['banking'] ?? 0) >= 7;
+    },
+    effect(state) {
+      const resets = (state.stats['reset'] as number) ?? 0;
+      state.race['cheese'] = rng(10, 10 + resets);
+      return `🧀 城市突然奉行了"奶酪运动"，市民们都开始痴迷于奶酪。`;
+    },
+  },
+
+  // basicEvent: rumor
+  {
+    id: 'rumor',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(_state) {
+      const rumors = [
+        '邻邦元首是个机器人',
+        '城东有座宝藏',
+        '国王私通巫师',
+        '魔法是真实的',
+        '外星人正在监视',
+        '地下生活着一群矮人',
+        '巫师能预知未来',
+        '城墙下埋有古老的怪物',
+        '我们的钱币里藏有密码',
+        '一些猫其实是间谍',
+      ];
+      return `📢 流言四起："${rumors[rng(0, rumors.length)]}"。`;
+    },
+  },
+
+  // legacy events.js L986-1009: pet（宠物）
+  {
+    id: 'pet',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    effect(state) {
+      if ((state.race as Record<string, unknown>)['pet']) {
+        const pet = state.race['pet'] as { event?: number };
+        pet.event = (pet.event ?? 0) + rng(300, 600);
+        return `🐾 城里的宠物又做了一件可爱的事情。`;
+      } else {
+        const petType = state.race['catnip']
+          ? 'cat'
+          : state.race['anise']
+          ? 'dog'
+          : rng(0, 2) === 0 ? 'cat' : 'dog';
+        state.race['pet'] = { type: petType, name: rng(0, 12), event: 0, pet: 0 };
+        return `🐾 市长养了一只${petType === 'cat' ? '猫' : '狗'}，全城都很喜欢！`;
+      }
+    },
+  },
+
+  // basicEvent: witch_hunt (minor variant)
+  {
+    id: 'witch_hunt',
+    type: 'minor',
+    reqs: { tech: 'magic' },
+    condition(state) {
+      const sus = state.resource['Sus']?.amount ?? 0;
+      const scientist = (state.civic['scientist'] as { workers?: number } | undefined)?.workers ?? 0;
+      return !!state.race['witch_hunter'] && sus >= 50 && scientist > 0;
+    },
+    effect(state) {
+      const species = state.race.species;
+      const pop = state.resource[species];
+      if (pop) pop.amount = Math.max(0, pop.amount - 1);
+      const scientist = state.civic['scientist'] as { workers?: number; assigned?: number };
+      if (scientist) {
+        scientist.workers = Math.max(0, (scientist.workers ?? 0) - 1);
+        scientist.assigned = Math.max(0, (scientist.assigned ?? 0) - 1);
+      }
+      return `🧙 巫师猎人审判了一名科学家，1 名科学家被处决。`;
+    },
+  },
+
+  // basicEvent: chicken (chicken trait variant)
+  {
+    id: 'chicken',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return !!state.race['chicken'] && (state.resource[species]?.amount ?? 0) > 0;
+    },
+    effect(state) {
+      const species = state.race.species;
+      const pop = state.resource[species];
+      if (pop) pop.amount = Math.max(0, pop.amount - 1);
+      return `🍗 一只懦弱的市民被吃掉了，全城感到一丝凉意。`;
+    },
+  },
+
+  // basicEvent: fight (aggressive trait minor variant)
+  {
+    id: 'fight',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      const species = state.race.species;
+      return !!state.race['aggressive'] && (state.resource[species]?.amount ?? 0) > 0;
+    },
+    effect(state) {
+      const species = state.race.species;
+      const dead = rng(1, 4);
+      const pop = state.resource[species];
+      if (pop) {
+        const actual = Math.min(pop.amount, dead);
+        pop.amount = Math.max(0, pop.amount - actual);
+        state.stats.died = (state.stats.died ?? 0) + actual;
+        return `🥊 几位市民因争吵爆发斗殴，${actual} 人不幸丧命。`;
+      }
+      return '🥊 几位市民因争吵打架，所幸无人死亡。';
+    },
+  },
+
+  // legacy events.js L718-727: curious1
+  {
+    id: 'curious1',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['curious'];
+    },
+    effect(_state) {
+      const observations = [
+        '一只猫盯着虚空，仿佛看见了什么。',
+        '一只鸟莫名其妙地飞向天空。',
+        '河边有几条彩色的鱼。',
+        '夜里听到奇怪的低语。',
+        '集市上有人用奇怪的语言交谈。',
+      ];
+      return `🔍 ${observations[rng(0, observations.length)]}`;
+    },
+  },
+
+  // legacy events.js L729-738: curious2
+  {
+    id: 'curious2',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['curious'];
+    },
+    effect(_state) {
+      const observations = [
+        '一位探险家带回了奇异的种子。',
+        '挖掘队在地下发现了荧光蘑菇。',
+        '天文学家观察到罕见的星象。',
+        '商队带来了远方的传说。',
+        '医生发现了新的药用植物。',
+      ];
+      return `🔍 ${observations[rng(0, observations.length)]}`;
+    },
+  },
+
+  // slave_death1/2/3 (major)
+  {
+    id: 'slave_death1',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['slaver'];
+    },
+    effect(state) {
+      const slaves = state.city['slave_pen'] as { count?: number; slaves?: number } | undefined;
+      if (slaves?.slaves) slaves.slaves = Math.max(0, slaves.slaves - 1);
+      return `⛓️ 一名奴隶因过度劳累死亡。`;
+    },
+  },
+  {
+    id: 'slave_death2',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['slaver'];
+    },
+    effect(state) {
+      const slaves = state.city['slave_pen'] as { slaves?: number } | undefined;
+      const dead = rng(2, 5);
+      if (slaves?.slaves) slaves.slaves = Math.max(0, slaves.slaves - dead);
+      return `⛓️ ${dead} 名奴隶在事故中丧生。`;
+    },
+  },
+  {
+    id: 'slave_death3',
+    type: 'major',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['slaver'];
+    },
+    effect(state) {
+      const slaves = state.city['slave_pen'] as { slaves?: number } | undefined;
+      const dead = rng(5, 10);
+      if (slaves?.slaves) slaves.slaves = Math.max(0, slaves.slaves - dead);
+      return `⛓️ 严重事故！${dead} 名奴隶死亡。`;
+    },
+  },
+  {
+    id: 'slave_escape1',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['slaver'];
+    },
+    effect(state) {
+      const slaves = state.city['slave_pen'] as { slaves?: number } | undefined;
+      if (slaves?.slaves) slaves.slaves = Math.max(0, slaves.slaves - 1);
+      return `🏃 一名奴隶趁夜逃跑了。`;
+    },
+  },
+  {
+    id: 'slave_escape2',
+    type: 'minor',
+    reqs: { tech: 'primitive' },
+    condition(state) {
+      return !!state.race['slaver'];
+    },
+    effect(state) {
+      const slaves = state.city['slave_pen'] as { slaves?: number } | undefined;
+      const escaped = rng(2, 5);
+      if (slaves?.slaves) slaves.slaves = Math.max(0, slaves.slaves - escaped);
+      return `🏃 ${escaped} 名奴隶集体逃亡！`;
+    },
+  },
 ];
 
 // ============================================================

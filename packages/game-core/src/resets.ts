@@ -10,6 +10,8 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { checkResetAchievements } from './achievement-triggers';
+import { applyUniverse, UNIVERSES, type UniverseType } from './bigbang';
 
 // ============================================================
 // 转生类型枚举
@@ -195,7 +197,8 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
   };
 
   const rc = getResetConstants(type);
-  let { pop_divisor, k_mult, phage_mult, plasmid_cap } = rc;
+  let { pop_divisor, plasmid_cap } = rc;
+  const { k_mult, phage_mult } = rc;
   let k_inc = rc.k_inc;
 
   // --- 人口计算 ---
@@ -283,7 +286,7 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
     gains.dark   = +(new_dark * cm).toFixed(3);
   } else if (type === 'vacuum') {
     const manaGen = (state.resource['Mana'] as unknown as Record<string, number> | undefined)?.['gen'] ?? 0;
-    let new_dark = +(Math.log2(Math.max(1, manaGen)) / 5).toFixed(3);
+    const new_dark = +(Math.log2(Math.max(1, manaGen)) / 5).toFixed(3);
     gains.dark   = +(new_dark * cm).toFixed(3);
   }
 
@@ -492,7 +495,7 @@ export function resetCataclysm(state: GameState): GameState | null {
  * 奖励：Phage + Plasmid + Dark
  * 目标宇宙：bigbang
  */
-export function resetBlackhole(state: GameState): GameState {
+export function resetBlackhole(state: GameState, targetUniverse?: string): GameState {
   const newState: GameState = JSON.parse(JSON.stringify(state));
 
   const gains = calcPrestigeGains(newState, 'blackhole');
@@ -510,11 +513,14 @@ export function resetBlackhole(state: GameState): GameState {
   const srace = newState.race['srace'] as string | false ?? false;
   const corruption = getCorruption(newState);
 
+  // 默认进入 bigbang 重启同一宇宙；玩家可指定切换到 magic / heavy / micro / antimatter / evil
+  const newUniverse = targetUniverse ?? 'bigbang';
+
   newState.race = {
     species: 'protoplasm',
     gods: god,
     old_gods: oldGod,
-    universe: 'bigbang',
+    universe: newUniverse,
     seeded: true,
     bigbang: true,
     probes: 4,
@@ -523,6 +529,11 @@ export function resetBlackhole(state: GameState): GameState {
   };
   if (corruption > 0) newState.race['corruption'] = corruption;
   if (srace) newState.race['srace'] = srace;
+
+  // 应用宇宙类型特殊效果（如 magic 自动启用 Mana）
+  if (newUniverse !== 'bigbang' && (UNIVERSES as Record<string, unknown>)[newUniverse]) {
+    applyUniverse(newState, newUniverse as UniverseType);
+  }
 
   resetCommon(newState, { orbit, biome, ptrait, geology: false });
   return newState;
@@ -741,19 +752,192 @@ export function canReset(state: GameState, type: ResetType): boolean {
 
 export function triggerReset(state: GameState, type: ResetType): GameState | null {
   if (!canReset(state, type)) return null;
+  // 先触发成就（在 state 重置前读取当前种族 / tech）
+  checkResetAchievements(state, type);
+
   switch (type) {
     case 'mad':       return resetMAD(state);
     case 'bioseed':   return resetBioseed(state);
     case 'cataclysm': return resetCataclysm(state);
     case 'blackhole': return resetBlackhole(state);
-    case 'vacuum':    return resetBlackhole(state);  // vacuumCollapse 与 blackhole 共用逻辑
+    case 'vacuum':    return resetBlackhole(state);
     case 'ascend':    return resetAscend(state);
     case 'descend':   return resetDescend(state);
     case 'apotheosis':return resetApotheosis(state);
     case 'retire':    return resetRetire(state);
-    // terraform / aiApoc / matrix / eden 留待 portal.ts 完成后补全
+    case 'terraform': return resetTerraform(state);
+    case 'aiApoc':    return resetAiApocalypse(state);
+    case 'matrix':    return resetMatrix(state);
+    case 'eden':      return resetGardenOfEden(state);
     default:          return null;
   }
+}
+
+// ============================================================
+// 扩展转生：terraform / aiApoc / matrix / eden
+// ============================================================
+
+/**
+ * Terraform（地球化）转生 — 对标 legacy/src/resets.js terraform L844-931
+ * 触发：拥有 terraform 科技 ≥ 5，选择新行星
+ * 奖励：Phage + Plasmid + Harmony
+ * 保留：geo（不重置），所有地质 +0.02
+ */
+export function resetTerraform(state: GameState): GameState {
+  const newState: GameState = JSON.parse(JSON.stringify(state));
+
+  const gains = calcPrestigeGains(newState, 'terraform');
+  applyPlasmid(newState, gains.plasmid);
+  applyPhage(newState, gains.phage);
+  applyHarmony(newState, gains.harmony);
+  newState.stats = incrementStat(newState.stats, 'terraform');
+
+  const god = newState.race.species;
+  const oldGod = newState.race.gods;
+  const orbit = getOrbit(newState);
+  const biome = getBiome(newState);
+  const ptrait = getPtrait(newState);
+  const srace = newState.race['srace'] as string | false ?? false;
+  const corruption = getCorruption(newState);
+
+  // 地质 +0.02
+  const geo = getGeology(newState);
+  for (const g of Object.keys(geo)) {
+    geo[g] = +((geo[g] + 0.02).toFixed(2));
+  }
+
+  newState.race = {
+    species: 'protoplasm',
+    gods: god,
+    old_gods: oldGod,
+    universe: newState.race.universe,
+    seeded: false,
+    seed: Math.floor(Math.random() * 10000),
+    ascended: newState.race['ascended'] ?? false,
+    rejuvenated: true,
+  };
+  if (corruption > 0) newState.race['corruption'] = corruption;
+  if (srace) newState.race['srace'] = srace;
+
+  resetCommon(newState, { orbit, biome, ptrait, geology: geo });
+  return newState;
+}
+
+/**
+ * AI Apocalypse（AI 末日）转生 — 对标 legacy/src/resets.js aiApocalypse L934-1043
+ * 触发：ai_core 科技 ≥ 5（titan AI 核心已建造并通电）
+ * 奖励：Phage + Plasmid + AICore
+ * 携带：种族变更为 synth
+ */
+export function resetAiApocalypse(state: GameState): GameState {
+  const newState: GameState = JSON.parse(JSON.stringify(state));
+
+  const gains = calcPrestigeGains(newState, 'aiApoc');
+  applyPlasmid(newState, gains.plasmid);
+  applyPhage(newState, gains.phage);
+  applyAICore(newState, gains.artifact);
+  newState.stats = incrementStat(newState.stats, 'aiApoc');
+
+  const god = newState.race.species;
+  const oldGod = newState.race.gods;
+  const orbit = getOrbit(newState);
+  const biome = getBiome(newState);
+  const ptrait = getPtrait(newState);
+  const geo = getGeology(newState);
+
+  // AI 末日：保存原种族 ID 为 srace，自身变为 synth
+  newState.race = {
+    species: 'protoplasm',
+    gods: god,
+    old_gods: oldGod,
+    universe: newState.race.universe,
+    seeded: false,
+    seed: Math.floor(Math.random() * 10000),
+    ascended: newState.race['ascended'] ?? false,
+    srace: god,  // 用 srace 记录原种族，便于 synth 复制
+  };
+
+  resetCommon(newState, { orbit, biome, ptrait, geology: geo });
+  return newState;
+}
+
+/**
+ * Matrix（矩阵）转生 — 对标 legacy/src/resets.js matrix L1046-1093
+ * 触发：完成 matrix 科技（eris 上完成 matrix 项目）
+ * 奖励：Phage + Plasmid
+ */
+export function resetMatrix(state: GameState): GameState {
+  const newState: GameState = JSON.parse(JSON.stringify(state));
+
+  const gains = calcPrestigeGains(newState, 'matrix');
+  applyPlasmid(newState, gains.plasmid);
+  applyPhage(newState, gains.phage);
+  newState.stats = incrementStat(newState.stats, 'matrix');
+
+  const god = newState.race.species;
+  const oldGod = newState.race.gods;
+  const orbit = getOrbit(newState);
+  const biome = getBiome(newState);
+  const ptrait = getPtrait(newState);
+  const geo = getGeology(newState);
+  const srace = newState.race['srace'] as string | false ?? false;
+  const corruption = getCorruption(newState);
+
+  newState.race = {
+    species: 'protoplasm',
+    gods: god,
+    old_gods: oldGod,
+    universe: newState.race.universe,
+    seeded: false,
+    seed: Math.floor(Math.random() * 10000),
+    ascended: newState.race['ascended'] ?? false,
+    matrix: true,
+  };
+  if (corruption > 0) newState.race['corruption'] = corruption;
+  if (srace) newState.race['srace'] = srace;
+
+  resetCommon(newState, { orbit, biome, ptrait, geology: geo });
+  return newState;
+}
+
+/**
+ * Garden of Eden（伊甸园）转生 — 对标 legacy/src/resets.js gardenOfEden L1180-1262
+ * 触发：完成 eden 科技 ≥ 1（apotheosis 已激活）
+ * 奖励：Plasmid + Phage + Harmony（小于 ascend，专属 eden 路径）
+ */
+export function resetGardenOfEden(state: GameState): GameState {
+  const newState: GameState = JSON.parse(JSON.stringify(state));
+
+  const gains = calcPrestigeGains(newState, 'eden');
+  applyPlasmid(newState, gains.plasmid);
+  applyPhage(newState, gains.phage);
+  applyHarmony(newState, gains.harmony);
+  newState.stats = incrementStat(newState.stats, 'eden');
+
+  const god = newState.race.species;
+  const oldGod = newState.race.gods;
+  const orbit = getOrbit(newState);
+  const biome = getBiome(newState);
+  const ptrait = getPtrait(newState);
+  const geo = getGeology(newState);
+  const srace = newState.race['srace'] as string | false ?? false;
+  const corruption = getCorruption(newState);
+
+  newState.race = {
+    species: 'protoplasm',
+    gods: god,
+    old_gods: oldGod,
+    universe: newState.race.universe,
+    seeded: false,
+    seed: Math.floor(Math.random() * 10000),
+    ascended: true,
+    edenic: true,
+  };
+  if (corruption > 0) newState.race['corruption'] = corruption;
+  if (srace) newState.race['srace'] = srace;
+
+  resetCommon(newState, { orbit, biome, ptrait, geology: geo });
+  return newState;
 }
 
 // ============================================================

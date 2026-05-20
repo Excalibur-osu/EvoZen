@@ -66,6 +66,68 @@ export function armyRating(
     army *= rageVars()[0];
   }
 
+  // 种族 trait 战斗加成
+  // apex_predator：狩猎/战斗显著提升
+  if (state.race['apex_predator']) {
+    const rank = (state.race['apex_predator'] as number) || 1;
+    // vars[0]: combat bonus pct
+    const mul = rank === 0.1 ? 10 : rank === 0.25 ? 15 : rank === 0.5 ? 20 : rank === 1 ? 30 : rank === 2 ? 40 : rank === 3 ? 45 : 50;
+    army *= 1 + mul / 100;
+  }
+  // fiery (balorg)：主要战争加成
+  if (state.race['fiery']) {
+    const rank = (state.race['fiery'] as number) || 1;
+    const mul = rank === 0.1 ? 20 : rank === 0.25 ? 30 : rank === 0.5 ? 40 : rank === 1 ? 65 : rank === 2 ? 70 : rank === 3 ? 72 : 74;
+    army *= 1 + mul / 100;
+  }
+  // swift (ghast)：战斗加成
+  if (state.race['swift']) {
+    const rank = (state.race['swift'] as number) || 1;
+    const mul = rank === 0.1 ? 20 : rank === 0.25 ? 35 : rank === 0.5 ? 55 : rank === 1 ? 75 : rank === 2 ? 85 : rank === 3 ? 90 : 92;
+    army *= 1 + mul / 100;
+  }
+  // sniper (centaur)：武器升级 +X%
+  if (state.race['sniper'] && state.tech['military']) {
+    const rank = (state.race['sniper'] as number) || 1;
+    const mul = rank === 0.1 ? 3 : rank === 0.25 ? 4 : rank === 0.5 ? 6 : rank === 1 ? 8 : rank === 2 ? 9 : rank === 3 ? 10 : 11;
+    const techMil = (state.tech['military'] as number) - 1;
+    army *= 1 + (techMil * mul) / 100;
+  }
+  // pathetic (imp): -X% army
+  if (state.race['pathetic']) {
+    const rank = (state.race['pathetic'] as number) || 1;
+    const mul = rank === 0.1 ? 40 : rank === 0.25 ? 35 : rank === 0.5 ? 30 : rank === 1 ? 25 : rank === 2 ? 20 : rank === 3 ? 15 : 12;
+    army *= 1 - mul / 100;
+  }
+  // claws (scorpid): army roll upper bound +X%
+  if (state.race['claws']) {
+    const rank = (state.race['claws'] as number) || 1;
+    const mul = rank === 0.1 ? 5 : rank === 0.25 ? 8 : rank === 0.5 ? 12 : rank === 1 ? 25 : rank === 2 ? 32 : rank === 3 ? 35 : 38;
+    army *= 1 + mul / 100;
+  }
+  // grenadier (bombardier)：士兵单兵更强 但 fewer
+  if (state.race['grenadier']) {
+    const rank = (state.race['grenadier'] as number) || 1;
+    const mul = rank === 0.1 ? 100 : rank === 0.25 ? 110 : rank === 0.5 ? 125 : rank === 1 ? 150 : rank === 2 ? 175 : rank === 3 ? 200 : 225;
+    army *= mul / 100;
+  }
+
+  // Magic ritual: army
+  const casting = state.race['casting'] as Record<string, number> | undefined;
+  if (casting?.['army']) {
+    army *= 1 + casting['army'] * 0.005;
+  }
+
+  // weather: cautious 雨天 -X% 战斗力
+  if (state.race['cautious']) {
+    const w = state.city.calendar?.weather ?? 2;
+    if (w === 0) {
+      const rank = (state.race['cautious'] as number) || 1;
+      const mul = rank === 0.1 ? 16 : rank === 0.25 ? 14 : rank === 0.5 ? 12 : rank === 1 ? 10 : rank === 2 ? 8 : rank === 3 ? 6 : 4;
+      army *= 1 - mul / 100;
+    }
+  }
+
   return Math.max(army, 0);
 }
 
@@ -76,13 +138,28 @@ export function armyRating(
 
 export function armorCalc(deaths: number, state: GameState): number {
   const armorLevel = state.tech['armor'] ?? 0;
-  if (armorLevel === 0) return 0;
-
-  // 每级护甲减少 ~1 名死亡
   let armored = armorLevel;
-  if (armored > deaths) {
-    armored = deaths;
+
+  // 种族 trait armored (tortoisan): 战斗减少阵亡
+  if (state.race['armored']) {
+    const rank = (state.race['armored'] as number) || 1;
+    // vars[0]: chance pct
+    const chance = rank === 0.1 ? 10 : rank === 0.25 ? 15 : rank === 0.5 ? 25 : rank === 1 ? 50 : rank === 2 ? 70 : rank === 3 ? 80 : 85;
+    armored += Math.floor(deaths * chance / 100);
   }
+  // scales (reptilian): 减少阵亡
+  if (state.race['scales']) {
+    const rank = (state.race['scales'] as number) || 1;
+    const reduce = rank === 0.1 ? 1 : rank === 0.25 ? 1 : rank === 0.5 ? 1 : rank === 1 ? 2 : rank === 2 ? 2 : rank === 3 ? 2 : 3;
+    armored += reduce;
+  }
+  // apex_predator: 无护甲（即护甲返回 0）
+  if (state.race['apex_predator']) armored = 0;
+  // frail (mantis): 增加阵亡（即护甲降低）
+  if (state.race['frail']) armored = Math.max(0, armored - 1);
+
+  if (armorLevel === 0 && armored === 0) return 0;
+  if (armored > deaths) armored = deaths;
   return armored;
 }
 

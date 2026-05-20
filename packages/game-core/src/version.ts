@@ -9,4 +9,4 @@
  */
 
 /** 存档格式版本，破坏性变更时才修改 */
-export const SAVE_VERSION = '0.7.0';
+export const SAVE_VERSION = '0.9.0';

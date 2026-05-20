@@ -49,6 +49,7 @@ const MONUMENT_RES_LABEL: Record<MonumentType, string> = {
   Sculpture:'钢铁 ×300,000',
   Monolith: '水泥 ×300,000',
   Pillar:   '木材 ×1,000,000',
+  Megalith: '水晶 ×55,000',
 }
 const MONUMENT_ICON: Record<MonumentType, string> = {
   Obelisk:  '🗿',
@@ -56,8 +57,9 @@ const MONUMENT_ICON: Record<MonumentType, string> = {
   Sculpture:'🪨',
   Monolith: '🧱',
   Pillar:   '🏛️',
+  Megalith: '🪐',
 }
-const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith','Pillar']
+const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith','Pillar','Megalith']
 </script>
 
 <template>

@@ -33,6 +33,16 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const s = state;
   const species = s.race.species;
 
+  // 自动 display：任何 amount>0 或 max>0 的资源都标记 display=true
+  // 这让 Phase 4/5 新增的资源（Mana/Soul_Gem/Asphodel_Powder 等）在使用时自动出现在 UI
+  for (const [id, res] of Object.entries(s.resource)) {
+    if (res && !res.display && ((res.amount ?? 0) > 0 || (res.max ?? 0) > 0)) {
+      if (id !== 'RNA' && id !== 'DNA') {  // 进化阶段资源由 evolution 模块控制
+        res.display = true;
+      }
+    }
+  }
+
   const getStructCount = (id: string): number =>
     (s.city[id] as { count: number } | undefined)?.count ?? 0;
   const getSpaceCount = (id: string): number =>
@@ -497,6 +507,68 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const visibleResCount = Object.values(s.resource).filter((res) => res.display).length;
   if (visibleResCount >= 6) {
     s.settings.showResources = true;
+  }
+
+  // ============================================================
+  // ARPA 完成效果（持续加成）
+  // ============================================================
+
+  const arpa = s.arpa as Record<string, { rank?: number } | unknown> | undefined;
+
+  // stock_exchange: 银行容量 +10% / rank
+  if (arpa) {
+    const seRank = ((arpa['stock_exchange'] as { rank?: number } | undefined)?.rank) ?? 0;
+    if (seRank > 0 && s.resource['Money']) {
+      s.resource['Money'].max = Math.floor(s.resource['Money'].max * (1 + seRank * 0.1));
+    }
+  }
+
+  // tp_depot: +5 贸易路线 / rank（在 trade.ts getMaxTradeRoutes 中应用）— 此处仅启用 settings
+  // railway: +2 贸易路线 / rank — 同上
+  // 这两项在 trade 模块查询时实时读取 arpa.rank，无需 derived-state 修改
+
+  // roid_eject: 累积质量影响 Dark Energy 产出（小行星弹射器，需要 blackhole 阶段）
+  // 实际产出在 stellar_engine / interstellar 中处理（接入点已存在）
+
+  // ============================================================
+  // Ancient Pillar 调谐加成（Harmony 调谐过的柱子持续提供全球加成）
+  // ============================================================
+
+  const portal = s.portal as Record<string, Record<string, number>> | undefined;
+  const tunedPillars = portal?.['ancient_pillars']?.['tuned'] ?? 0;
+  if (tunedPillars > 0) {
+    // 每柱 +5% 全球产出，存在 race._pillar_bonus 供 tick.ts 读取
+    (s.race as Record<string, unknown>)['_pillar_bonus'] = 1 + 0.05 * tunedPillars;
+  } else {
+    (s.race as Record<string, unknown>)['_pillar_bonus'] = 1;
+  }
+
+  // ============================================================
+  // 自动 display：基于科技/建筑解锁
+  // ============================================================
+  if ((s.tech['magic'] ?? 0) >= 1 && s.resource['Mana']) {
+    s.resource['Mana'].display = true;
+    if (s.resource['Mana'].max === 0) s.resource['Mana'].max = 100;  // 解锁后基础 100
+  }
+  if ((s.tech['magic'] ?? 0) >= 1 && s.resource['Crystal']) {
+    s.resource['Crystal'].display = true;
+    if (s.resource['Crystal'].max === 0) s.resource['Crystal'].max = 500;
+  }
+  if ((s.tech['portal'] ?? 0) >= 2 && s.resource['Soul_Gem']) {
+    s.resource['Soul_Gem'].display = true;
+    s.resource['Soul_Gem'].max = -1;  // 无上限
+  }
+  if ((s.tech['hell_pit'] ?? 0) >= 5 && s.resource['Asphodel_Powder']) {
+    s.resource['Asphodel_Powder'].display = true;
+    s.resource['Asphodel_Powder'].max = 10000;
+  }
+  if ((s.tech['hell_gate'] ?? 0) >= 4 && s.resource['Infernite']) {
+    s.resource['Infernite'].display = true;
+    s.resource['Infernite'].max = 100000;
+  }
+  if ((s.tech['edenic'] ?? 0) >= 1 && s.resource['Ectoplasm']) {
+    s.resource['Ectoplasm'].display = true;
+    s.resource['Ectoplasm'].max = 100000;
   }
 }
 

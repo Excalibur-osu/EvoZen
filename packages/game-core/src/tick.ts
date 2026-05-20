@@ -21,7 +21,30 @@ import {
 } from './government';
 import { BASIC_STRUCTURES } from './structures';
 import { RESOURCE_VALUES } from './resources';
-import { getProfessorTraitBonus, getTaxIncomeTraitMultiplier, getHungerMultiplier } from './traits';
+import {
+  getProfessorTraitBonus,
+  getTaxIncomeTraitMultiplier,
+  getHungerMultiplier,
+  getWeakWorkerMultiplier,
+  getToughMiningMultiplier,
+  getIntelligentGlobalBonus,
+  getSuctionGripBonus,
+  getToxicFactoryBonus,
+  getCalmGlobalBonus,
+  getLogicalKnowledgePerCitizen,
+  getTrackerHuntBonus,
+  getHivemindMultiplier,
+  getIronAllergyPenalty,
+  getPyrophobiaSmelterPenalty,
+  getPompousProfessorPenalty,
+  getTruthfulBankerPenalty,
+  getSpiritualTempleBonus,
+  getGluttonyFoodMultiplier,
+  getRavenousFoodMultiplier,
+  getHighMetabolismFoodMultiplier,
+  getSlaverBonus,
+} from './traits';
+import { getRitualMultiplier } from './magic';
 import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
@@ -39,6 +62,17 @@ import {
 } from './planet-traits';
 import { evolutionTick } from './evolution';
 import { arpaTick } from './arpa';
+import { fortressTick, portalProductionTick } from './portal';
+import { mechBuildTick, mechStationPatrolTick } from './mech';
+import { syndicateTick, siegeTick } from './syndicate';
+import { womlingTick } from './womling';
+import { checkAchievements } from './achievement-triggers';
+import { complexTraitTick, getSelenophobiaMultiplier } from './complex-traits';
+import { petTick } from './pet';
+import { magicTick } from './magic';
+import { edenicTick, edenicProductionTick } from './edenic';
+import { truepathProductionTick } from './truepath';
+import { runGovernorTasks } from './governor';
 import {
   getSatelliteScientistImpactMultiplier,
   getObservatoryKnowledgeCapBonus,
@@ -458,10 +492,17 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     }
   }
 
+  // Trait 影响食物：tracker (+hunt), suction_grip, calm, ritual:farmer/hunting
+  // 同时食物消耗会被 gluttony / ravenous / high_metabolism 放大
+  const foodProdTraitMult = getSuctionGripBonus(state) * getCalmGlobalBonus(state)
+    * getRitualMultiplier(state, 'farmer') * getSlaverBonus(state);
+  const huntTraitMult = getTrackerHuntBonus(state) * getRitualMultiplier(state, 'hunting');
+  const foodConsumptionMul = getGluttonyFoodMultiplier(state) * getRavenousFoodMultiplier(state) * getHighMetabolismFoodMultiplier(state);
+
   deltas['Food'] =
-    (hunterFood * rageHuntMult + farmerFood * weatherFoodMult) * prodMult * planetGlobalMult
+    (hunterFood * rageHuntMult * huntTraitMult + farmerFood * weatherFoodMult) * prodMult * planetGlobalMult * foodProdTraitMult
     + biodomeFood * prodMult
-    - foodConsumption
+    - foodConsumption * foodConsumptionMul
     - tourismFoodDemand;
 
   // ============================================================
@@ -494,7 +535,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (activeSawmills > 0) {
     lumberMult *= 1 + activeSawmills * 0.04;
   }
-  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * effectiveProdMult;
+  // Trait: weak (-X%), suction_grip (+X%), calm (+X%), hivemind, intelligent, ritual:lumberjack
+  const lumberTraitMult = getWeakWorkerMultiplier(state) * getSuctionGripBonus(state) * getCalmGlobalBonus(state)
+    * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, lumberjacks)
+    * getRitualMultiplier(state, 'lumberjack') * getSlaverBonus(state);
+  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * effectiveProdMult * lumberTraitMult;
 
   // ============================================================
   // 4. 石头 — 石工
@@ -514,12 +559,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   const activeQuarries = poweredOn['rock_quarry'] ?? 0;
-  let stoneMult = 1 + quarries * 0.02;
+  const stoneMult = 1 + quarries * 0.02;
   let quarryPowerMult = 1;
   if (activeQuarries > 0) {
     quarryPowerMult += activeQuarries * 0.04;
   }
-  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * quarryPowerMult * effectiveProdMult;
+  const stoneTraitMult = getWeakWorkerMultiplier(state) * getSuctionGripBonus(state) * getCalmGlobalBonus(state)
+    * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, quarryWorkers)
+    * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
+  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * quarryPowerMult * effectiveProdMult * stoneTraitMult;
 
   // ============================================================
   // 4.5 铝 — 采石副产物 (Aluminium)
@@ -567,10 +615,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const ironGeologyMult = 1 + (state.city.geology?.['Iron'] ?? 0);
   const copperBiomeMult = getCopperBiomeMultiplier(state);
   const ironBiomeMult = getIronBiomeMultiplier(state);
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * copperBiomeMult * minerPlanetMult * effectiveProdMult;
+  // Trait: weak (-), tough (+), suction_grip (+), calm (+), iron_allergy (-iron), intelligent, hivemind, ritual:miner
+  const minerTraitMult = getWeakWorkerMultiplier(state) * getToughMiningMultiplier(state) * getSuctionGripBonus(state)
+    * getCalmGlobalBonus(state) * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, actualMiners)
+    * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
+  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * copperBiomeMult * minerPlanetMult * effectiveProdMult * minerTraitMult;
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * ironBiomeMult * minerPlanetMult * effectiveProdMult;
+    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * ironBiomeMult * minerPlanetMult * effectiveProdMult * minerTraitMult * getIronAllergyPenalty(state);
   }
 
   // ============================================================
@@ -581,7 +633,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const activeCoalMines = poweredOn['coal_mine'] ?? 0;
   const coalPowerMult = activeCoalMines > 0 ? 1 + activeCoalMines * 0.05 : 1;
   const coalGeologyMult = 1 + (state.city.geology?.['Coal'] ?? 0);
-  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * coalPowerMult * coalGeologyMult * effectiveProdMult;
+  const coalTraitMult = getWeakWorkerMultiplier(state) * getToughMiningMultiplier(state) * getSuctionGripBonus(state)
+    * getCalmGlobalBonus(state) * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, actualCoalMiners)
+    * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
+  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * coalPowerMult * coalGeologyMult * effectiveProdMult * coalTraitMult;
 
   // 铀 — 煤矿副产物
   // 对标 legacy main.js L6595: uranium = coal_delta / 115
@@ -658,11 +713,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // legacy: delta = (prof+sci)*hunger*global_mult + sundial*global_mult, 然后 delta *= library_mult
   // library_mult 作用于**包含日晷的整体 delta**，不仅仅是 prof+sci
   const libraryMult = 1 + libraries * 0.05;
+  // Trait: pompous (-prof), ritual:science, logical (citizen knowledge)
+  const profTraitMult = getPompousProfessorPenalty(state) * getRitualMultiplier(state, 'science');
   // 教授+科学家受饥饿影响；日晷不受（原版 L4228-4229）
-  const workerKnowledge = (professorsBase + scientistBase) * effectiveProdMult;
+  const workerKnowledge = (professorsBase * profTraitMult + scientistBase) * effectiveProdMult;
   const sundialKnowledge = (sundialBase + sundialPlanet) * prodMult * planetGlobalMult;
+  // Logical 合成种族：每市民 +X 知识/秒
+  const logicalKnowledge = getLogicalKnowledgePerCitizen(state) * pop * prodMult;
   // legacy L4261: delta *= library_mult — 对整体（含日晷）统一乘以图书馆加成
-  deltas['Knowledge'] = (workerKnowledge + sundialKnowledge) * libraryMult;
+  deltas['Knowledge'] = (workerKnowledge + sundialKnowledge + logicalKnowledge) * libraryMult;
 
   // ============================================================
   // 8a. 信仰（Faith）— 牧师产出
@@ -674,6 +733,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     // 牧师输出 0.5 信仰/tick（乘 prodMult）
     let faithRate = priests * 0.5 * effectiveProdMult;
     if (state.civic.govern?.type === 'theocracy') faithRate *= 1.1;
+    faithRate *= getSpiritualTempleBonus(state);
     deltas['Faith'] = (deltas['Faith'] ?? 0) + faithRate;
   }
 
@@ -700,6 +760,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         bankerImpact += 0.02 * techLevel('stock_exchange');
       }
       bankerImpact *= getBankerImpactMultiplier(state);
+      bankerImpact *= getTruthfulBankerPenalty(state); // seraph: -X% banker
       incomeBase *= 1 + bankers * bankerImpact;
     }
     incomeBase *= getTaxIncomeTraitMultiplier(state);
@@ -709,7 +770,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     // anthropology:4 开始，每座神庙使税收 +2.5%
     let templeTaxMult = 1;
     if (techLevel('anthropology') >= 4) {
-      templeTaxMult += structCount('temple') * 0.025;
+      templeTaxMult += structCount('temple') * 0.025 * getSpiritualTempleBonus(state);
     }
 
     deltas['Money'] = incomeBase * templeTaxMult * taxMoneyMult;
@@ -801,7 +862,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const ironAdvanced = techLevel('smelting') >= 7 ? 1.25 : 1;
     // oil_bonus: 每个石油燃料槽加成铁/铱产量
     const oilBonus = oilFuel > 0 ? 1 + (oilFuel / 200) : 1;  // legacy L5019-5022
-    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironSmelter * ironBlast * ironAdvanced * oilBonus;
+    // 熔炉 trait 加成：pyrophobia 减产、iron_allergy 减铁、forge（无燃料）
+    const smelterTraitMult = getPyrophobiaSmelterPenalty(state);
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironSmelter * ironBlast * ironAdvanced * oilBonus * smelterTraitMult * getIronAllergyPenalty(state);
 
     // 产出铱 — 对标 legacy main.js L5008-5021
     // iridium_smelter *= 0.05（基础铱效率），同样应用 smelting>=7 和 oil_bonus 修正
@@ -838,7 +901,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       if (techLevel('smelting') >= 7) steelBase *= 1.25;
 
       // 原版：钢的合成受全局效率 (effectiveProdMult) 加成
-      const steelOutput = steelSmelter * steelBase * effectiveProdMult;
+      const steelOutput = steelSmelter * steelBase * effectiveProdMult * smelterTraitMult;
       deltas['Steel'] = (deltas['Steel'] ?? 0) + steelOutput;
 
       // 钛副产物
@@ -1392,6 +1455,79 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   );
 
   // ============================================================
+  // 15a. Portal 要塞入侵 tick + 建筑产出
+  // ============================================================
+  if ((newState.tech['portal'] ?? 0) >= 2) {
+    fortressTick(newState, TIME_MULTIPLIER);
+    portalProductionTick(newState, TIME_MULTIPLIER, deltas);
+    mechBuildTick(newState, TIME_MULTIPLIER);
+    // Mech Station 巡逻（asphodel mech_station 通电时启用）
+    const edenObj = newState.eden as Record<string, { on?: number }>;
+    if ((edenObj['mech_station']?.on ?? 0) > 0) {
+      mechStationPatrolTick(newState, TIME_MULTIPLIER);
+    }
+  }
+
+  // ============================================================
+  // 15b. 魔法宇宙 tick（Mana 再生 + 炼金转化）
+  // ============================================================
+  magicTick(newState, TIME_MULTIPLIER);
+
+  // ============================================================
+  // 15b1. Truepath 建筑产出 + 辛迪加海盗骚扰
+  // ============================================================
+  if (newState.race['truepath']) {
+    truepathProductionTick(newState, TIME_MULTIPLIER, deltas);
+    syndicateTick(newState, TIME_MULTIPLIER);
+    womlingTick(newState, TIME_MULTIPLIER, deltas);
+  }
+
+  // ============================================================
+  // 15c. Edenic tick（神圣腐化进度）+ 建筑产出
+  // ============================================================
+  if ((newState.tech['edenic'] ?? 0) >= 1) {
+    edenicTick(newState, TIME_MULTIPLIER);
+    edenicProductionTick(newState, TIME_MULTIPLIER, deltas);
+    siegeTick(newState, TIME_MULTIPLIER);
+  }
+
+  // ============================================================
+  // 15d. 总督自动化任务
+  // ============================================================
+  if (newState.race['governor']) {
+    runGovernorTasks(newState);
+  }
+
+  // ============================================================
+  // 15e. 成就自动检查（每 tick 简化版；高频检查不会显著影响性能）
+  // ============================================================
+  checkAchievements(newState);
+
+  // ============================================================
+  // 15f. 复杂 trait 持续效果（unstable 死亡 / wish 冷却等）
+  // ============================================================
+  complexTraitTick(newState, TIME_MULTIPLIER);
+
+  // ============================================================
+  // 15f1. Pet 宠物 tick
+  // ============================================================
+  petTick(newState, TIME_MULTIPLIER);
+
+  // ============================================================
+  // 15g. 应用全局 trait 乘数到所有产出 delta（selenophobia 月相、pillar、shapeshifter）
+  // ============================================================
+  const seleno = getSelenophobiaMultiplier(newState);
+  const pillarBonus = ((newState.race as Record<string, unknown>)['_pillar_bonus'] as number) ?? 1;
+  const globalTraitMul = seleno * pillarBonus;
+  if (globalTraitMul !== 1) {
+    for (const resId of Object.keys(deltas)) {
+      if (deltas[resId] > 0) {
+        deltas[resId] *= globalTraitMul;
+      }
+    }
+  }
+
+  // ============================================================
   // 16. ARPA 长线研究 tick
   // ============================================================
   const arpaDone = arpaTick(newState, TIME_MULTIPLIER);
@@ -1577,7 +1713,11 @@ export function factoryTick(
   const allocStanene = allocate(factory.Stanene);
 
   const assembly = Math.min(state.tech['factory'] ?? 0, 4);
-  const outputMultiplier = getFactoryOutputMultiplier(state);
+  let outputMultiplier = getFactoryOutputMultiplier(state);
+  // 蘑菇人种族 (toxic)：工厂工人产出 +20% 默认
+  outputMultiplier *= getToxicFactoryBonus(state);
+  // 仪式：factory ritual
+  outputMultiplier *= getRitualMultiplier(state, 'factory');
   const luxDemandMultiplier = state.civic.govern?.type === 'corpocracy'
     ? 2.5
     : (state.civic.govern?.type === 'socialist' ? 0.8 : 1);

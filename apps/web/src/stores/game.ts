@@ -109,6 +109,104 @@ import {
   removeMiningDroid as coreRemoveMiningDroid,
   type FactoryLineId,
   type MiningDroidTargetId,
+  // Portal 系统
+  PORTAL_REGIONS,
+  PORTAL_BUILDINGS,
+  fortressTick,
+  defaultFortressState,
+  isRegionUnlocked as coreIsRegionUnlocked,
+  getPortalBuildCost as coreGetPortalBuildCost,
+  canBuildPortalStructure as coreCanBuildPortalStructure,
+  buildPortalStructure as coreBuildPortalStructure,
+  getBuildingsByRegion as coreGetPortalBuildingsByRegion,
+  ascendSpire as coreAscendSpire,
+  type PortalRegionId,
+  type PortalBuildingDef,
+  // Governor 系统
+  GOVERNOR_BACKGROUNDS,
+  GOVERNOR_TASKS,
+  generateGovernorCandidates,
+  appointGovernor as coreAppointGovernor,
+  fireGovernor as coreFireGovernor,
+  setGovernorTask as coreSetGovernorTask,
+  runGovernorTasks,
+  govActive,
+  getTaskSlotCount,
+  type GovernorCandidate,
+  type GovernorTaskId,
+  // 魔法系统
+  RITUAL_TYPES,
+  setupRituals,
+  setRitualPower as coreSetRitualPower,
+  cancelRituals as coreCancelRituals,
+  setupAlchemy,
+  setAlchemyTarget as coreSetAlchemyTarget,
+  ALCHEMY_RESOURCES,
+  getAstrologySign,
+  getAstrologyValue,
+  conjureFood as coreConjureFood,
+  buildShrine as coreBuildShrine,
+  isMagicUniverse,
+  magicTick,
+  type RitualType,
+  type ZodiacSign,
+  // 成就系统
+  ACHIEVEMENTS,
+  FEATS,
+  unlockAchievement,
+  unlockFeat,
+  countAchievements,
+  calcUniverseLevel,
+  calcMastery,
+  checkAchievementHunterFeats,
+  // 种族系统
+  RACES,
+  GENUS_DEFS,
+  getAvailableBasicRaces as coreGetAvailableBasicRaces,
+  applyRaceTraits,
+  getRaceFullTraits,
+  // TRAITS,
+  // 转生
+  triggerReset as coreTriggerReset,
+  canReset as coreCanReset,
+  calcPrestigeGains as coreCalcPrestigeGains,
+  type ResetType,
+  // Truepath
+  TRUEPATH_REGIONS,
+  TRUEPATH_BUILDINGS,
+  isTruepath,
+  isTruepathRegionUnlocked,
+  canBuildTruepath as coreCanBuildTruepath,
+  buildTruepathStructure as coreBuildTruepathStructure,
+  getTruepathBuildCost as coreGetTruepathBuildCost,
+  getTruepathBuildingsByRegion as coreGetTruepathBuildingsByRegion,
+  type TruepathRegionId,
+  // Edenic
+  EDENIC_REGIONS,
+  EDENIC_BUILDINGS,
+  isEdenicUnlocked,
+  isEdenicRegionUnlocked,
+  canBuildEdenic as coreCanBuildEdenic,
+  buildEdenicStructure as coreBuildEdenicStructure,
+  getEdenicBuildCost as coreGetEdenicBuildCost,
+  getEdenicBuildingsByRegion as coreGetEdenicBuildingsByRegion,
+  edenicTick,
+  type EdenicRegionId,
+  // Phase 5 新系统
+  mechCost,
+  mechRating,
+  mechSize,
+  getMechBayCapacity,
+  startMechBuild as coreStartMechBuild,
+  totalMechRating,
+  type MechDef,
+  attemptSpireFloor,
+  getCurrentSpireInfo,
+  discoverWomling as coreDiscoverWomling,
+  initWomling,
+  getWomlingPopCap,
+  assignWomling as coreAssignWomling,
+  canUseWomling,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
@@ -1085,5 +1183,192 @@ export const useGameStore = defineStore('game', () => {
     getInterstellarBuildCost,
     canBuildInterstellarStructure,
     buildInterstellarStructure,
+
+    // ==================== Phase 3 新增 ====================
+
+    // Portal 地狱门
+    PORTAL_REGIONS,
+    PORTAL_BUILDINGS,
+    isPortalUnlocked: computed(() => (state.value.tech['portal'] ?? 0) >= 2),
+    isRegionUnlocked: (r: PortalRegionId) => coreIsRegionUnlocked(state.value, r),
+    getPortalBuildingsByRegion: (r: PortalRegionId) => coreGetPortalBuildingsByRegion(r),
+    getPortalBuildCost: (id: string) => coreGetPortalBuildCost(state.value, id),
+    canBuildPortalStructure: (id: string) => coreCanBuildPortalStructure(state.value, id),
+    buildPortalStructure: (id: string) => {
+      const built = coreBuildPortalStructure(state.value, id)
+      if (built) {
+        addMessage(`建造完成：${PORTAL_BUILDINGS.find((b: PortalBuildingDef) => b.id === id)?.name ?? id}`, 'info', 'building')
+      } else {
+        addMessage('资源不足或条件不满足', 'warning', 'building')
+      }
+      return built
+    },
+    ascendSpire: () => {
+      const ok = coreAscendSpire(state.value)
+      addMessage(ok ? '尖塔登顶进度 +1' : '尖塔登顶失败：资源不足', ok ? 'special' : 'warning', 'portal')
+      return ok
+    },
+    getFortressState: () => {
+      const portal = state.value.portal as Record<string, Record<string, number>>
+      if (!portal['fortress']) portal['fortress'] = defaultFortressState() as unknown as Record<string, number>
+      return portal['fortress']
+    },
+
+    // Governor 总督
+    GOVERNOR_BACKGROUNDS,
+    GOVERNOR_TASKS,
+    governor: computed(() => {
+      const gov = state.value.race['governor'] as unknown
+      return gov ?? null
+    }),
+    generateGovernorCandidates: (count: number = 10) => generateGovernorCandidates(state.value, count),
+    appointGovernor: (candidate: GovernorCandidate) => {
+      coreAppointGovernor(state.value, candidate)
+      addMessage(`已任命总督：${candidate.t} ${candidate.n}`, 'special', 'governor')
+    },
+    fireGovernor: () => {
+      coreFireGovernor(state.value)
+      addMessage('已解雇总督。', 'info', 'governor')
+    },
+    setGovernorTask: (slot: 0 | 1 | 2 | 3 | 4, task: GovernorTaskId) => {
+      coreSetGovernorTask(state.value, slot, task)
+    },
+    governorTaskSlotCount: () => getTaskSlotCount(state.value),
+    governorActiveTrait: (trait: string, varIdx: number = 0) => govActive(state.value, trait, varIdx),
+
+    // 魔法系统
+    RITUAL_TYPES,
+    ALCHEMY_RESOURCES,
+    isMagicUniverse: computed(() => isMagicUniverse(state.value)),
+    setupRituals: () => setupRituals(state.value),
+    setRitualPower: (ritual: RitualType, power: number) => {
+      const ok = coreSetRitualPower(state.value, ritual, power)
+      if (!ok) addMessage('Mana 不足以维持此仪式', 'warning', 'magic')
+      return ok
+    },
+    cancelRituals: () => coreCancelRituals(state.value),
+    setupAlchemy: () => setupAlchemy(state.value),
+    setAlchemyTarget: (resource: string, amount: number) => {
+      const ok = coreSetAlchemyTarget(state.value, resource as Parameters<typeof coreSetAlchemyTarget>[1], amount)
+      if (!ok) addMessage('Mana 或 Crystal 不足', 'warning', 'magic')
+      return ok
+    },
+    currentZodiac: computed<ZodiacSign>(() => getAstrologySign()),
+    zodiacEffect: (sign?: ZodiacSign) => getAstrologyValue(state.value, sign),
+    conjureFood: () => {
+      const ok = coreConjureFood(state.value)
+      if (ok) addMessage('召唤食物成功！', 'success', 'magic')
+      else addMessage('Mana 或 Crystal 不足', 'warning', 'magic')
+      return ok
+    },
+    buildShrine: () => {
+      const ok = coreBuildShrine(state.value)
+      if (ok) addMessage('神龛已建造！', 'success', 'magic')
+      else addMessage('需要满月，且 Stone+Cement 充足', 'warning', 'magic')
+      return ok
+    },
+
+    // 成就系统
+    ACHIEVEMENTS,
+    FEATS,
+    unlockAchievement: (id: string, small: boolean = false, rank?: number) =>
+      unlockAchievement(state.value, id, small, rank),
+    unlockFeat: (id: string, small: boolean = false, rank?: number) =>
+      unlockFeat(state.value, id, small, rank),
+    countAchievements: () => countAchievements(state.value),
+    universeLevels: () => calcUniverseLevel(state.value),
+    masteryMultiplier: () => calcMastery(state.value),
+    checkAchievementHunterFeats: () => checkAchievementHunterFeats(state.value),
+
+    // 种族系统
+    RACES,
+    GENUS_DEFS,
+    getAvailableBasicRaces: () => coreGetAvailableBasicRaces(state.value),
+    getRaceFullTraits,
+    applyRaceTraits: (raceId: Parameters<typeof applyRaceTraits>[1]) => applyRaceTraits(state.value, raceId),
+
+    // 转生
+    triggerReset: (type: ResetType) => {
+      const newState = coreTriggerReset(state.value, type)
+      if (!newState) {
+        addMessage('转生条件不满足', 'warning', 'prestige')
+        return false
+      }
+      state.value = newState
+      addMessage(`转生完成（${type}），新世代开始！`, 'special', 'prestige')
+      return true
+    },
+    canReset: (type: ResetType) => coreCanReset(state.value, type),
+    calcPrestigeGains: (type: ResetType) => coreCalcPrestigeGains(state.value, type),
+
+    // Truepath
+    TRUEPATH_REGIONS,
+    TRUEPATH_BUILDINGS,
+    isTruepathMode: computed(() => isTruepath(state.value)),
+    isTruepathRegionUnlocked: (r: TruepathRegionId) => isTruepathRegionUnlocked(state.value, r),
+    getTruepathBuildingsByRegion: (r: TruepathRegionId) => coreGetTruepathBuildingsByRegion(r),
+    getTruepathBuildCost: (id: string) => coreGetTruepathBuildCost(state.value, id),
+    canBuildTruepath: (id: string) => coreCanBuildTruepath(state.value, id),
+    buildTruepathStructure: (id: string) => {
+      const ok = coreBuildTruepathStructure(state.value, id)
+      addMessage(ok ? '真相之路建筑已建造' : '资源不足', ok ? 'info' : 'warning', 'truepath')
+      return ok
+    },
+
+    // Edenic
+    EDENIC_REGIONS,
+    EDENIC_BUILDINGS,
+    isEdenicUnlocked: computed(() => isEdenicUnlocked(state.value)),
+    isEdenicRegionUnlocked: (r: EdenicRegionId) => isEdenicRegionUnlocked(state.value, r),
+    getEdenicBuildingsByRegion: (r: EdenicRegionId) => coreGetEdenicBuildingsByRegion(r),
+    getEdenicBuildCost: (id: string) => coreGetEdenicBuildCost(state.value, id),
+    canBuildEdenic: (id: string) => coreCanBuildEdenic(state.value, id),
+    buildEdenicStructure: (id: string) => {
+      const ok = coreBuildEdenicStructure(state.value, id)
+      addMessage(ok ? '伊甸园建筑已建造' : '资源不足', ok ? 'info' : 'warning', 'edenic')
+      return ok
+    },
+
+    // ==================== Phase 5 新增 ====================
+    // Mech
+    mechCost,
+    mechRating,
+    mechSize,
+    getMechBayCapacity: () => getMechBayCapacity(state.value),
+    startMechBuild: (def: Omit<MechDef, 'built'>) => {
+      const ok = coreStartMechBuild(state.value, def)
+      addMessage(ok ? `开始建造 ${def.size} 机甲` : '资源/容量不足或已有机甲在造', ok ? 'info' : 'warning', 'mech')
+      return ok
+    },
+    totalMechRating: () => totalMechRating(state.value),
+    getMechs: () => {
+      const ms = (state.value.portal as Record<string, unknown>)['mechs'] as { mechs?: MechDef[]; building?: { def: MechDef; progress: number; total: number } } | undefined
+      return ms ?? { mechs: [] as MechDef[] }
+    },
+
+    // Spire 战斗
+    spireInfo: () => getCurrentSpireInfo(state.value),
+    attemptSpireFloor: () => {
+      const result = attemptSpireFloor(state.value)
+      addMessage(result.message, result.success ? 'special' : 'warning', 'portal')
+      return result
+    },
+
+    // Womling
+    canUseWomling: () => canUseWomling(state.value),
+    discoverWomling: () => coreDiscoverWomling(state.value),
+    getWomling: () => initWomling(state.value),
+    getWomlingPopCap: () => getWomlingPopCap(state.value),
+    assignWomling: (job: 'farmer' | 'miner' | 'lab' | 'soldier', delta: number) => {
+      const ok = coreAssignWomling(state.value, job, delta)
+      if (!ok) addMessage('无法分配（人口不足或岗位为零）', 'warning', 'womling')
+      return ok
+    },
+
+    // Tick 钩子（供 Phase 3 接入主循环）
+    _fortressTick: (timeMul: number = 1) => fortressTick(state.value, timeMul),
+    _magicTick: (timeMul: number = 1) => magicTick(state.value, timeMul),
+    _edenicTick: (timeMul: number = 1) => edenicTick(state.value, timeMul),
+    _runGovernorTasks: () => runGovernorTasks(state.value),
   }
 })

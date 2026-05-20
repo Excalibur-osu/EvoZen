@@ -1,12 +1,49 @@
 /**
  * 存档系统
- * 本地存档 / 读档 / 导入 / 导出
+ * 本地存档 / 读档 / 导入 / 导出 + 字段迁移
  */
 
 import type { GameState, SaveData } from '@evozen/shared-types';
+import { createNewGame } from './state';
 
 const SAVE_KEY = 'evozen_save';
 const BACKUP_KEY = 'evozen_backup';
+
+/**
+ * 存档字段迁移：旧存档读取时补全 Phase 2/3 新增的字段
+ * 包括：portal/eden/tauceti/blood/genes 顶级容器，以及新增资源。
+ */
+function migrateState(state: GameState): GameState {
+  const fresh = createNewGame();
+
+  // 1. 顶级容器（旧版没有这些）
+  if (!state.portal) state.portal = {};
+  if (!state.eden) state.eden = {};
+  if (!state.tauceti) state.tauceti = {};
+  if (!state.blood) state.blood = {};
+  if (!state.genes) state.genes = {};
+
+  // 2. 资源补全（新增的 Mana / Soul_Gem / Demonic_Essence / Asphodel_Powder 等）
+  for (const [resId, resState] of Object.entries(fresh.resource)) {
+    if (!state.resource[resId]) {
+      state.resource[resId] = resState;
+    }
+  }
+
+  // 3. settings 字段补全
+  for (const [key, val] of Object.entries(fresh.settings)) {
+    if (state.settings[key] === undefined) {
+      (state.settings as Record<string, unknown>)[key] = val;
+    }
+  }
+
+  // 4. stats.achieve / feat 容器
+  const stats = state.stats as Record<string, unknown>;
+  if (!stats['achieve']) stats['achieve'] = {};
+  if (!stats['feat']) stats['feat'] = {};
+
+  return state;
+}
 
 /**
  * 将游戏状态保存到 localStorage
@@ -38,7 +75,7 @@ export function loadGame(): GameState | null {
 
     const json = decodeURIComponent(atob(compressed));
     const data: SaveData = JSON.parse(json);
-    return data.gameState;
+    return migrateState(data.gameState);
   } catch (e) {
     console.error('读档失败:', e);
     return null;
@@ -70,7 +107,7 @@ export function importSave(rawJson: string): GameState | null {
       return null;
     }
 
-    return data.gameState;
+    return migrateState(data.gameState);
   } catch (e) {
     console.error('导入存档失败:', e);
     return null;
@@ -107,7 +144,7 @@ export function loadBackup(): GameState | null {
 
     const json = decodeURIComponent(atob(compressed));
     const data: SaveData = JSON.parse(json);
-    return data.gameState;
+    return migrateState(data.gameState);
   } catch (e) {
     console.error('读取备份失败:', e);
     return null;

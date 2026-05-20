@@ -12,6 +12,7 @@ import { getModifiedTechCosts } from './traits';
 import { canEnqueue } from './queue';
 import { getMaxTaxRate } from './government';
 import { applyDerivedStateInPlace } from './derived-state';
+import { applyMaterialSubstitution } from './material-substitution';
 import {
   SPACE_STRUCTURES,
   canBuildSpaceStructure,
@@ -43,14 +44,71 @@ function ensureInterstellarStructure(state: GameState, id: string): void {
   }
 }
 
+/**
+ * 计算 trait 对建筑成本的乘数
+ * - wasteful (humanoid genus)：所有合成材料 +10%
+ * - heavy (rhinotaur)：所有建筑 +10%
+ * - large (giant genus)：所有建筑递增 +0.5%
+ * - small (small genus)：所有建筑递增 -1%
+ * - bloated (shoggoth)：所有建筑 +15%
+ * - deconstructor (nano)：所有建筑 +100%
+ * - hooved (centaur)：所有 +10%（footwear）
+ */
+function getRaceCostMul(state: GameState, resId: string): number {
+  let mul = 1;
+  const r = state.race as Record<string, unknown>;
+  if (r['wasteful'] && ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal'].includes(resId)) {
+    const rank = (r['wasteful'] as number) || 1;
+    const v = rank === 0.1 ? 16 : rank === 0.25 ? 14 : rank === 0.5 ? 12 : rank === 1 ? 10 : rank === 2 ? 6 : rank === 3 ? 4 : 2;
+    mul *= 1 + v / 100;
+  }
+  if (r['heavy']) mul *= 1.1;
+  if (r['bloated']) {
+    const rank = (r['bloated'] as number) || 1;
+    const v = rank === 0.1 ? 30 : rank === 0.25 ? 25 : rank === 0.5 ? 20 : rank === 1 ? 15 : rank === 2 ? 10 : rank === 3 ? 6 : 4;
+    mul *= 1 + v / 100;
+  }
+  if (r['deconstructor']) {
+    const rank = (r['deconstructor'] as number) || 1;
+    const v = rank === 0.1 ? 25 : rank === 0.25 ? 40 : rank === 0.5 ? 60 : rank === 1 ? 100 : rank === 2 ? 125 : rank === 3 ? 140 : 150;
+    mul *= 1 + v / 100;
+  }
+  if (r['hooved']) {
+    const rank = (r['hooved'] as number) || 1;
+    const v = rank === 0.1 ? 140 : rank === 0.25 ? 130 : rank === 0.5 ? 120 : rank === 1 ? 100 : rank === 2 ? 80 : rank === 3 ? 70 : 60;
+    mul *= v / 100;
+  }
+  return mul;
+}
+
+/** Tunneler 矿场成本折扣（在 mining 建筑成本计算时调用）*/
+export function getTunnelerCostDiscount(state: GameState, structureId: string): number {
+  if (!state.race['tunneler']) return 1;
+  if (!['mine', 'coal_mine'].includes(structureId)) return 1;
+  const rank = (state.race['tunneler'] as number) || 1;
+  const v = rank === 0.1 ? 0.001 : rank === 0.25 ? 0.002 : rank === 0.5 ? 0.005 : rank === 1 ? 0.01 : rank === 2 ? 0.015 : rank === 3 ? 0.018 : 0.02;
+  // 每件矿场成本 -X%（最高 -2%）
+  return 1 - v;
+}
+
 export function getBuildCost(state: GameState, structureId: string): Record<string, number> {
   const def = BASIC_STRUCTURES.find((structure) => structure.id === structureId);
   if (!def) return {};
 
   const count = (state.city[structureId] as { count?: number } | undefined)?.count ?? 0;
-  const costs: Record<string, number> = {};
+  let costs: Record<string, number> = {};
   for (const [resId, costFn] of Object.entries(def.costs)) {
-    costs[resId] = costFn(state, count);
+    const baseCost = costFn(state, count);
+    costs[resId] = Math.ceil(baseCost * getRaceCostMul(state, resId));
+  }
+  // 材料替换：kindling_kindred / iron_wood / smoldering 等
+  costs = applyMaterialSubstitution(state, costs);
+  // tunneler 矿场折扣
+  const tunnelerDiscount = getTunnelerCostDiscount(state, structureId);
+  if (tunnelerDiscount !== 1) {
+    for (const k of Object.keys(costs)) {
+      costs[k] = Math.ceil(costs[k] * tunnelerDiscount);
+    }
   }
   return costs;
 }

@@ -90,6 +90,41 @@ function getAutoCraftRatio(
     ratio *= 1.5;
   }
 
+  // Shoggoth (living_tool): 工艺加成
+  if (state.race['living_tool']) {
+    const rank = (state.race['living_tool'] as number) || 1;
+    // vars[1]: crafting boost percent
+    const mul = rank === 0.1 ? 2 : rank === 0.25 ? 5 : rank === 0.5 ? 12 : rank === 1 ? 25 : rank === 2 ? 35 : rank === 3 ? 42 : 45;
+    ratio *= 1 + mul / 100;
+  }
+
+  // Hollow bones (avian): 工艺成本降低 = 产出 +X%
+  if (state.race['hollow_bones']) {
+    const rank = (state.race['hollow_bones'] as number) || 1;
+    const mul = rank === 0.1 ? 1 : rank === 0.25 ? 2 : rank === 0.5 ? 3 : rank === 1 ? 5 : rank === 2 ? 8 : rank === 3 ? 10 : 12;
+    ratio *= 1 + mul / 100;
+  }
+
+  // Rigid trait (avian): 工艺产出 -X%
+  if (state.race['rigid']) {
+    const rank = (state.race['rigid'] as number) || 1;
+    const mul = rank === 0.1 ? 4 : rank === 0.25 ? 3 : rank === 0.5 ? 2 : rank === 1 ? 1 : rank === 2 ? 0.5 : rank === 3 ? 0.4 : 0.3;
+    ratio *= 1 - mul / 100;
+  }
+
+  // Resourceful trait (arraak): 工艺成本减少（视为产出加成）
+  if (state.race['resourceful']) {
+    const rank = (state.race['resourceful'] as number) || 1;
+    const mul = rank === 0.1 ? 4 : rank === 0.25 ? 6 : rank === 0.5 ? 8 : rank === 1 ? 12 : rank === 2 ? 16 : rank === 3 ? 18 : 20;
+    ratio *= 1 + mul / 100;
+  }
+
+  // Ritual: crafting
+  const casting = state.race['casting'] as Record<string, number> | undefined;
+  if (casting?.['crafting']) {
+    ratio *= 1 + casting['crafting'] * 0.005;
+  }
+
   return ratio;
 }
 

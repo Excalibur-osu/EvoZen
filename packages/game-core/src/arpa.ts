@@ -254,6 +254,34 @@ export const ARPA_PROJECTS: ArpaProjectDef[] = [
     }),
     mult: 1.12,
   },
+
+  // ===== syphon（魔法虹吸） =====
+  // 对标 legacy/src/arpa.js L259-300
+  // 解锁条件：veil:2（魔法宇宙特殊科技）
+  // 每次完成 +1 syphon 等级，从 magic universe 中虹吸魔法能量
+  // syphon 阈值：20/40/60/80 对应不同效果（详见 effectText）
+  // 注意：syphon ≥ 80 时触发真空坍塌（vacuumCollapse），是魔法宇宙特有的转生路径
+  {
+    id: 'syphon',
+    name: '魔法虹吸',
+    desc: '在魔法宇宙中虹吸纱幕中的魔力，但虹吸过度会导致维度崩溃。',
+    reqs: { veil: 2 },
+    condition: (state) => state.race.universe === 'magic',
+    grantKey: 'syphon',
+    effectText:
+      '每次完成 +1 syphon 等级。阈值效果：' +
+      '≥20: 解锁初级转化；' +
+      '≥40: 中级转化（mana 上限大幅增加）；' +
+      '≥60: 显示真空坍塌倒计时；' +
+      '≥80: 触发真空坍塌转生（vacuumCollapse），获得 Plasmid + Phage + Dark。',
+    baseCost: () => ({
+      Money: 7_500_000,
+      Mana: 5_000,
+      Crystal: 100_000,
+      Infernite: 10_000,
+    }),
+    mult: 1.025,
+  },
 ];
 
 // ============================================================
@@ -425,6 +453,38 @@ export function arpaTick(state: GameState, _timeMul: number): string[] {
         state.tech['space'] = Math.max(state.tech['space'] ?? 0, 1);
         state.settings.showSpace = true;
       }
+
+      // syphon: 每次完成增加 syphon 等级（覆盖默认 grant +1 逻辑，使其按 rank 步进 20）
+      // 对标 legacy: tech.syphon 取值范围 0-80+，每次 +1
+      if (def.id === 'syphon') {
+        // 已通过 currentGrant + 1 提升 state.tech.syphon
+        // 当 syphon >= 80 时，触发真空坍塌警告（实际转生由 canReset('vacuum') 触发）
+        if ((state.tech['syphon'] ?? 0) >= 80) {
+          state.race['vacuum_collapse'] = true;
+        }
+      }
+
+      // nexus 完成：+5 Mana 上限
+      if (def.id === 'nexus' && state.resource['Mana']) {
+        state.resource['Mana'].max += 5;
+        state.resource['Mana'].display = true;
+      }
+
+      // lhc 完成：+ Knowledge 上限（每次 +25k 基础）
+      if (def.id === 'lhc' && state.resource['Knowledge']) {
+        state.resource['Knowledge'].max += 25_000;
+      }
+
+      // monument 完成：建造完毕，士气加成在 derived-state 中持续提供
+      // 此处不需特殊处理（rank 自身已 +1）
+
+      // stock_exchange 完成：增加银行容量（在 derived-state 中按 rank 持续应用）
+
+      // tp_depot 完成：+5 贸易路线（在 derived-state 中按 rank 应用）
+
+      // railway 完成：+2 贸易路线 + 利润加成（在 derived-state 中应用）
+
+      // roid_eject 完成：累积质量（rank 数即累积）
 
       completed.push(def.id);
     }

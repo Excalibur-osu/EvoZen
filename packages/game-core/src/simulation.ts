@@ -71,6 +71,34 @@ export function handlePopulationGrowth(state: GameState, random?: () => number):
   let upperBound = Math.floor(pop.amount * (3 - Math.pow(2, 0.25)));
   if (upperBound < 2) upperBound = 2;
 
+  // Trait 影响人口增长率
+  const r = s.race as Record<string, unknown>;
+  // fast_growth (insectoid)：增长率 +X 倍 (vars[0])
+  if (r['fast_growth']) {
+    const rank = (r['fast_growth'] as number) || 1;
+    const mul = rank === 0.1 ? 1.2 : rank === 0.25 ? 1.5 : rank === 0.5 ? 2 : rank === 1 ? 2 : rank === 2 ? 2.5 : rank === 3 ? 3 : 3.5;
+    lowerBound = Math.floor(lowerBound * mul);
+  }
+  // promiscuous (minor)：每级 +5%
+  if (r['promiscuous']) {
+    const rank = (r['promiscuous'] as number) || 1;
+    lowerBound = Math.floor(lowerBound * (1 + rank * 0.05));
+  }
+  // spores (fungi)：风天增长率提升
+  if (r['spores'] && (s.city.calendar?.wind ?? 0) > 0) {
+    lowerBound = Math.floor(lowerBound * 1.3);
+  }
+  // spongy (fungi)：雨天降低
+  if (r['spongy'] && (s.city.calendar?.weather ?? 2) === 0) {
+    lowerBound = Math.floor(lowerBound * 0.7);
+  }
+  // wish lucky / popgrowth_boost
+  if (r['popgrowth_boost']) lowerBound = Math.floor(lowerBound * 1.5);
+  if (r['lucky']) lowerBound = Math.floor(lowerBound * 1.3);
+
+  // high_pop (insectoid)：人口上限更高，但增长不变
+  // photosynth (plant)：阳光下减少食物需求 — 已在 food 计算中
+
   const nextRandom = random ?? Math.random;
   if (nextRandom() < (lowerBound + 1) / upperBound) {
     pop.amount = Math.floor(pop.amount) + 1;

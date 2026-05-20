@@ -70,6 +70,22 @@ const activeTraits = computed(() =>
 
 const selectedSpecies = ref('human')
 const selectedPtrait = ref('none')
+const useCustom = ref(false)
+const hasCustomRace = computed(() => {
+  const cust = (game.state as Record<string, unknown>)['custom'] as { race0?: unknown } | undefined
+  return !!cust?.race0
+})
+
+function chooseRaceFinal() {
+  game.chooseRace(selectedSpecies.value, selectedPtrait.value)
+  // 选择后若启用自定义种族，应用 trait
+  if (useCustom.value && hasCustomRace.value) {
+    // 延迟到种族切换完成后应用
+    import('@evozen/game-core').then((mod) => {
+      mod.applyCustomRace(game.state, false)
+    })
+  }
+}
 
 // ---- 辅助 ----
 
@@ -322,6 +338,18 @@ const stageDesc = computed(() => {
         </div>
       </div>
 
+      <!-- 自定义种族（已配置时显示） -->
+      <div v-if="hasCustomRace" class="custom-race-option">
+        <h4>🛠️ 自定义种族</h4>
+        <button
+          class="species-card"
+          :class="{ active: useCustom }"
+          @click="useCustom = !useCustom"
+        >
+          {{ useCustom ? '✓' : '⚙️' }} 使用自定义种族
+        </button>
+      </div>
+
       <!-- 费用展示 + 进化按钮 -->
       <div class="sentience-cost">
         <span>消耗：</span>
@@ -334,7 +362,7 @@ const stageDesc = computed(() => {
       <button
         class="btn primary sentience-btn"
         :disabled="rnaAmount < 320 || dnaAmount < 320"
-        @click="game.chooseRace(selectedSpecies, selectedPtrait)"
+        @click="chooseRaceFinal()"
       >
         🌟 进化为 {{ availableRaces.find(r => r.id === selectedSpecies)?.name ?? selectedSpecies }} 踏上文明！
       </button>

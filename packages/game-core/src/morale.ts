@@ -224,6 +224,74 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
   morale += getGovernmentMoraleOffset(state);
 
   // ----------------------------------------------------------
+  // 种族 trait 士气加成（接入剩余士气类 trait）
+  // ----------------------------------------------------------
+  const r = state.race as Record<string, unknown>;
+
+  // optimistic (gecko)：减压
+  if (r['optimistic']) {
+    const rank = (r['optimistic'] as number) || 1;
+    const v = rank === 0.1 ? 3 : rank === 0.25 ? 4 : rank === 0.5 ? 5 : rank === 1 ? 10 : rank === 2 ? 15 : rank === 3 ? 18 : 20;
+    morale += v / 4;  // 缓和压力影响
+  }
+  // pessimistic (pterodacti)：增压
+  if (r['pessimistic']) {
+    morale -= 2;
+  }
+  // musical (satyr)：娱乐效率（已在 entertainerBonus 接入；这里再加一点固定）
+  if (r['musical']) morale += 2;
+  // freespirit (vulpine)：常规岗位压力增加
+  if (r['freespirit']) {
+    const workersTotal = BASE_JOBS.reduce((s, j) => {
+      const job = state.civic[j.id] as { workers?: number } | undefined;
+      return s + (job?.workers ?? 0);
+    }, 0);
+    morale -= workersTotal * 0.05;
+  }
+  // blissful (angelic)：低士气惩罚减半 — 通过提升基础值实现
+  if (r['blissful'] && morale < 100) {
+    morale += (100 - morale) * 0.5;
+  }
+  // snowy (yeti)：非雪天损失
+  if (r['snowy']) {
+    const weather = state.city.calendar?.weather ?? 2;
+    const temp = state.city.calendar?.temp ?? 1;
+    const isSnowy = weather === 0 && temp === 0;
+    if (!isSnowy) morale -= 5;
+    else morale += 3;
+  }
+  // lazy (cath)：热天降低
+  if (r['lazy'] && temp === 2) {
+    morale -= 3;
+  }
+  // skittish (cacti)：雷暴降低
+  if (r['skittish'] && weather === 0 && wind === 1) {
+    morale -= 5;
+  }
+  // rainbow (unicorn)：雨后晴天加成
+  if (r['rainbow']) {
+    if (weather === 2 && (state.race['_was_rainy'] as boolean | undefined)) {
+      morale += 5;
+    }
+    state.race['_was_rainy'] = weather === 0;
+  }
+  // gloomy (unicorn)：阴天加成
+  if (r['gloomy'] && weather === 1) {
+    morale += 3;
+  }
+  // blood_thirst (sharkin)：战斗后临时士气
+  if (r['blood_thirst'] && (r['blood_thirst_count'] as number) > 0) {
+    morale += 5;
+  }
+  // calm (capybara)：固定 +5
+  if (r['calm']) morale += 5;
+  // content (minor)：每级 +1
+  if (r['content']) {
+    const rank = (r['content'] as number) || 1;
+    morale += rank;
+  }
+
+  // ----------------------------------------------------------
   // 6. 士气上限 — 对标 legacy main.js L3164-3211
   // moraleCap = 100 + 赌场通电数 + 圆形剧场数 + vr_center×2 + 纪念碑×2 + 低税率奖励
   // ----------------------------------------------------------
@@ -354,15 +422,14 @@ export function randomizeWeather(state: GameState): void {
       }
       break;
     case 'ashland':
-      if (randInt(3) === 0) {
+    case 'volcanic':
+      if (biome === 'ashland' && randInt(3) === 0) {
         if (skyRoll < 1) {
           skyRoll += 1;
         } else if (skyRoll > 2) {
           skyRoll -= 1;
         }
       }
-    // legacy 在 ashland 后故意 fall through 到 volcanic
-    case 'volcanic':
       if (cal.season === 1) {
         tempRoll = 2;
       } else if (randInt(3) === 0 && tempRoll < 2 && !hasPermafrost) {
