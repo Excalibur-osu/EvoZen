@@ -67,6 +67,24 @@ export {
   type InterstellarSupportResult,
 } from './interstellar';
 export {
+  GALAXY_STRUCTURES,
+  GALAXY_REGIONS,
+  isGalaxyRegionUnlocked,
+  getGalaxyStructuresForRegion,
+  type GalaxyStructureDefinition,
+  type GalaxySupportPool,
+  type GalaxyRegion,
+} from './galaxy';
+export {
+  TAUCETI_STRUCTURES,
+  TAUCETI_REGIONS,
+  isTaucetiRegionUnlocked,
+  getTaucetiStructuresForRegion,
+  type TaucetiStructureDefinition,
+  type TaucetiSupportPool,
+  type TaucetiRegion,
+} from './tauceti';
+export {
   SPACE_ACTIONS,
   getSpaceActionCost,
   canRunSpaceAction,
