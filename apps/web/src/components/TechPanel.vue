@@ -6,19 +6,35 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
-import { BASIC_TECHS } from '@evozen/game-core'
+import { BASIC_TECHS, type TechDefinition } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
 
 const game = useGameStore()
 
+const techCatalog = computed(() => {
+  const seen = new Set<string>()
+  return BASIC_TECHS.filter(tech => {
+    if (seen.has(tech.id)) return false
+    seen.add(tech.id)
+    return true
+  })
+})
+
 /** 可研究的科技 */
 const availableTechs = computed(() => {
-  return BASIC_TECHS.filter(t => game.isTechAvailable(t.id))
+  return techCatalog.value
+    .filter(t => game.isTechAvailable(t.id))
+    .sort((a, b) => {
+      const ak = a.costs.Knowledge ?? Number.MAX_SAFE_INTEGER
+      const bk = b.costs.Knowledge ?? Number.MAX_SAFE_INTEGER
+      if (ak !== bk) return ak - bk
+      return totalCost(a) - totalCost(b)
+    })
 })
 
 /** 已研究完成的科技 */
 const completedTechs = computed(() => {
-  return BASIC_TECHS.filter(t => {
+  return techCatalog.value.filter(t => {
     const [grantKey, grantLvl] = t.grant
     return (game.state.tech[grantKey] ?? 0) >= grantLvl
   })
@@ -32,6 +48,18 @@ function formatCost(techId: string): Array<{ resId: string; amount: number; affo
       amount: Math.ceil(amount),
       affordable: (game.state.resource[resId]?.amount ?? 0) >= amount,
     }))
+}
+
+function totalCost(tech: TechDefinition): number {
+  return Object.values(tech.costs).reduce((sum, cost) => sum + cost, 0)
+}
+
+function techTooltip(tech: TechDefinition): string {
+  const costs = formatCost(tech.id)
+  const costText = costs.length > 0
+    ? costs.map(cost => `${getResourceName(cost.resId)} ${cost.amount.toLocaleString()}`).join('，')
+    : '无'
+  return `${tech.description}\n效果：${tech.effect}\n费用：${costText}`
 }
 </script>
 
@@ -54,6 +82,8 @@ function formatCost(techId: string): Array<{ resId: string; amount: number; affo
           :key="tech.id"
           class="tech-card"
           :class="{ disabled: !game.canAffordTech(tech.id) }"
+          :data-tooltip="techTooltip(tech)"
+          data-tooltip-pos="bottom"
           @click="game.research(tech.id)"
         >
           <div class="tech-card-top">

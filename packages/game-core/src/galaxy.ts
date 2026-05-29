@@ -391,21 +391,6 @@ export const GALAXY_STRUCTURES: GalaxyStructureDefinition[] = [
     effect: '用于博洛尼乌姆资源运输。',
   },
 
-  // gxy_gorddon 补充
-  {
-    id: 'super_freighter',
-    region: 'gxy_gorddon',
-    name: '超级货船',
-    description: '建造超级货船用于大规模贸易。',
-    reqs: { xeno: 7 },
-    costs: {
-      Money: galaxyCost(5000000, 1.15),
-      Stanene: galaxyCost(400000, 1.15),
-      Graphene: galaxyCost(250000, 1.15),
-    },
-    effect: '大幅提升贸易运输能力。',
-  },
-
   // gxy_alien2 补充
   {
     id: 'scavenger',

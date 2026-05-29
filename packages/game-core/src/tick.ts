@@ -1578,21 +1578,21 @@ function removeOneCitizen(state: GameState): void {
 
   const jobPriority = [
     'unemployed',
-    'hunter',
-    'farmer',
-    'lumberjack',
-    'quarry_worker',
-    'miner',
-    'coal_miner',
-    'colonist',
-    'craftsman',
-    'cement_worker',
     'banker',
     'entertainer',
     'professor',
     'scientist',
     'priest',
+    'craftsman',
+    'cement_worker',
+    'miner',
+    'coal_miner',
+    'colonist',
+    'lumberjack',
+    'quarry_worker',
     'garrison',
+    'hunter',
+    'farmer',
   ];
 
   for (const jobId of jobPriority) {

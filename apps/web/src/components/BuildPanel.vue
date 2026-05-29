@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
-import { BASIC_STRUCTURES } from '@evozen/game-core'
+import { BASIC_STRUCTURES, type StructureDefinition } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
 import QueuePanel from './QueuePanel.vue'
 
@@ -22,14 +22,49 @@ interface GatherAction {
   colorVar: string
 }
 
+const categoryLabels: Record<StructureDefinition['category'], string> = {
+  housing: '居住',
+  food: '食物',
+  resource: '资源',
+  storage: '仓储',
+  commerce: '商业与信仰',
+  science: '科研',
+  military: '军事',
+  craft: '制造',
+  power: '电力',
+}
+
+const categoryOrder: StructureDefinition['category'][] = [
+  'housing',
+  'food',
+  'resource',
+  'storage',
+  'commerce',
+  'science',
+  'military',
+  'craft',
+  'power',
+]
+
 /** 可见建筑：前置科技已满足 */
 const availableBuildings = computed(() => {
   return BASIC_STRUCTURES.filter(def => {
     for (const [techId, lvl] of Object.entries(def.reqs)) {
       if ((game.state.tech[techId] ?? 0) < lvl) return false
     }
+    if (def.condition && !def.condition(game.state)) return false
     return true
   })
+})
+
+const buildingGroups = computed(() => {
+  return categoryOrder
+    .map(category => ({
+      category,
+      label: categoryLabels[category],
+      buildings: availableBuildings.value.filter(def => def.category === category),
+    }))
+    .filter(group => group.buildings.length > 0)
 })
 
 /** 手动采集按钮配置 */
@@ -86,6 +121,14 @@ function isStorageFull(resId: string): boolean {
   const res = game.state.resource[resId]
   if (!res) return false
   return res.max > 0 && res.amount >= res.max
+}
+
+function buildingTooltip(def: StructureDefinition): string {
+  const costs = formatCost(def.id)
+  const costText = costs.length > 0
+    ? costs.map(cost => `${getResourceName(cost.resId)} ${cost.amount.toLocaleString()}`).join('，')
+    : '无'
+  return `${def.description}\n效果：${def.effect}\n当前数量：${getCount(def.id)}\n本次费用：${costText}`
 }
 </script>
 
@@ -157,41 +200,52 @@ function isStorageFull(resId: string): boolean {
         <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><path d="M9 4v16"/><path d="M4 9h16"/><path d="M4 15h16"/></svg>
         <span class="section-title">设施建造</span>
       </div>
-      <div class="build-grid">
+      <div class="build-category-stack">
         <div
-          v-for="def in availableBuildings"
-          :key="def.id"
-          class="build-item"
-          :class="{ disabled: !game.canAfford(def.id) }"
-          @click="game.build(def.id)"
+          v-for="group in buildingGroups"
+          :key="group.category"
+          class="build-category"
         >
-          <div class="build-header">
-            <div class="build-header-left">
-              <span class="build-name">{{ def.name }}</span>
-              <span class="build-count font-mono" v-if="getCount(def.id) > 0">{{ getCount(def.id) }}</span>
+          <div class="build-category-title">{{ group.label }}</div>
+          <div class="build-grid">
+            <div
+              v-for="def in group.buildings"
+              :key="def.id"
+              class="build-item"
+              :class="{ disabled: !game.canAfford(def.id) }"
+              :data-tooltip="buildingTooltip(def)"
+              data-tooltip-pos="bottom"
+              @click="game.build(def.id)"
+            >
+              <div class="build-header">
+                <div class="build-header-left">
+                  <span class="build-name">{{ def.name }}</span>
+                  <span class="build-count font-mono" v-if="getCount(def.id) > 0">{{ getCount(def.id) }}</span>
+                </div>
+                <button 
+                  v-if="game.isQueueUnlocked"
+                  class="q-btn" 
+                  :disabled="!game.canEnqueueBuilding"
+                  @click.stop="game.enqueueBuilding(def.id)"
+                  title="加入建造队列"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                  队列
+                </button>
+              </div>
+              <p class="build-effect">{{ def.effect }}</p>
+              <div class="build-costs">
+                <span
+                  v-for="cost in formatCost(def.id)"
+                  :key="cost.resId"
+                  class="cost-tag"
+                  :class="{ unaffordable: !cost.affordable }"
+                >
+                  <span class="cost-name">{{ getResourceName(cost.resId) }}</span>
+                  {{ cost.amount.toLocaleString() }}
+                </span>
+              </div>
             </div>
-            <button 
-              v-if="game.isQueueUnlocked"
-              class="q-btn" 
-              :disabled="!game.canEnqueueBuilding"
-              @click.stop="game.enqueueBuilding(def.id)"
-              title="加入建造队列"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-              队列
-            </button>
-          </div>
-          <p class="build-effect">{{ def.effect }}</p>
-          <div class="build-costs">
-            <span
-              v-for="cost in formatCost(def.id)"
-              :key="cost.resId"
-              class="cost-tag"
-              :class="{ unaffordable: !cost.affordable }"
-            >
-              <span class="cost-name">{{ getResourceName(cost.resId) }}</span>
-              {{ cost.amount.toLocaleString() }}
-            </span>
           </div>
         </div>
       </div>
@@ -275,6 +329,20 @@ function isStorageFull(resId: string): boolean {
 
 .gather-label {
   font-size: 12px;
+}
+
+.build-category-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.build-category-title {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  text-transform: uppercase;
 }
 
 /* 建筑列表 */

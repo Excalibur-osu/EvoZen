@@ -120,6 +120,7 @@ export function canBuildStructure(state: GameState, structureId: string): boolea
   for (const [techId, lvl] of Object.entries(def.reqs)) {
     if ((state.tech[techId] ?? 0) < lvl) return false;
   }
+  if (def.condition && !def.condition(state)) return false;
 
   const costs = getBuildCost(state, structureId);
   for (const [resId, cost] of Object.entries(costs)) {

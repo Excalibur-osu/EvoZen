@@ -20,6 +20,8 @@ export interface StructureDefinition {
   category: 'housing' | 'food' | 'resource' | 'storage' | 'commerce' | 'science' | 'military' | 'craft' | 'power';
   /** 前置科技要求 */
   reqs: Record<string, number>;
+  /** 原版 condition() 可见性/可建造判断 */
+  condition?: (state: GameState) => boolean;
   /** 各资源费用（基于已有数量递增） */
   costs: Record<string, CostFunction>;
   /** 效果描述 */
@@ -209,7 +211,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Lumber: scaleCost(6, 1.9),
       Stone: scaleCost(2, 1.95),
     },
-    effect: '木材上限 +100，木材产量 +2',
+    effect: '木材上限 +100，木材产量 +2%',
   },
   // actions.js L2592-2665: rock_quarry
   {
@@ -223,7 +225,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       Lumber: scaleCost(50, 1.36),
       Stone: scaleCost(10, 1.36),
     },
-    effect: '石头上限 +100，石头产量 +2',
+    effect: '石头上限 +100，石头产量 +2%',
     powered: true,
     powerCost: 1,
   },
@@ -805,6 +807,14 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     description: '为狩猎/灵魂食者/腐食者/人工种族提供额外住宅（需 hunting Lv.2 或特殊种族科技）。',
     category: 'housing',
     reqs: { housing: 1, currency: 1 },
+    condition: (state) =>
+      ((Boolean(state.race['soul_eater']) ||
+        Boolean(state.race['detritivore']) ||
+        Boolean(state.race['artifical']) ||
+        Boolean(state.race['unfathomable']) ||
+        Boolean(state.race['forager'])) &&
+        (state.tech['s_lodge'] ?? 0) >= 1) ||
+      (state.tech['hunting'] ?? 0) >= 2,
     costs: {
       Money:  scaleCost(50,  1.32),
       Lumber: scaleCost(20,  1.36),
@@ -925,6 +935,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     description: 'wish 种族特质解锁的奇观，由特殊事件赋予，不可主动建造。',
     category: 'commerce',
     reqs: {},
+    condition: () => false,
     costs: {},
     effect: '+5 全员士气（city_wonder_effect）。',
   },
@@ -934,6 +945,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     description: 'wish 种族特质解锁的奇观，由特殊事件赋予，不可主动建造。',
     category: 'commerce',
     reqs: {},
+    condition: () => false,
     costs: {},
     effect: '+5 全员士气（city_wonder_effect）。',
   },

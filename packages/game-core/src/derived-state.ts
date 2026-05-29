@@ -33,10 +33,10 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const s = state;
   const species = s.race.species;
 
-  // 自动 display：任何 amount>0 或 max>0 的资源都标记 display=true
-  // 这让 Phase 4/5 新增的资源（Mana/Soul_Gem/Asphodel_Powder 等）在使用时自动出现在 UI
+  // 自动 display：已有数量的资源标记 display=true。
+  // 不根据 max 解锁，否则文明开局会把所有默认容量资源直接亮出来。
   for (const [id, res] of Object.entries(s.resource)) {
-    if (res && !res.display && ((res.amount ?? 0) > 0 || (res.max ?? 0) > 0)) {
+    if (res && !res.display && (res.amount ?? 0) > 0) {
       if (id !== 'RNA' && id !== 'DNA') {  // 进化阶段资源由 evolution 模块控制
         res.display = true;
       }
@@ -60,9 +60,11 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const cottages = getStructCount('cottage');
   const apartments = getStructCount('apartment');
   const farms = getStructCount('farm');
+  const lodges = getStructCount('lodge');
   popCap += basicHousing;
   popCap += cottages * 2;
   popCap += apartments * 4;
+  popCap += lodges;
   if ((s.tech['farm'] ?? 0) >= 1) {
     popCap += farms;
   }
@@ -272,7 +274,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
   moneyMax += casinos * getCasinoVault(s);
   s.resource['Money'].max = moneyMax;
 
-  setJobMax('farmer', farms);
+  setJobMax('farmer', -1);
   setJobMax('lumberjack', -1);
   setJobMax('quarry_worker', -1);
   setJobMax('miner', getStructCount('mine'));

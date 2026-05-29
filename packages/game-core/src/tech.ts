@@ -31,7 +31,7 @@ export interface TechDefinition {
  * 数据来源：legacy/src/tech.js
  * 格式：id → 原版 tech key, reqs/grant/cost 均直接对标
  */
-export const BASIC_TECHS: TechDefinition[] = [
+const RAW_BASIC_TECHS: TechDefinition[] = [
   // ===== 原始时代 (primitive) =====
   // legacy tech.js L18-37: club
   {
@@ -4502,3 +4502,18 @@ export const BASIC_TECHS: TechDefinition[] = [
   { id: 'wormholes', name: '虫洞', description: '研究虫洞技术。', category: 'science', era: '星系际', reqs: { high_tech: 15 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000 }, effect: '解锁虫洞旅行。' },
   { id: 'gateway_depot', name: '网关仓库', description: '建造网关仓库。', category: 'storage', era: '星系际', reqs: { gateway: 5 }, grant: ['gateway', 6], costs: { Knowledge: 4000000, Neutronium: 80000, Stanene: 500000 }, effect: '提供大量存储容量。' },
 ];
+
+function dedupeTechDefinitions(techs: TechDefinition[]): TechDefinition[] {
+  const seen = new Set<string>();
+  const result: TechDefinition[] = [];
+
+  for (const tech of techs) {
+    if (seen.has(tech.id)) continue;
+    seen.add(tech.id);
+    result.push(tech);
+  }
+
+  return result;
+}
+
+export const BASIC_TECHS: TechDefinition[] = dedupeTechDefinitions(RAW_BASIC_TECHS);
