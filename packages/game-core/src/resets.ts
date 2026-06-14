@@ -10,7 +10,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
-import { checkResetAchievements } from './achievement-triggers';
+import { checkResetAchievements, markChallengeTask } from './achievement-triggers';
 import { applyUniverse, UNIVERSES, type UniverseType } from './bigbang';
 
 // ============================================================
@@ -596,6 +596,9 @@ export function resetDescend(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'descend');
   applyArtifact(newState, gains.artifact);
   newState.stats = incrementStat(newState.stats, 'descend');
+  if (newState.race['fasting'] && (newState.tech['dish_reset'] ?? 0) > 0) {
+    markChallengeTask(newState, 'endless_hunger', 'b5');
+  }
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;

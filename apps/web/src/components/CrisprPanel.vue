@@ -18,6 +18,8 @@ function buy(id: string) {
   if (purchaseCrispr(game.state, id)) {
     // 触发响应式更新
     game.state.prestige = { ...game.state.prestige } as typeof game.state.prestige
+    game.state.genes = { ...game.state.genes }
+    game.state.race = { ...game.state.race }
   }
 }
 function plasmidCost(id: string) {
@@ -73,7 +75,7 @@ function doRoll() {
         <div v-for="upg in CRISPR_UPGRADES" :key="upg.id" class="upgrade-card">
           <div class="upg-head">
             <span class="upg-name">{{ upg.name }}</span>
-            <span class="upg-level">Lv. {{ level(upg.id) }}/5</span>
+            <span class="upg-level">Lv. {{ level(upg.id) }}/{{ upg.maxLevel ?? 5 }}</span>
           </div>
           <p class="upg-desc">{{ upg.desc }}</p>
           <div class="upg-buy">

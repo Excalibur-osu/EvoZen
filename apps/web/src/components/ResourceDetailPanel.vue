@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { ResourceState } from '@evozen/shared-types'
+import { buildResourceTooltip } from '../utils/resourceBreakdown'
 
 const game = useGameStore()
 
@@ -40,6 +41,10 @@ function fillPercent(res: { amount: number; max: number }): number {
   if (res.max <= 0) return 0
   return Math.min(100, (res.amount / res.max) * 100)
 }
+
+function resourceTooltip(res: ResourceState & { id: string }): string {
+  return buildResourceTooltip(game.state, res)
+}
 </script>
 
 <template>
@@ -57,7 +62,12 @@ function fillPercent(res: { amount: number; max: number }): number {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="res in allResources" :key="res.id">
+        <tr
+          v-for="res in allResources"
+          :key="res.id"
+          :data-tooltip="resourceTooltip(res)"
+          data-tooltip-pos="bottom"
+        >
           <td class="col-name">{{ res.name || getResourceName(res.id) }}</td>
           <td class="col-num font-mono">{{ formatNum(res.amount) }}</td>
           <td class="col-num font-mono" style="color: var(--text-muted)">{{ res.max > 0 ? formatNum(res.max) : '∞' }}</td>

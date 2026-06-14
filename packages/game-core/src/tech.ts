@@ -1898,24 +1898,8 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   },
 
   // ===== 神学 / 宗教科技链 =====
-  // theology:1 由 prestige 基因 'ancients' 自动授予，当前不可达。
-  // 以下科技在 theology:1 就位后形成完整可达链。
-
-  // legacy tech.js L8345-8369: theology → theology:2
-  {
-    id: 'theology',
-    name: '神学',
-    description: '研究信仰的力量。',
-    category: 'religion',
-    era: '文明',
-    reqs: { theology: 1, housing: 1, cement: 1 },
-    grant: ['theology', 2],
-    costs: { Knowledge: 900 },
-    effect: '解锁神殿建筑，为后续宗教科技奠定基础。',
-  },
-  // legacy tech.js L8371-8399: fanaticism → theology:3
-  // 原版有 fanaticism / alt_fanaticism 两个分支（取决于 transcendence 基因），
-  // 当前简化为单一 fanaticism。
+  // theology:1 由 faith 在 EvoZen 内建立；theology:2 的定义位于早期宗教段。
+  // legacy tech.js L8371-8429: fanaticism / alt_fanaticism
   {
     id: 'fanaticism',
     name: '狂热信仰',
@@ -1923,9 +1907,22 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
     category: 'religion',
     era: '文明',
     reqs: { theology: 2 },
+    condition: (state) => (state.genes['transcendence'] ?? 0) === 0,
     grant: ['theology', 3],
     costs: { Knowledge: 2500 },
     effect: '推进神学到 Lv.3，为古代神学解锁前置。',
+  },
+  {
+    id: 'alt_fanaticism',
+    name: '狂热信仰',
+    description: '将信仰推向极致。',
+    category: 'religion',
+    era: '文明',
+    reqs: { theology: 2 },
+    condition: (state) => (state.genes['transcendence'] ?? 0) > 0,
+    grant: ['fanaticism', 1],
+    costs: { Knowledge: 2500 },
+    effect: '解锁狂热信仰分支，并在 transcendence 路线中推进神学。',
   },
   // legacy tech.js L8432-8457: ancient_theology → theology:4
   {
@@ -1949,9 +1946,22 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
     category: 'religion',
     era: '早期太空',
     reqs: { theology: 4 },
+    condition: (state) => (state.genes['transcendence'] ?? 0) < 2,
     grant: ['theology', 5],
     costs: { Knowledge: 195000 },
     effect: '获得 ancient_study:1，提升神殿全局乘数基数（0.004 → 0.006）。',
+  },
+  {
+    id: 'study_alt',
+    name: '远古研究',
+    description: '深入研究远古文明遗迹。',
+    category: 'religion',
+    era: '早期太空',
+    reqs: { theology: 4 },
+    condition: (state) => (state.genes['transcendence'] ?? 0) >= 2,
+    grant: ['ancient_study', 1],
+    costs: { Knowledge: 195000 },
+    effect: '在 transcendence 路线中直接开启 ancient_study 分支。',
   },
 
   // ===== 太阳能 / 戴森球科技链 =====
@@ -2346,32 +2356,8 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   },
 
   // legacy tech.js L923-943: dowsing_rod → dowsing:1
-  {
-    id: 'dowsing_rod',
-    name: '探测杖',
-    description: '用于探测地下资源的分叉木杖。',
-    category: 'foraging',
-    era: '文明',
-    reqs: { foraging: 1, mining: 2 },
-    condition: (state) => state.race.forager !== undefined,
-    grant: ['dowsing', 1],
-    costs: { Knowledge: 450, Lumber: 750 },
-    effect: '提升资源探测能力。',
-  },
 
   // legacy tech.js L944-963: metal_detector → dowsing:2
-  {
-    id: 'metal_detector',
-    name: '金属探测器',
-    description: '电子金属探测设备。',
-    category: 'foraging',
-    era: '文明',
-    reqs: { dowsing: 1, high_tech: 4 },
-    condition: (state) => state.race.forager !== undefined,
-    grant: ['dowsing', 2],
-    costs: { Knowledge: 65000 },
-    effect: '大幅提升资源探测能力。',
-  },
 
   // ===== 运输科技 (Transport) — 仅 gravity_well 种族可用 =====
 
@@ -2807,32 +2793,8 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   },
 
   // legacy tech.js L6513-6537: shovel → reclaimer:2
-  {
-    id: 'shovel',
-    name: '铲子',
-    description: '用于挖掘的铲子工具。',
-    category: 'reclaimer',
-    era: '文明',
-    reqs: { reclaimer: 1, mining: 2 },
-    condition: (state) => state.race.evil !== undefined && !state.race.living_tool,
-    grant: ['reclaimer', 2],
-    costs: { Knowledge: 540, Copper: 25 },
-    effect: '提升回收效率。',
-  },
 
   // legacy tech.js L6538-6562: iron_shovel → reclaimer:3
-  {
-    id: 'iron_shovel',
-    name: '铁铲',
-    description: '更坚固的铁制铲子。',
-    category: 'reclaimer',
-    era: '文明',
-    reqs: { reclaimer: 2, mining: 3 },
-    condition: (state) => state.race.evil !== undefined && !state.race.living_tool,
-    grant: ['reclaimer', 3],
-    costs: { Knowledge: 2700, Iron: 250 },
-    effect: '进一步提升回收效率。',
-  },
 
   // legacy tech.js L6563-6587: steel_shovel → reclaimer:4
   {
@@ -3020,6 +2982,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
     category: 'ai_core',
     era: '星际',
     reqs: { high_tech: 14, science: 15, blackhole: 3 },
+    condition: (state) => state.race.truepath === undefined,
     grant: ['high_tech', 15],
     costs: { Knowledge: 1500000 },
     effect: '解锁城堡建筑和 AI 核心技术。',
@@ -3705,7 +3668,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'fortifications', name: '要塞化', description: '在地狱入口建造防御要塞。', category: 'hell_dimension', era: '星际', reqs: { portal: 1 }, grant: ['portal', 2], costs: { Knowledge: 550000, Stone: 1000000 }, effect: '解锁地狱门区域和要塞防御系统。' },
   { id: 'war_drones', name: '战争无人机', description: '部署地狱作战无人机。', category: 'hell_dimension', era: '星际', reqs: { portal: 2, graphene: 1 }, grant: ['portal', 3], costs: { Knowledge: 700000 }, effect: '解锁荒地区域和战争无人机。' },
   { id: 'demon_attractor', name: '恶魔吸引器', description: '建造吸引恶魔的装置。', category: 'hell_dimension', era: '星际', reqs: { portal: 3, stanene: 1 }, grant: ['portal', 4], costs: { Knowledge: 745000 }, effect: '解锁恶魔吸引器建筑。' },
-  { id: 'combat_droids', name: '战斗机器人', description: '部署地狱战斗机器人。', category: 'hell_dimension', era: '星际', reqs: { portal: 5 }, grant: ['portal', 6], costs: { Knowledge: 762000, Soul_Gem: 1 }, effect: '解锁战斗机器人。' },
+  { id: 'combat_droids', name: '战斗机器人', description: '部署地狱战斗机器人。', category: 'hell_dimension', era: '星际', reqs: { portal: 4 }, grant: ['portal', 5], costs: { Knowledge: 762000, Soul_Gem: 1 }, effect: '解锁战斗机器人。' },
   { id: 'repair_droids', name: '维修机器人', description: '部署地狱维修机器人。', category: 'hell_dimension', era: '星际', reqs: { portal: 5 }, grant: ['portal', 6], costs: { Knowledge: 794000, Soul_Gem: 1 }, effect: '解锁维修机器人。' },
   { id: 'advanced_predators', name: '高级掠食者', description: '升级地狱防御系统。', category: 'hell_dimension', era: '星系际', reqs: { portal: 6, xeno: 4 }, grant: ['portal', 7], costs: { Knowledge: 5000000, Bolognium: 500000, Vitreloy: 250000 }, effect: '大幅提升地狱防御能力。' },
   { id: 'enhanced_droids', name: '增强机器人', description: '增强地狱战斗机器人的能力。', category: 'hell_dimension', era: '星际', reqs: { portal: 5, military: 9 }, grant: ['hdroid', 1], costs: { Knowledge: 1050000 }, effect: '提升机器人战斗效能。' },
@@ -3758,7 +3721,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'soul_binding', name: '灵魂束缚', description: '研究灵魂束缚技术。', category: 'hell_dimension', era: '星系际', reqs: { corrupt: 2, science: 19 }, condition: (state) => state.race.witch_hunter !== undefined, grant: ['forbidden', 1], costs: { Knowledge: 19000000 }, effect: '解锁灵魂束缚技术。' },
   { id: 'soul_capacitor', name: '灵魂电容器', description: '建造灵魂电容器。', category: 'hell_dimension', era: '星系际', reqs: { forbidden: 1 }, condition: (state) => state.race.witch_hunter !== undefined, grant: ['forbidden', 2], costs: { Knowledge: 19500000 }, effect: '解锁灵魂电容器建筑。' },
   { id: 'absorption_chamber', name: '吸收室', description: '建造灵魂吸收室。', category: 'hell_dimension', era: '星系际', reqs: { forbidden: 2 }, condition: (state) => state.race.witch_hunter !== undefined, grant: ['forbidden', 3], costs: { Knowledge: 20000000 }, effect: '解锁吸收室建筑。' },
-  { id: 'corrupt_gem_analysis', name: '腐化宝石分析', description: '分析腐化宝石的成分。', category: 'hell_dimension', era: '维度', reqs: { high_tech: 16, corrupt: 1 }, grant: ['corrupt', 2], costs: { Knowledge: 22000000, Corrupt_Gem: 1 }, effect: '分析腐化宝石。' },
+  { id: 'corrupt_gem_analysis', name: '腐化宝石分析', description: '分析腐化宝石的成分。', category: 'hell_dimension', era: '维度', reqs: { high_tech: 16, corrupt: 1 }, condition: (state) => state.race.witch_hunter === undefined, grant: ['corrupt', 2], costs: { Knowledge: 22000000, Corrupt_Gem: 1 }, effect: '分析腐化宝石。' },
   { id: 'hell_search', name: '地狱搜索', description: '搜索地狱废墟。', category: 'hell_dimension', era: '维度', reqs: { corrupt: 2 }, grant: ['hell_ruins', 1], costs: { Knowledge: 22100000 }, effect: '解锁废墟和地狱门区域。' },
 
   // --- 柱子 (Pillars) ---
@@ -3816,62 +3779,50 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   // ===== 特殊科技 (Special) =====
 
   { id: 'banquet', name: '宴会', description: '举办盛大宴会。', category: 'special', era: '发现', reqs: { high_tech: 2 }, grant: ['banquet', 1], costs: { Knowledge: 18500 }, effect: '解锁宴会建筑（需要无尽饥饿成就）。' },
-  { id: 'matter_replicator', name: '物质复制器', description: '建造物质复制器。', category: 'special', era: '发现', reqs: { high_tech: 2 }, grant: ['replicator', 1], costs: { Knowledge: 25000 }, effect: '解锁物质复制器（需要亚当夏娃成就）。' },
+  { id: 'matter_replicator', name: '物质复制器', description: '建造物质复制器。', category: 'special', era: '发现', reqs: { high_tech: 2 }, condition: (state) => state.race.truepath === undefined, grant: ['replicator', 1], costs: { Knowledge: 25000 }, effect: '解锁物质复制器（需要亚当夏娃成就）。' },
   { id: 'incorporeal', name: '无形体', description: '研究无形体状态。', category: 'special', era: '星系际', reqs: { science: 19 }, grant: ['ascension', 1], costs: { Knowledge: 17500000, Phage: 25 }, effect: '解锁飞升路径。' },
   { id: 'tech_ascension', name: '技术飞升', description: '通过技术实现飞升。', category: 'special', era: '星系际', reqs: { ascension: 1 }, grant: ['ascension', 2], costs: { Knowledge: 18500000, Plasmid: 100 }, effect: '解锁天狼星区域。' },
-  { id: 'terraforming', name: '地球化', description: '改造行星环境。', category: 'special', era: '星系际', reqs: { science: 19 }, grant: ['terraforming', 1], costs: { Knowledge: 18000000 }, effect: '解锁地球化项目。' },
+  { id: 'terraforming', name: '地球化', description: '改造行星环境。', category: 'special', era: '星系际', reqs: { science: 19 }, condition: (state) => state.race.truepath === undefined && state.race.orbit_decay !== undefined, grant: ['terraforming', 1], costs: { Knowledge: 18000000 }, effect: '解锁地球化项目。' },
   { id: 'mad', name: 'MAD', description: '相互保证毁灭武器系统。', category: 'special', era: '全球化', reqs: { uranium: 1, explosives: 3, high_tech: 7 }, grant: ['mad', 1], costs: { Knowledge: 120000, Oil: 8500, Uranium: 1250 }, effect: '解锁 MAD 转生路径。' },
-  { id: 'unification', name: '统一', description: '统一全球政权。', category: 'special', era: '早期太空', reqs: { mars: 2 }, grant: ['unify', 1], costs: { Knowledge: 200000 }, effect: '开始全球统一进程。' },
-  { id: 'unification2', name: '统一完成', description: '完成全球统一。', category: 'special', era: '早期太空', reqs: { unify: 1 }, grant: ['unify', 2], costs: { Knowledge: 200000 }, effect: '完成全球统一，解锁联邦政体。' },
-  { id: 'unite', name: '联合', description: '联合全球政权（真相之路）。', category: 'special', era: '全球化', reqs: { unify: 1 }, grant: ['unify', 2], costs: { Knowledge: 200000 }, effect: '完成全球统一。' },
+  { id: 'unification', name: '统一', description: '统一全球政权。', category: 'special', era: '早期太空', reqs: { mars: 2 }, condition: (state) => state.race.truepath === undefined, grant: ['unify', 1], costs: { Knowledge: 200000 }, effect: '开始全球统一进程。' },
+  { id: 'unification2', name: '统一完成', description: '完成全球统一。', category: 'special', era: '早期太空', reqs: { unify: 1 }, condition: (state) => state.race.truepath === undefined, grant: ['unify', 2], costs: { Knowledge: 200000 }, effect: '完成全球统一，解锁联邦政体。' },
+  { id: 'unite', name: '联合', description: '联合全球政权（真相之路）。', category: 'special', era: '全球化', reqs: { unify: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['unify', 2], costs: { Knowledge: 200000 }, effect: '完成全球统一。' },
   { id: 'genesis', name: '创世纪', description: '创世纪计划。', category: 'special', era: '深空', reqs: { high_tech: 10, genesis: 1 }, grant: ['genesis', 2], costs: { Knowledge: 350000 }, effect: '推进创世纪计划。' },
   { id: 'star_dock', name: '星港', description: '建造星港。', category: 'special', era: '深空', reqs: { genesis: 2, space: 5, high_tech: 10 }, grant: ['genesis', 3], costs: { Knowledge: 380000 }, effect: '解锁星港建筑。' },
   { id: 'genesis_ship', name: '创世飞船', description: '建造创世飞船。', category: 'special', era: '深空', reqs: { genesis: 4 }, grant: ['genesis', 5], costs: { Knowledge: 425000 }, effect: '建造创世飞船进行播种。' },
   { id: 'geck', name: 'GECK', description: '基因工程创造工具包。', category: 'special', era: '深空', reqs: { genesis: 5 }, grant: ['geck', 1], costs: { Knowledge: 500000 }, effect: '解锁 GECK 工具包（需要拉米蒂斯成就）。' },
-  { id: 'terraforming_tp', name: '地球化（真相之路）', description: '真相之路地球化改造。', category: 'special', era: '太阳系', reqs: { dig_control: 1, eris: 2, titan_ai_core: 2 }, grant: ['terraforming', 1], costs: { Knowledge: 5000000 }, effect: '解锁地球化改造器。' },
-  { id: 'replicator_tp', name: '复制器（真相之路）', description: '真相之路物质复制器。', category: 'special', era: 'Tauceti', reqs: { tau_home: 4, isolation: 1 }, grant: ['replicator', 1], costs: { Knowledge: 6250000 }, effect: '解锁物质复制器。' },
+  { id: 'terraforming_tp', name: '地球化（真相之路）', description: '真相之路地球化改造。', category: 'special', era: '太阳系', reqs: { dig_control: 1, eris: 2, titan_ai_core: 2 }, condition: (state) => state.race.truepath !== undefined, grant: ['terraforming', 1], costs: { Knowledge: 5000000 }, effect: '解锁地球化改造器。' },
+  { id: 'replicator_tp', name: '复制器（真相之路）', description: '真相之路物质复制器。', category: 'special', era: 'Tauceti', reqs: { tau_home: 4, isolation: 1 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor !== undefined, grant: ['replicator', 1], costs: { Knowledge: 6250000 }, effect: '解锁物质复制器。' },
   { id: 'outpost_boost', name: '前哨站升级', description: '升级前哨站效率。', category: 'special', era: 'Tauceti', reqs: { tau_home: 4, isolation: 1 }, grant: ['outpost_boost', 1], costs: { Knowledge: 8900000 }, effect: '提升前哨站效率。' },
   { id: 'garden_of_eden', name: '伊甸园', description: '建造伊甸园设施。', category: 'special', era: 'Tauceti', reqs: { eden: 1 }, grant: ['eden', 2], costs: { Knowledge: 10000000 }, effect: '解锁伊甸园设施建筑。' },
 
   // ===== 存储科技 (Storage) =====
 
   // storage 链
-  { id: 'storage', name: '存储', description: '建造棚屋存储资源。', category: 'storage', era: '文明', reqs: { primitive: 3, currency: 1 }, grant: ['storage', 1], costs: { Knowledge: 20 }, effect: '解锁棚屋建筑。' },
-  { id: 'reinforced_shed', name: '加固棚屋', description: '用铁和水泥加固棚屋。', category: 'storage', era: '文明', reqs: { storage: 1, cement: 1, mining: 3 }, grant: ['storage', 2], costs: { Money: 3750, Knowledge: 2550, Iron: 750, Cement: 500 }, effect: '提升棚屋容量。' },
-  { id: 'barns', name: '谷仓', description: '建造大型谷仓。', category: 'storage', era: '发现', reqs: { storage: 2, smelting: 2, alumina: 1 }, grant: ['storage', 3], costs: { Knowledge: 15750, Aluminium: 3000, Steel: 3000 }, effect: '进一步提升存储容量。' },
-  { id: 'warehouse', name: '仓库', description: '建造现代仓库。', category: 'storage', era: '工业化', reqs: { storage: 3, high_tech: 3, smelting: 2 }, grant: ['storage', 4], costs: { Knowledge: 40500, Titanium: 3000 }, effect: '大幅提升存储容量。' },
   { id: 'cameras', name: '监控摄像头', description: '安装监控系统提升安全性。', category: 'storage', era: '全球化', reqs: { storage: 4, high_tech: 4 }, grant: ['storage', 5], costs: { Money: 90000, Knowledge: 65000 }, effect: '提升存储安全性。' },
   { id: 'pocket_dimensions', name: '口袋维度', description: '利用粒子物理开辟额外存储空间。', category: 'storage', era: '早期太空', reqs: { particles: 1, storage: 5 }, grant: ['storage', 6], costs: { Knowledge: 108000 }, effect: '大幅提升存储容量。' },
   { id: 'ai_logistics', name: 'AI 物流', description: '使用 AI 优化物流管理。', category: 'storage', era: '星际', reqs: { storage: 6, proxima: 2, science: 13 }, grant: ['storage', 7], costs: { Knowledge: 650000 }, effect: 'AI 优化存储管理。' },
 
   // container 链
-  { id: 'containerization', name: '集装箱化', description: '使用集装箱标准化存储。', category: 'storage', era: '文明', reqs: { cement: 1, mining: 1, storage: 1, science: 1 }, grant: ['container', 1], costs: { Knowledge: 2700 }, effect: '解锁存储场建筑。' },
-  { id: 'reinforced_crates', name: '加固箱', description: '制造加固集装箱。', category: 'storage', era: '文明', reqs: { container: 1, smelting: 2 }, grant: ['container', 2], costs: { Knowledge: 6750, Sheet_Metal: 100 }, effect: '提升集装箱容量。' },
-  { id: 'cranes', name: '起重机', description: '使用起重机提升装卸效率。', category: 'storage', era: '发现', reqs: { container: 2, high_tech: 2 }, grant: ['container', 3], costs: { Knowledge: 18000, Copper: 1000, Steel: 2500 }, effect: '提升装卸效率。' },
   { id: 'titanium_crates', name: '钛箱', description: '制造钛合金集装箱。', category: 'storage', era: '全球化', reqs: { container: 3, titanium: 1 }, grant: ['container', 4], costs: { Knowledge: 67500, Titanium: 1000 }, effect: '提升集装箱容量。' },
   { id: 'mythril_crates', name: '秘银箱', description: '制造秘银集装箱。', category: 'storage', era: '早期太空', reqs: { container: 4, space: 3 }, grant: ['container', 5], costs: { Knowledge: 145000, Mythril: 350 }, effect: '提升集装箱容量。' },
-  { id: 'infernite_crates', name: '地狱火箱', description: '制造地狱火集装箱。', category: 'storage', era: '星际', reqs: { container: 5, infernite: 1 }, grant: ['container', 6], costs: { Knowledge: 575000, Infernite: 1000 }, effect: '提升集装箱容量。' },
+  { id: 'infernite_crates', name: '地狱火箱', description: '制造地狱火集装箱。', category: 'storage', era: '星际', reqs: { container: 5, infernite: 1 }, condition: (state) => state.race.truepath === undefined, grant: ['container', 6], costs: { Knowledge: 575000, Infernite: 1000 }, effect: '提升集装箱容量。' },
   { id: 'graphene_crates', name: '石墨烯箱', description: '制造石墨烯集装箱。', category: 'storage', era: '星际', reqs: { container: 6, graphene: 1 }, grant: ['container', 7], costs: { Knowledge: 725000, Graphene: 75000 }, effect: '提升集装箱容量。' },
   { id: 'bolognium_crates', name: '博洛尼乌姆箱', description: '制造博洛尼乌姆集装箱。', category: 'storage', era: '星系际', reqs: { container: 7, gateway: 3 }, grant: ['container', 8], costs: { Knowledge: 3420000, Bolognium: 90000 }, effect: '提升集装箱容量。' },
 
   // steel_container 链
-  { id: 'steel_containers', name: '钢制集装箱', description: '制造钢制集装箱。', category: 'storage', era: '发现', reqs: { smelting: 2, container: 1 }, grant: ['steel_container', 1], costs: { Knowledge: 9000, Steel: 250 }, effect: '解锁仓库建筑。' },
-  { id: 'gantry_crane', name: '龙门吊', description: '建造龙门吊提升效率。', category: 'storage', era: '发现', reqs: { steel_container: 1, high_tech: 2 }, grant: ['steel_container', 2], costs: { Knowledge: 22500, Steel: 5000 }, effect: '提升仓库效率。' },
   { id: 'alloy_containers', name: '合金集装箱', description: '制造合金集装箱。', category: 'storage', era: '工业化', reqs: { steel_container: 2, storage: 4 }, grant: ['steel_container', 3], costs: { Knowledge: 49500, Alloy: 2500 }, effect: '提升集装箱容量。' },
   { id: 'mythril_containers', name: '秘银集装箱', description: '制造秘银集装箱。', category: 'storage', era: '早期太空', reqs: { steel_container: 3, space: 3 }, grant: ['steel_container', 4], costs: { Knowledge: 165000, Mythril: 500 }, effect: '提升集装箱容量。' },
-  { id: 'adamantite_containers', name: '精金集装箱', description: '制造精金集装箱。', category: 'storage', era: '星际', reqs: { steel_container: 4, alpha: 2 }, grant: ['steel_container', 5], costs: { Knowledge: 525000, Adamantite: 17500 }, effect: '提升集装箱容量。' },
-  { id: 'aerogel_containers', name: '气凝胶集装箱', description: '制造气凝胶集装箱。', category: 'storage', era: '星际', reqs: { steel_container: 5, aerogel: 1 }, grant: ['steel_container', 6], costs: { Knowledge: 775000, Aerogel: 500 }, effect: '提升集装箱容量。' },
+  { id: 'adamantite_containers', name: '精金集装箱', description: '制造精金集装箱。', category: 'storage', era: '星际', reqs: { steel_container: 4, alpha: 2 }, condition: (state) => state.race.truepath === undefined, grant: ['steel_container', 5], costs: { Knowledge: 525000, Adamantite: 17500 }, effect: '提升集装箱容量。' },
+  { id: 'aerogel_containers', name: '气凝胶集装箱', description: '制造气凝胶集装箱。', category: 'storage', era: '星际', reqs: { steel_container: 5, aerogel: 1 }, condition: (state) => state.race.truepath === undefined, grant: ['steel_container', 6], costs: { Knowledge: 775000, Aerogel: 500 }, effect: '提升集装箱容量。' },
   { id: 'bolognium_containers', name: '博洛尼乌姆集装箱', description: '制造博洛尼乌姆集装箱。', category: 'storage', era: '星系际', reqs: { steel_container: 6, gateway: 3 }, grant: ['steel_container', 7], costs: { Knowledge: 3500000, Bolognium: 125000 }, effect: '提升集装箱容量。' },
   { id: 'nanoweave_containers', name: '纳米织物集装箱', description: '制造纳米织物集装箱。', category: 'storage', era: '星系际', reqs: { steel_container: 7, nanoweave: 1 }, grant: ['steel_container', 8], costs: { Knowledge: 9000000, Nanoweave: 50000 }, effect: '提升集装箱容量。' },
 
   // 油库
-  { id: 'oil_depot', name: '油库', description: '建造油库存储石油。', category: 'storage', era: '工业化', reqs: { oil: 1 }, grant: ['oil', 2], costs: { Knowledge: 32000 }, effect: '解锁油库建筑。' },
   { id: 'uranium_storage', name: '铀存储', description: '建造铀存储设施。', category: 'storage', era: '全球化', reqs: { uranium: 1 }, grant: ['uranium', 2], costs: { Knowledge: 75600, Alloy: 2500 }, effect: '提升铀存储容量。' },
 
   // ===== 电力科技 (Power Generation) =====
 
-  { id: 'oil_well', name: '油井', description: '钻探石油。', category: 'power_generation', era: '工业化', reqs: { high_tech: 3 }, grant: ['oil', 1], costs: { Knowledge: 27000 }, effect: '解锁油井建筑。' },
-  { id: 'oil_power', name: '燃油发电', description: '使用石油发电。', category: 'power_generation', era: '工业化', reqs: { oil: 2 }, grant: ['oil', 3], costs: { Knowledge: 44000 }, effect: '解锁燃油发电厂。' },
   { id: 'titanium_drills', name: '钛钻头', description: '使用钛合金钻头提升采油效率。', category: 'power_generation', era: '工业化', reqs: { oil: 3 }, grant: ['oil', 4], costs: { Knowledge: 54000, Titanium: 3500 }, effect: '提升采油效率。' },
   { id: 'alloy_drills', name: '合金钻头', description: '使用合金钻头。', category: 'power_generation', era: '全球化', reqs: { oil: 4 }, grant: ['oil', 5], costs: { Knowledge: 77000, Alloy: 1000 }, effect: '进一步提升采油效率。' },
   { id: 'fracking', name: '水力压裂', description: '使用水力压裂技术采油。', category: 'power_generation', era: '全球化', reqs: { oil: 5, high_tech: 6 }, grant: ['oil', 6], costs: { Knowledge: 132000 }, effect: '大幅提升采油效率。' },
@@ -3880,75 +3831,36 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 锻造科技 (Crafting) =====
 
-  { id: 'foundry', name: '锻造', description: '建造锻造炉。', category: 'crafting', era: '文明', reqs: { mining: 2, smelting: 1 }, grant: ['foundry', 1], costs: { Knowledge: 450 }, effect: '解锁锻造炉建筑。' },
-  { id: 'brick_foundry', name: '砖砌锻造', description: '用砖砌建造更好的锻造炉。', category: 'crafting', era: '文明', reqs: { foundry: 1, cement: 1 }, grant: ['foundry', 2], costs: { Knowledge: 1200, Cement: 200 }, effect: '提升锻造效率。' },
-  { id: 'foundry_automation', name: '锻造自动化', description: '自动化锻造流程。', category: 'crafting', era: '发现', reqs: { foundry: 3, high_tech: 2 }, grant: ['foundry', 4], costs: { Knowledge: 18000 }, effect: '大幅提升锻造效率。' },
-  { id: 'advanced_foundry', name: '高级锻造', description: '建造高级锻造设施。', category: 'crafting', era: '工业化', reqs: { foundry: 4, high_tech: 3 }, grant: ['foundry', 5], costs: { Knowledge: 40000 }, effect: '进一步提升锻造效率。' },
-  { id: 'nanotech_foundry', name: '纳米锻造', description: '使用纳米技术的锻造设施。', category: 'crafting', era: '星际', reqs: { foundry: 5, high_tech: 12 }, grant: ['foundry', 6], costs: { Knowledge: 750000 }, effect: '大幅提升锻造效率。' },
-  { id: 'assembly_line', name: '流水线', description: '建立生产流水线。', category: 'crafting', era: '工业化', reqs: { high_tech: 3, mass: 1 }, grant: ['factory', 1], costs: { Knowledge: 38000 }, effect: '解锁工厂建筑。' },
-  { id: 'robotic_assembly', name: '机器人装配', description: '使用机器人进行装配。', category: 'crafting', era: '全球化', reqs: { factory: 1, high_tech: 6 }, grant: ['factory', 2], costs: { Knowledge: 95000 }, effect: '提升工厂效率。' },
-  { id: 'factory_optimization', name: '工厂优化', description: '优化生产流程。', category: 'crafting', era: '深空', reqs: { factory: 2, high_tech: 10 }, grant: ['factory', 3], costs: { Knowledge: 320000 }, effect: '大幅提升工厂效率。' },
+  { id: 'assembly_line', name: '流水线', description: '建立生产流水线。', category: 'crafting', era: '全球化', reqs: { high_tech: 4 }, grant: ['factory', 1], costs: { Knowledge: 72000, Copper: 125000 }, effect: '解锁工厂建筑。' },
+  { id: 'automation', name: '自动化', description: '研发自动化技术。', category: 'crafting', era: '早期太空', reqs: { factory: 1, high_tech: 8 }, grant: ['factory', 2], costs: { Knowledge: 165000 }, effect: '提升工厂自动化。' },
 
   // ===== 军事科技 (Military) =====
 
-  { id: 'boot_camp', name: '训练营', description: '建造士兵训练营。', category: 'military', era: '文明', reqs: { science: 1, housing: 1 }, grant: ['military', 1], costs: { Knowledge: 350 }, effect: '解锁训练营建筑。' },
-  { id: 'barracks', name: '兵营', description: '建造兵营。', category: 'military', era: '文明', reqs: { military: 1 }, grant: ['military', 2], costs: { Knowledge: 500 }, effect: '提升军队容量。' },
-  { id: 'medic', name: '医疗兵', description: '培训医疗兵。', category: 'military', era: '发现', reqs: { military: 2, high_tech: 2 }, grant: ['medic', 1], costs: { Knowledge: 15000 }, effect: '降低战斗伤亡。' },
-  { id: 'armor', name: '盔甲', description: '制造战斗盔甲。', category: 'military', era: '文明', reqs: { military: 2, smelting: 1 }, grant: ['armor', 1], costs: { Knowledge: 750, Iron: 250 }, effect: '提升军队防御力。' },
-  { id: 'iron_armor', name: '铁甲', description: '制造铁制盔甲。', category: 'military', era: '文明', reqs: { armor: 1, mining: 3 }, grant: ['armor', 2], costs: { Knowledge: 3000, Iron: 500 }, effect: '进一步提升防御力。' },
   { id: 'steel_armor', name: '钢甲', description: '制造钢制盔甲。', category: 'military', era: '发现', reqs: { armor: 2, smelting: 3 }, grant: ['armor', 3], costs: { Knowledge: 12000, Steel: 750 }, effect: '大幅提升防御力。' },
   { id: 'titanium_armor', name: '钛甲', description: '制造钛合金盔甲。', category: 'military', era: '工业化', reqs: { armor: 3, high_tech: 3 }, grant: ['armor', 4], costs: { Knowledge: 42000, Titanium: 500 }, effect: '进一步提升防御力。' },
   { id: 'alloy_armor', name: '合金甲', description: '制造合金盔甲。', category: 'military', era: '全球化', reqs: { armor: 4, high_tech: 5 }, grant: ['armor', 5], costs: { Knowledge: 85000, Alloy: 750 }, effect: '大幅提升防御力。' },
-  { id: 'bunk_beds', name: '双层床', description: '在兵营安装双层床。', category: 'military', era: '文明', reqs: { military: 2 }, grant: ['morale', 1], costs: { Knowledge: 450, Lumber: 200 }, effect: '提升兵营容量。' },
-  { id: 'mercs', name: '雇佣兵', description: '招募雇佣兵。', category: 'military', era: '发现', reqs: { military: 3, currency: 3 }, grant: ['mercs', 1], costs: { Knowledge: 12000 }, effect: '解锁雇佣兵系统。' },
-  { id: 'spy_gadgets_mil', name: '军事装备', description: '研发先进军事装备。', category: 'military', era: '全球化', reqs: { military: 5, high_tech: 6 }, grant: ['military', 6], costs: { Knowledge: 110000 }, effect: '提升军队战斗力。' },
-  { id: 'laser_rifles', name: '激光步枪', description: '装备激光步枪。', category: 'military', era: '深空', reqs: { military: 7, high_tech: 10 }, grant: ['military', 8], costs: { Knowledge: 350000, Elerium: 250 }, effect: '大幅提升军队战斗力。' },
-  { id: 'rail_gun', name: '电磁炮', description: '研发电磁炮武器。', category: 'military', era: '星际', reqs: { military: 8, high_tech: 13 }, grant: ['military', 9], costs: { Knowledge: 800000, Elerium: 500 }, effect: '大幅提升军队火力。' },
-  { id: 'xeno_laser', name: '异星激光', description: '使用外星技术的激光武器。', category: 'military', era: '星系际', reqs: { military: 9, xeno: 5 }, grant: ['military', 10], costs: { Knowledge: 5000000 }, effect: '进一步提升军队火力。' },
+  { id: 'bunk_beds', name: '双层床', description: '在兵营安装双层床。', category: 'military', era: '全球化', reqs: { military: 4, high_tech: 4 }, grant: ['military', 5], costs: { Knowledge: 76500, Furs: 25000, Alloy: 3000 }, effect: '提升兵营容量。' },
+  { id: 'spy_gadgets_mil', name: '军事装备', description: '研发先进军事装备。', category: 'military', era: '早期太空', reqs: { military: 5, mass: 1 }, grant: ['military', 6], costs: { Knowledge: 200000, Iridium: 2500 }, effect: '提升军队战斗力。' },
+  { id: 'laser_rifles', name: '激光步枪', description: '装备激光步枪。', category: 'military', era: '深空', reqs: { military: 6, high_tech: 9, elerium: 1 }, grant: ['military', 7], costs: { Knowledge: 325000, Elerium: 250 }, effect: '大幅提升军队战斗力。' },
+  { id: 'xeno_laser', name: '高斯步枪', description: '使用星系际材料制造高斯武器。', category: 'military', era: '星系际', reqs: { military: 9, science: 18 }, grant: ['military', 10], costs: { Knowledge: 9500000, Bolognium: 100000 }, effect: '进一步提升军队火力。' },
 
   // ===== 科学科技 (Science) =====
 
-  { id: 'science', name: '科学', description: '建立科学研究体系。', category: 'science', era: '文明', reqs: { primitive: 3 }, grant: ['science', 1], costs: { Knowledge: 20 }, effect: '解锁科学家岗位。' },
-  { id: 'scientific_journal', name: '科学期刊', description: '创办科学期刊。', category: 'science', era: '文明', reqs: { science: 1 }, grant: ['science', 2], costs: { Knowledge: 50 }, effect: '提升知识获取。' },
-  { id: 'electricity', name: '电力', description: '发现电力。', category: 'science', era: '发现', reqs: { science: 3, high_tech: 1 }, grant: ['high_tech', 2], costs: { Knowledge: 12000 }, effect: '解锁电力系统。' },
-  { id: 'superconductors', name: '超导体', description: '研究超导材料。', category: 'science', era: '全球化', reqs: { high_tech: 5 }, grant: ['high_tech', 6], costs: { Knowledge: 90000 }, effect: '提升电力传输效率。' },
-  { id: 'quantum_computing', name: '量子计算', description: '研发量子计算机。', category: 'science', era: '深空', reqs: { high_tech: 8 }, grant: ['high_tech', 9], costs: { Knowledge: 260000 }, effect: '大幅提升计算能力。' },
-  { id: 'virtual_reality', name: '虚拟现实', description: '开发虚拟现实技术。', category: 'science', era: '全球化', reqs: { high_tech: 6 }, grant: ['high_tech', 7], costs: { Knowledge: 120000 }, effect: '解锁虚拟现实系统。' },
-  { id: 'automation', name: '自动化', description: '研发自动化技术。', category: 'science', era: '全球化', reqs: { high_tech: 5 }, grant: ['mass', 1], costs: { Knowledge: 85000 }, effect: '解锁自动化系统。' },
-  { id: 'nano_tubes', name: '纳米管', description: '制造碳纳米管。', category: 'science', era: '深空', reqs: { high_tech: 9 }, grant: ['nano', 1], costs: { Knowledge: 280000 }, effect: '解锁纳米管制造。' },
+  { id: 'quantum_computing', name: '量子计算', description: '研发量子计算机。', category: 'science', era: '深空', reqs: { high_tech: 10, nano: 1 }, grant: ['high_tech', 11], costs: { Knowledge: 435000, Elerium: 250, Nano_Tube: 100000 }, effect: '大幅提升计算能力。' },
+  { id: 'virtual_reality', name: '虚拟现实', description: '开发虚拟现实技术。', category: 'science', era: '星际', reqs: { high_tech: 11, alpha: 2, infernite: 1, stanene: 1 }, grant: ['high_tech', 12], costs: { Knowledge: 600000, Stanene: 1250, Soul_Gem: 1 }, effect: '解锁虚拟现实系统。' },
   { id: 'supercollider', name: '超级对撞机', description: '建造粒子超级对撞机。', category: 'science', era: '深空', reqs: { high_tech: 9 }, grant: ['particles', 1], costs: { Knowledge: 250000 }, effect: '解锁粒子物理研究。' },
-  { id: 'grand_unified_theory', name: '大统一理论', description: '研究大统一理论。', category: 'science', era: '星际', reqs: { high_tech: 12 }, grant: ['high_tech', 13], costs: { Knowledge: 800000 }, effect: '推进物理学前沿。' },
-  { id: 'theory_of_everything', name: '万有理论', description: '研究万有理论。', category: 'science', era: '星系际', reqs: { high_tech: 15 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000 }, effect: '统一所有物理理论。' },
 
   // ===== 银行科技 (Banking) =====
 
-  { id: 'currency', name: '货币', description: '建立货币体系。', category: 'banking', era: '文明', reqs: { housing: 1 }, grant: ['currency', 1], costs: { Knowledge: 22, Lumber: 10 }, effect: '解锁货币系统。' },
-  { id: 'investing', name: '投资', description: '通过放贷获取利息。', category: 'banking', era: '文明', reqs: { banking: 1 }, grant: ['banking', 2], costs: { Money: 2500, Knowledge: 900 }, effect: '解锁银行家岗位。' },
-  { id: 'vault', name: '金库', description: '建造金库。', category: 'banking', era: '文明', reqs: { banking: 2, cement: 1 }, grant: ['banking', 3], costs: { Money: 2000, Knowledge: 3600, Iron: 500, Cement: 750 }, effect: '提升金钱上限。' },
-  { id: 'bonds', name: '债券', description: '发行债券。', category: 'banking', era: '文明', reqs: { banking: 3 }, grant: ['banking', 4], costs: { Money: 20000, Knowledge: 5000 }, effect: '推进银行业。' },
-  { id: 'steel_vault', name: '钢制金库', description: '建造钢制金库。', category: 'banking', era: '发现', reqs: { banking: 4, smelting: 2 }, grant: ['banking', 5], costs: { Money: 75000, Knowledge: 16000, Steel: 2500 }, effect: '大幅提升金钱上限。' },
-  { id: 'stock_market', name: '股票市场', description: '建立股票市场。', category: 'banking', era: '工业化', reqs: { banking: 5, high_tech: 3 }, grant: ['banking', 6], costs: { Money: 250000, Knowledge: 42000 }, effect: '解锁股票交易。' },
-  { id: 'tax_rates', name: '税率', description: '启用税率调节。', category: 'banking', era: '文明', reqs: { banking: 2, currency: 2, queue: 1 }, grant: ['currency', 3], costs: { Knowledge: 3375 }, effect: '完善财政体系。' },
-  { id: 'large_trades', name: '大宗交易', description: '处理大宗交易。', category: 'banking', era: '文明', reqs: { currency: 3 }, grant: ['currency', 4], costs: { Knowledge: 6750 }, effect: '提升交易上限。' },
-  { id: 'tax_mining', name: '矿业税', description: '对矿业征税。', category: 'banking', era: '发现', reqs: { currency: 4, mining: 5 }, grant: ['currency', 5], costs: { Knowledge: 25000 }, effect: '矿业产生额外税收。' },
-  { id: 'gambling', name: '赌博', description: '开设赌场。', category: 'banking', era: '全球化', reqs: { banking: 6, high_tech: 6 }, grant: ['gambling', 1], costs: { Knowledge: 110000 }, effect: '解锁赌场建筑。' },
-  { id: 'q_level', name: '量子级金库', description: '使用量子技术的金库。', category: 'banking', era: '深空', reqs: { banking: 8, particles: 1 }, grant: ['banking', 9], costs: { Money: 5000000, Knowledge: 300000 }, effect: '大幅提升金钱上限。' },
-  { id: 'spiracy', name: '超级对撞机银行', description: '使用超级对撞机的银行系统。', category: 'banking', era: '星际', reqs: { banking: 10, high_tech: 13 }, grant: ['banking', 11], costs: { Money: 50000000, Knowledge: 850000 }, effect: '大幅提升金融能力。' },
-  { id: 'virt_trade', name: '虚拟贸易', description: '建立虚拟贸易系统。', category: 'banking', era: '星系际', reqs: { banking: 12, xeno: 6 }, grant: ['banking', 13], costs: { Money: 100000000, Knowledge: 5000000 }, effect: '解锁跨星际贸易。' },
+  { id: 'four_oh_one', name: '401K', description: '建立长期投资和退休账户体系。', category: 'banking', era: '早期太空', reqs: { banking: 10 }, grant: ['banking', 11], costs: { Money: 425000, Knowledge: 144000 }, effect: '提升金融体系效率。' },
   { id: 'omen_occur', name: '预兆出现', description: '神秘预兆出现。', category: 'banking', era: '存在', reqs: { banking: 14, asphodel: 5 }, grant: ['banking', 15], costs: { Knowledge: 80000000, Omniscience: 12000 }, effect: '解锁高级金融系统。' },
 
   // ===== 其他缺失科技 =====
 
   // housing
-  { id: 'housing', name: '住房', description: '建造基本住房。', category: 'housing', era: '文明', reqs: { primitive: 3 }, grant: ['housing', 1], costs: { Knowledge: 10, Lumber: 10 }, effect: '解锁棚屋建筑。' },
-  { id: 'cottages', name: '村舍', description: '建造村舍。', category: 'housing', era: '文明', reqs: { housing: 1, cement: 1 }, grant: ['housing', 2], costs: { Knowledge: 500, Stone: 200 }, effect: '解锁村舍建筑。' },
-  { id: 'apartments', name: '公寓', description: '建造公寓楼。', category: 'housing', era: '工业化', reqs: { housing: 2, high_tech: 3 }, grant: ['housing', 3], costs: { Knowledge: 35000 }, effect: '解锁公寓建筑。' },
   { id: 'smart_housing', name: '智能住房', description: '建造智能家居。', category: 'housing', era: '全球化', reqs: { housing: 3, high_tech: 6 }, grant: ['housing', 4], costs: { Knowledge: 95000 }, effect: '提升住房效率。' },
 
   // religion
-  { id: 'theology', name: '神学', description: '研究神学。', category: 'religion', era: '文明', reqs: { housing: 1 }, grant: ['theology', 1], costs: { Knowledge: 45 }, effect: '解锁神庙建筑。' },
-  { id: 'study_theology', name: '神学研究', description: '深入研究神学。', category: 'religion', era: '文明', reqs: { theology: 1 }, grant: ['theology', 2], costs: { Knowledge: 200 }, effect: '提升神庙效果。' },
-  { id: 'priests', name: '牧师', description: '培训牧师。', category: 'religion', era: '发现', reqs: { theology: 3 }, grant: ['theology', 4], costs: { Knowledge: 12000 }, effect: '解锁牧师岗位。' },
   { id: 'cult_of_personality', name: '个人崇拜', description: '建立个人崇拜。', category: 'religion', era: '工业化', reqs: { theology: 5, high_tech: 3 }, grant: ['theology', 6], costs: { Knowledge: 35000 }, effect: '提升士气和统治力。' },
 
   // space_exploration
@@ -3957,97 +3869,56 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'mars', name: '火星', description: '探索火星。', category: 'space_exploration', era: '早期太空', reqs: { space: 3, luna: 1 }, grant: ['mars', 1], costs: { Knowledge: 190000 }, effect: '解锁火星区域。' },
   { id: 'hell_planet', name: '地狱行星', description: '探索地狱行星。', category: 'space_exploration', era: '早期太空', reqs: { mars: 1 }, grant: ['hell', 1], costs: { Knowledge: 210000 }, effect: '解锁地狱行星区域。' },
   { id: 'sun', name: '太阳', description: '探索太阳。', category: 'space_exploration', era: '早期太空', reqs: { hell: 1 }, grant: ['sun', 1], costs: { Knowledge: 225000 }, effect: '解锁太阳区域。' },
-  { id: 'gas_giant', name: '气态巨行星', description: '探索气态巨行星。', category: 'space_exploration', era: '深空', reqs: { sun: 1 }, grant: ['gas_giant', 1], costs: { Knowledge: 250000 }, effect: '解锁气态巨行星区域。' },
   { id: 'gas_moon', name: '气态巨行星卫星', description: '探索气态巨行星的卫星。', category: 'space_exploration', era: '深空', reqs: { gas_giant: 1 }, grant: ['gas_moon', 1], costs: { Knowledge: 275000 }, effect: '解锁气态巨行星卫星区域。' },
   { id: 'dwarf_planet', name: '矮行星', description: '探索矮行星。', category: 'space_exploration', era: '深空', reqs: { gas_moon: 1 }, grant: ['dwarf', 1], costs: { Knowledge: 300000 }, effect: '解锁矮行星区域。' },
 
   // entertainment
-  { id: 'theatre', name: '剧院', description: '建造剧院。', category: 'entertainment', era: '文明', reqs: { housing: 1, currency: 1, cement: 1 }, grant: ['theatre', 1], costs: { Knowledge: 750 }, effect: '解锁剧院建筑。' },
-  { id: 'tourism', name: '旅游业', description: '发展旅游业。', category: 'entertainment', era: '全球化', reqs: { theatre: 2, high_tech: 5 }, grant: ['tourism', 1], costs: { Knowledge: 85000 }, effect: '解锁旅游建筑。' },
   { id: 'vr_tourism', name: 'VR 旅游', description: '虚拟现实旅游。', category: 'entertainment', era: '深空', reqs: { tourism: 1, high_tech: 10 }, grant: ['tourism', 2], costs: { Knowledge: 350000 }, effect: '提升旅游收入。' },
 
   // agriculture
-  { id: 'farm', name: '农场', description: '建造农场。', category: 'agriculture', era: '文明', reqs: { primitive: 3 }, grant: ['farm', 1], costs: { Knowledge: 45 }, effect: '解锁农场建筑。' },
-  { id: 'irrigation', name: '灌溉', description: '建设灌溉系统。', category: 'agriculture', era: '文明', reqs: { farm: 1 }, grant: ['farm', 2], costs: { Knowledge: 250 }, effect: '提升农场效率。' },
-  { id: 'silos', name: '粮仓', description: '建造粮仓。', category: 'agriculture', era: '文明', reqs: { farm: 2 }, grant: ['farm', 3], costs: { Knowledge: 650 }, effect: '提升粮食存储。' },
-  { id: 'mills', name: '磨坊', description: '建造磨坊。', category: 'agriculture', era: '文明', reqs: { farm: 3, smelting: 1 }, grant: ['farm', 4], costs: { Knowledge: 1800 }, effect: '提升粮食加工效率。' },
   { id: 'hydroponics', name: '水培', description: '发展水培技术。', category: 'agriculture', era: '深空', reqs: { farm: 5, high_tech: 9 }, grant: ['farm', 6], costs: { Knowledge: 280000 }, effect: '在太空中种植食物。' },
 
   // mining
-  { id: 'mining', name: '采矿', description: '学习采矿技术。', category: 'mining', era: '文明', reqs: { primitive: 3 }, grant: ['mining', 1], costs: { Knowledge: 15 }, effect: '解锁矿工岗位。' },
-  { id: 'copper_sledgehammer', name: '铜锤', description: '制造铜锤。', category: 'mining', era: '文明', reqs: { mining: 1 }, grant: ['mining', 2], costs: { Knowledge: 45, Copper: 25 }, effect: '提升采矿效率。' },
-  { id: 'iron_sledgehammer', name: '铁锤', description: '制造铁锤。', category: 'mining', era: '文明', reqs: { mining: 2 }, grant: ['mining', 3], costs: { Knowledge: 350, Iron: 100 }, effect: '进一步提升采矿效率。' },
-  { id: 'steel_sledgehammer', name: '钢锤', description: '制造钢锤。', category: 'mining', era: '发现', reqs: { mining: 3, smelting: 2 }, grant: ['mining', 4], costs: { Knowledge: 8000, Steel: 200 }, effect: '大幅提升采矿效率。' },
-  { id: 'titanium_sledgehammer', name: '钛锤', description: '制造钛锤。', category: 'mining', era: '工业化', reqs: { mining: 4, high_tech: 3 }, grant: ['mining', 5], costs: { Knowledge: 35000, Titanium: 250 }, effect: '进一步提升采矿效率。' },
-  { id: 'alloy_sledgehammer', name: '合金锤', description: '制造合金锤。', category: 'mining', era: '全球化', reqs: { mining: 5, high_tech: 5 }, grant: ['mining', 6], costs: { Knowledge: 80000, Alloy: 500 }, effect: '大幅提升采矿效率。' },
-  { id: 'mythril_sledgehammer', name: '秘银锤', description: '制造秘银锤。', category: 'mining', era: '早期太空', reqs: { mining: 6, space: 3 }, grant: ['mining', 7], costs: { Knowledge: 150000, Mythril: 350 }, effect: '进一步提升采矿效率。' },
-  { id: 'adamantite_sledgehammer', name: '精金锤', description: '制造精金锤。', category: 'mining', era: '星际', reqs: { mining: 7, alpha: 2 }, grant: ['mining', 8], costs: { Knowledge: 500000, Adamantite: 10000 }, effect: '大幅提升采矿效率。' },
   { id: 'mine_conveyor', name: '矿场传送带', description: '在矿场安装传送带。', category: 'mining', era: '发现', reqs: { high_tech: 2 }, grant: ['mine_conveyor', 1], costs: { Knowledge: 16200, Copper: 2250, Steel: 1750 }, effect: '提升矿场效率。' },
 
   // cement
-  { id: 'cement', name: '水泥', description: '发明水泥。', category: 'cement', era: '文明', reqs: { mining: 1, storage: 1, science: 1 }, grant: ['cement', 1], costs: { Knowledge: 500 }, effect: '解锁水泥厂建筑。' },
-  { id: 'rebar', name: '钢筋', description: '在水泥中加入钢筋。', category: 'cement', era: '文明', reqs: { mining: 3, cement: 1 }, grant: ['cement', 2], costs: { Knowledge: 3200 }, effect: '提升水泥强度。' },
-  { id: 'cement_batch', name: '批量水泥', description: '批量生产水泥。', category: 'cement', era: '发现', reqs: { cement: 2, high_tech: 2 }, grant: ['cement', 3], costs: { Knowledge: 16000 }, effect: '大幅提升水泥产量。' },
-  { id: 'cement_plant', name: '现代水泥厂', description: '建造现代水泥厂。', category: 'cement', era: '工业化', reqs: { cement: 3, high_tech: 4 }, grant: ['cement', 4], costs: { Knowledge: 55000 }, effect: '进一步提升水泥产量。' },
   { id: 'cement_formula', name: '改良配方', description: '改良水泥配方。', category: 'cement', era: '全球化', reqs: { cement: 4, high_tech: 6 }, grant: ['cement', 5], costs: { Knowledge: 100000 }, effect: '大幅提升水泥质量。' },
   { id: 'nano_cement', name: '纳米水泥', description: '使用纳米技术的水泥。', category: 'cement', era: '深空', reqs: { cement: 5, high_tech: 10 }, grant: ['cement', 6], costs: { Knowledge: 350000 }, effect: '顶级水泥质量。' },
 
   // market
-  { id: 'market', name: '市场', description: '建立市场。', category: 'market', era: '文明', reqs: { banking: 1, govern: 1 }, grant: ['currency', 2], costs: { Knowledge: 1800 }, effect: '解锁市场功能。' },
   { id: 'advertising', name: '广告', description: '发展广告业。', category: 'market', era: '工业化', reqs: { currency: 5, high_tech: 3 }, grant: ['currency', 6], costs: { Knowledge: 40000 }, effect: '提升市场效率。' },
   { id: 'e_marketing', name: '电子营销', description: '发展电子营销。', category: 'market', era: '全球化', reqs: { currency: 6, high_tech: 6 }, grant: ['currency', 7], costs: { Knowledge: 100000 }, effect: '大幅提升市场效率。' },
 
   // stone_gathering
-  { id: 'stone_axe', name: '石斧', description: '制造石斧。', category: 'stone_gathering', era: '原始', reqs: { primitive: 1 }, grant: ['stone', 1], costs: { Knowledge: 5 }, effect: '提升采石效率。' },
-  { id: 'copper_axes', name: '铜斧', description: '制造铜斧。', category: 'stone_gathering', era: '文明', reqs: { stone: 1, mining: 1 }, grant: ['stone', 2], costs: { Knowledge: 25, Copper: 15 }, effect: '进一步提升采石效率。' },
-  { id: 'iron_axes', name: '铁斧', description: '制造铁斧。', category: 'stone_gathering', era: '文明', reqs: { stone: 2, mining: 2 }, grant: ['stone', 3], costs: { Knowledge: 250, Iron: 50 }, effect: '大幅提升采石效率。' },
-  { id: 'steel_axes', name: '钢斧', description: '制造钢斧。', category: 'stone_gathering', era: '发现', reqs: { stone: 3, smelting: 2 }, grant: ['stone', 4], costs: { Knowledge: 8000, Steel: 150 }, effect: '进一步提升采石效率。' },
   { id: 'titanium_axes', name: '钛斧', description: '制造钛斧。', category: 'stone_gathering', era: '工业化', reqs: { stone: 4, high_tech: 3 }, grant: ['stone', 5], costs: { Knowledge: 35000, Titanium: 250 }, effect: '大幅提升采石效率。' },
 
   // lumber_gathering
-  { id: 'copper_axes_lumber', name: '铜伐木斧', description: '制造铜伐木斧。', category: 'lumber_gathering', era: '文明', reqs: { lumber: 1, mining: 1 }, grant: ['lumber', 2], costs: { Knowledge: 25, Copper: 15 }, effect: '提升伐木效率。' },
-  { id: 'iron_axes_lumber', name: '铁伐木斧', description: '制造铁伐木斧。', category: 'lumber_gathering', era: '文明', reqs: { lumber: 2, mining: 2 }, grant: ['lumber', 3], costs: { Knowledge: 250, Iron: 50 }, effect: '进一步提升伐木效率。' },
 
   // arpa
-  { id: 'arpa', name: 'ARPA', description: '建立高级研究项目局。', category: 'arpa', era: '全球化', reqs: { high_tech: 6 }, grant: ['arpa', 1], costs: { Knowledge: 100000 }, effect: '解锁 ARPA 面板。' },
   { id: 'stock_exchange', name: '证券交易所', description: '建立证券交易所。', category: 'arpa', era: '全球化', reqs: { arpa: 1, banking: 7 }, grant: ['arpa', 2], costs: { Money: 500000, Knowledge: 120000 }, effect: '解锁证券交易所项目。' },
 
   // queues
-  { id: 'urban_planning', name: '城市规划', description: '建立城市规划体系。', category: 'queues', era: '文明', reqs: { banking: 2, currency: 2 }, grant: ['queue', 1], costs: { Knowledge: 2500 }, effect: '解锁建造队列。' },
-  { id: 'zoning_permits', name: '分区许可', description: '发放分区许可。', category: 'queues', era: '工业化', reqs: { queue: 1, high_tech: 3 }, grant: ['queue', 2], costs: { Knowledge: 28000 }, effect: '提升队列容量。' },
-  { id: 'urbanization', name: '城市化', description: '推进城市化进程。', category: 'queues', era: '全球化', reqs: { queue: 2, high_tech: 6 }, grant: ['queue', 3], costs: { Knowledge: 95000 }, effect: '进一步提升队列容量。' },
   { id: 'assistant', name: '助手', description: '研发研究助手。', category: 'queues', era: '文明', reqs: { queue: 1, science: 4 }, grant: ['r_queue', 1], costs: { Knowledge: 5000 }, effect: '解锁研究队列。' },
 
   // ===== 宗教补充科技 (Religion Extended) =====
 
-  { id: 'theology2', name: '神学研究', description: '深入研究神学。', category: 'religion', era: '文明', reqs: { theology: 1, housing: 1, cement: 1 }, grant: ['theology', 2], costs: { Knowledge: 900 }, effect: '解锁神庙建筑。' },
-  { id: 'fanaticism', name: '狂热信仰', description: '建立狂热信仰体系。', category: 'religion', era: '文明', reqs: { theology: 2 }, grant: ['theology', 3], costs: { Knowledge: 2500 }, effect: '解锁狂热信仰效果。' },
-  { id: 'anthropology', name: '人类学', description: '研究种族文化。', category: 'religion', era: '文明', reqs: { theology: 2 }, grant: ['theology', 3], costs: { Knowledge: 2500 }, effect: '解锁人类学研究。' },
+  { id: 'anthropology', name: '人类学', description: '研究种族文化。', category: 'religion', era: '文明', reqs: { theology: 2 }, condition: (state) => (state.genes['transcendence'] ?? 0) === 0, grant: ['theology', 3], costs: { Knowledge: 2500 }, effect: '解锁人类学研究。' },
   { id: 'mythology', name: '神话学', description: '研究古老神话。', category: 'religion', era: '文明', reqs: { anthropology: 1 }, grant: ['anthropology', 2], costs: { Knowledge: 5000 }, effect: '提升文化理解。' },
   { id: 'indoctrination', name: '教化', description: '进行宗教教化。', category: 'religion', era: '文明', reqs: { fanaticism: 1 }, grant: ['fanaticism', 2], costs: { Knowledge: 5000 }, effect: '提升信仰传播。' },
   { id: 'missionary', name: '传教', description: '派遣传教士。', category: 'religion', era: '发现', reqs: { fanaticism: 2 }, grant: ['fanaticism', 3], costs: { Knowledge: 10000 }, effect: '扩大信仰范围。' },
   { id: 'zealotry', name: '狂热', description: '激发宗教狂热。', category: 'religion', era: '发现', reqs: { fanaticism: 3 }, grant: ['fanaticism', 4], costs: { Knowledge: 25000 }, effect: '大幅提升信仰效果。' },
-  { id: 'ancient_theology', name: '古代神学', description: '研究古代神学。', category: 'religion', era: '早期太空', reqs: { theology: 3, mars: 2 }, grant: ['theology', 4], costs: { Knowledge: 180000 }, effect: '解锁金字塔建筑。' },
-  { id: 'study', name: '研习', description: '研习古代知识。', category: 'religion', era: '早期太空', reqs: { theology: 4 }, grant: ['theology', 5], costs: { Knowledge: 195000 }, effect: '深入理解古代文明。' },
-  { id: 'deify', name: '神化', description: '将古代神灵神化。', category: 'religion', era: '早期太空', reqs: { theology: 4 }, grant: ['theology', 5], costs: { Knowledge: 195000 }, effect: '神化古代神灵。' },
+  { id: 'deify', name: '神化', description: '将古代神灵神化。', category: 'religion', era: '早期太空', reqs: { theology: 4 }, condition: (state) => (state.genes['transcendence'] ?? 0) < 2, grant: ['theology', 5], costs: { Knowledge: 195000 }, effect: '神化古代神灵。' },
+  { id: 'deify_alt', name: '神化', description: '将古代神灵神化。', category: 'religion', era: '早期太空', reqs: { theology: 4 }, condition: (state) => (state.genes['transcendence'] ?? 0) >= 2, grant: ['ancient_deify', 1], costs: { Knowledge: 195000 }, effect: '在 transcendence 路线中直接开启 ancient_deify 分支。' },
   { id: 'encoding', name: '编码', description: '编码古代知识。', category: 'religion', era: '深空', reqs: { ancient_study: 1, mars: 5 }, grant: ['ancient_study', 2], costs: { Knowledge: 268000 }, effect: '保存古代知识。' },
   { id: 'infusion', name: '灌注', description: '灌注古代力量。', category: 'religion', era: '深空', reqs: { ancient_deify: 1, mars: 5 }, grant: ['ancient_deify', 2], costs: { Knowledge: 268000 }, effect: '获得古代力量。' },
 
   // ===== 太空探索补充 (Space Exploration Extended) =====
 
-  { id: 'astrophysics', name: '天体物理学', description: '研究天体物理学。', category: 'space_exploration', era: '早期太空', reqs: { space: 2 }, grant: ['space_explore', 1], costs: { Knowledge: 125000 }, effect: '解锁推进剂仓库。' },
-  { id: 'rover', name: '探测车', description: '建造行星探测车。', category: 'space_exploration', era: '早期太空', reqs: { space_explore: 1 }, grant: ['space_explore', 2], costs: { Knowledge: 135000, Alloy: 22000, Polymer: 18000, Uranium: 750 }, effect: '解锁月球区域。' },
-  { id: 'probes', name: '探测器', description: '发射深空探测器。', category: 'space_exploration', era: '早期太空', reqs: { space_explore: 2 }, grant: ['space_explore', 3], costs: { Knowledge: 168000, Steel: 100000, Iridium: 5000, Uranium: 2250, Helium_3: 3500 }, effect: '解锁火星和地狱行星区域。' },
-  { id: 'starcharts', name: '星图', description: '绘制详细星图。', category: 'space_exploration', era: '早期太空', reqs: { space_explore: 3, science: 9 }, grant: ['space_explore', 4], costs: { Knowledge: 185000 }, effect: '解锁气态巨行星和太阳区域。' },
-  { id: 'red_tower', name: '红色塔楼', description: '在火星建造通讯塔。', category: 'space_exploration', era: '早期太空', reqs: { mars: 2 }, grant: ['mars', 3], costs: { Knowledge: 195000 }, effect: '提升火星通讯能力。' },
   { id: 'nav_beacon', name: '导航信标', description: '在月球建造导航信标。', category: 'space_exploration', era: '早期太空', reqs: { luna: 1 }, grant: ['luna', 2], costs: { Knowledge: 180000 }, effect: '提升太空导航精度。' },
   { id: 'subspace_signal', name: '亚空间信号', description: '探测亚空间信号。', category: 'space_exploration', era: '星际', reqs: { science: 13, luna: 2, stanene: 1 }, grant: ['luna', 3], costs: { Knowledge: 700000, Stanene: 125000 }, effect: '解锁深层太空探索。' },
 
   // ===== 太阳能/戴森球科技 (Solar/Dyson) =====
 
-  { id: 'dyson_sphere', name: '戴森球', description: '设计戴森球。', category: 'power_generation', era: '早期太空', reqs: { solar: 1 }, grant: ['solar', 2], costs: { Knowledge: 195000 }, effect: '设计戴森球结构。' },
-  { id: 'dyson_swarm', name: '戴森群', description: '建造戴森卫星群。', category: 'power_generation', era: '早期太空', reqs: { solar: 2 }, grant: ['solar', 3], costs: { Knowledge: 210000 }, effect: '解锁戴森卫星建筑。' },
-  { id: 'swarm_plant', name: '群卫星工厂', description: '建造戴森卫星工厂。', category: 'power_generation', era: '深空', reqs: { solar: 3, hell: 1, gas_moon: 1 }, grant: ['solar', 4], costs: { Knowledge: 250000 }, effect: '解锁群卫星工厂。' },
   { id: 'swarm_plant_ai', name: '群卫星 AI', description: '使用 AI 控制群卫星。', category: 'power_generation', era: '深空', reqs: { solar: 4, high_tech: 10 }, grant: ['swarm', 1], costs: { Knowledge: 335000 }, effect: 'AI 控制群卫星。' },
   { id: 'swarm_control_ai', name: '群控制 AI', description: '高级群控制 AI。', category: 'power_generation', era: '深空', reqs: { swarm: 1 }, grant: ['swarm', 2], costs: { Knowledge: 360000 }, effect: '提升群卫星效率。' },
   { id: 'quantum_swarm', name: '量子群', description: '量子化的群卫星。', category: 'power_generation', era: '深空', reqs: { swarm: 2, high_tech: 11 }, grant: ['swarm', 3], costs: { Knowledge: 450000 }, effect: '大幅提升群卫星效率。' },
@@ -4061,7 +3932,6 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 氦-3/核聚变科技 =====
 
-  { id: 'atmospheric_mining', name: '大气采矿', description: '从气态巨行星大气中采矿。', category: 'power_generation', era: '早期太空', reqs: { space: 5 }, grant: ['gas_giant', 1], costs: { Knowledge: 190000 }, effect: '解锁气态巨行星采矿。' },
   { id: 'ram_scoops', name: '冲压发动机', description: '建造冲压发动机。', category: 'power_generation', era: '星际', reqs: { nebula: 2 }, grant: ['ram_scoop', 1], costs: { Knowledge: 580000 }, effect: '解锁冲压发动机。' },
   { id: 'fusion_power', name: '核聚变', description: '掌握核聚变技术。', category: 'power_generation', era: '星际', reqs: { ram_scoop: 1 }, grant: ['fusion', 1], costs: { Knowledge: 640000 }, effect: '解锁聚变发电厂。' },
 
@@ -4082,20 +3952,17 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 太空制造/殖民 =====
 
-  { id: 'colonization', name: '殖民', description: '开始太空殖民。', category: 'agriculture', era: '早期太空', reqs: { space: 4, mars: 1 }, grant: ['mars', 2], costs: { Knowledge: 172000 }, effect: '解锁火星生物群落。' },
-  { id: 'space_manufacturing', name: '太空制造', description: '在太空中建立工厂。', category: 'crafting', era: '早期太空', reqs: { mars: 3 }, grant: ['mars', 4], costs: { Knowledge: 220000 }, effect: '解锁火星工厂。' },
-  { id: 'exotic_lab', name: '异域实验室', description: '建造异域材料实验室。', category: 'science', era: '深空', reqs: { mars: 4, asteroid: 5 }, grant: ['mars', 5], costs: { Knowledge: 250000 }, effect: '解锁异域实验室。' },
   { id: 'hydroponics_space', name: '太空水培', description: '在太空中建立水培农场。', category: 'agriculture', era: '星系际', reqs: { mars: 5, gateway: 3 }, grant: ['mars', 6], costs: { Knowledge: 3000000, Bolognium: 500000 }, effect: '在太空中种植食物。' },
 
   // ===== 星际科技补充 =====
 
-  { id: 'graphene', name: '石墨烯', description: '大规模生产石墨烯。', category: 'crafting', era: '星际', reqs: { high_tech: 12, proxima: 2 }, grant: ['graphene', 1], costs: { Knowledge: 650000 }, effect: '解锁石墨烯生产。' },
-  { id: 'stanene', name: '斯坦烯', description: '研发斯坦烯材料。', category: 'crafting', era: '星际', reqs: { high_tech: 12, graphene: 1 }, grant: ['stanene', 1], costs: { Knowledge: 700000 }, effect: '解锁斯坦烯生产。' },
-  { id: 'plasma', name: '等离子', description: '掌握等离子技术。', category: 'science', era: '星际', reqs: { high_tech: 13 }, grant: ['high_tech', 14], costs: { Knowledge: 850000 }, effect: '解锁等离子应用。' },
+  { id: 'graphene', name: '石墨烯', description: '大规模生产石墨烯。', category: 'crafting', era: '星际', reqs: { alpha: 3, infernite: 1 }, condition: (state) => state.race.truepath === undefined, grant: ['graphene', 1], costs: { Knowledge: 540000, Adamantite: 10000 }, effect: '解锁石墨烯生产。' },
+  { id: 'stanene', name: '斯坦烯', description: '研发斯坦烯材料。', category: 'crafting', era: '星际', reqs: { high_tech: 12, graphene: 1 }, condition: (state) => state.race.truepath === undefined, grant: ['stanene', 1], costs: { Knowledge: 700000 }, effect: '解锁斯坦烯生产。' },
+  { id: 'plasma', name: '等离子', description: '掌握等离子技术。', category: 'science', era: '星际', reqs: { high_tech: 12 }, grant: ['high_tech', 13], costs: { Knowledge: 755000, Infernite: 1000, Stanene: 250000 }, effect: '解锁等离子应用。' },
 
   // ===== 星系际科技补充 =====
 
-  { id: 'wormholes', name: '虫洞', description: '研究虫洞技术。', category: 'science', era: '星系际', reqs: { high_tech: 15 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000 }, effect: '解锁虫洞旅行。' },
+  { id: 'wormholes', name: '虫洞', description: '研究虫洞技术。', category: 'space_exploration', era: '星系际', reqs: { gravity: 1, science: 15 }, grant: ['stargate', 1], costs: { Knowledge: 2250000 }, effect: '解锁虫洞旅行。' },
   { id: 'xeno_culture', name: '异星文化', description: '研究异星文化。', category: 'progress', era: '星系际', reqs: { xeno: 3 }, grant: ['xeno', 4], costs: { Knowledge: 3400000 }, effect: '理解异星文明。' },
   { id: 'stellar_forge', name: '恒星锻造', description: '建造恒星锻造设施。', category: 'crafting', era: '星系际', reqs: { high_tech: 16, xeno: 5 }, grant: ['stellar_forge', 1], costs: { Knowledge: 6000000 }, effect: '解锁恒星锻造。' },
 
@@ -4112,20 +3979,14 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 锻造补充科技 (Crafting Extended) =====
 
-  { id: 'artisans', name: '工匠', description: '培训专业工匠。', category: 'crafting', era: '文明', reqs: { foundry: 1 }, grant: ['foundry', 2], costs: { Knowledge: 1500 }, effect: '提升锻造效率。' },
-  { id: 'apprentices', name: '学徒', description: '建立学徒制度。', category: 'crafting', era: '文明', reqs: { foundry: 2 }, grant: ['foundry', 3], costs: { Knowledge: 3200 }, effect: '进一步提升锻造效率。' },
-  { id: 'carpentry', name: '木工', description: '发展木工技术。', category: 'crafting', era: '文明', reqs: { foundry: 3, saw: 1 }, grant: ['foundry', 4], costs: { Knowledge: 5200 }, effect: '解锁木制品锻造。' },
   { id: 'master_craftsman', name: '大师工匠', description: '培养大师级工匠。', category: 'crafting', era: '发现', reqs: { foundry: 4 }, grant: ['foundry', 5], costs: { Knowledge: 12000 }, effect: '大幅提升锻造效率。' },
   { id: 'brickworks', name: '砖厂', description: '建造砖厂。', category: 'crafting', era: '发现', reqs: { foundry: 5 }, grant: ['foundry', 6], costs: { Knowledge: 18500 }, effect: '解锁砖制品锻造。' },
   { id: 'machinery', name: '机械', description: '发展机械制造。', category: 'crafting', era: '全球化', reqs: { foundry: 6, high_tech: 4 }, grant: ['foundry', 7], costs: { Knowledge: 66000 }, effect: '大幅提升锻造效率。' },
   { id: 'cnc_machine', name: '数控机床', description: '建造数控机床。', category: 'crafting', era: '全球化', reqs: { foundry: 7, high_tech: 8 }, grant: ['foundry', 8], costs: { Knowledge: 132000 }, effect: '顶级锻造效率。' },
   { id: 'vocational_training', name: '职业培训', description: '建立职业培训体系。', category: 'crafting', era: '工业化', reqs: { foundry: 1, high_tech: 3 }, grant: ['v_train', 1], costs: { Knowledge: 30000 }, effect: '提升工匠技能。' },
-  { id: 'stellar_forge', name: '恒星锻造', description: '建造恒星锻造设施。', category: 'crafting', era: '星系际', reqs: { foundry: 8, high_tech: 15, gateway: 3, neutron: 1 }, grant: ['star_forge', 1], costs: { Knowledge: 4500000 }, effect: '解锁恒星锻造建筑。' },
   { id: 'stellar_smelting', name: '恒星冶炼', description: '使用恒星锻造进行冶炼。', category: 'crafting', era: '星系际', reqs: { star_forge: 1, xeno: 4 }, grant: ['star_forge', 2], costs: { Knowledge: 5000000, Vitreloy: 10000 }, effect: '恒星锻造可冶炼金属。' },
 
   // --- 工厂链 ---
-  { id: 'assembly_line', name: '流水线', description: '建立生产流水线。', category: 'crafting', era: '全球化', reqs: { high_tech: 4 }, grant: ['factory', 1], costs: { Knowledge: 72000, Copper: 125000 }, effect: '解锁工厂建筑。' },
-  { id: 'automation', name: '自动化', description: '实现工厂自动化。', category: 'crafting', era: '早期太空', reqs: { high_tech: 8, factory: 1 }, grant: ['factory', 2], costs: { Knowledge: 165000 }, effect: '提升工厂效率。' },
   { id: 'laser_cutters', name: '激光切割机', description: '使用激光切割技术。', category: 'crafting', era: '深空', reqs: { high_tech: 9, factory: 2 }, grant: ['factory', 3], costs: { Knowledge: 300000, Elerium: 200 }, effect: '大幅提升工厂效率。' },
   { id: 'high_tech_factories', name: '高科技工厂', description: '建造高科技工厂。', category: 'crafting', era: '星系际', reqs: { high_tech: 17, alpha: 4, factory: 3 }, grant: ['factory', 4], costs: { Knowledge: 13500000, Vitreloy: 500000, Orichalcum: 300000 }, effect: '顶级工厂效率。' },
 
@@ -4135,73 +3996,47 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'fluidized_bed_reactor', name: '流化床反应器', description: '建造流化床反应器。', category: 'crafting', era: '全球化', reqs: { polymer: 1, high_tech: 6 }, grant: ['polymer', 2], costs: { Knowledge: 99000 }, effect: '提升聚合物产量。' },
   { id: 'synthetic_fur', name: '合成皮毛', description: '制造合成皮毛。', category: 'crafting', era: '全球化', reqs: { polymer: 1 }, grant: ['synthetic_fur', 1], costs: { Knowledge: 100000, Polymer: 2500 }, effect: '解锁合成皮毛生产。' },
   { id: 'nanoweave', name: '纳米织物', description: '制造纳米织物。', category: 'crafting', era: '星系际', reqs: { science: 18 }, grant: ['nanoweave', 1], costs: { Knowledge: 8500000, Nano_Tube: 5000000, Vitreloy: 250000 }, effect: '解锁纳米织物生产。' },
-  { id: 'stanene', name: '斯坦烯', description: '研发斯坦烯材料。', category: 'crafting', era: '星际', reqs: { infernite: 1 }, grant: ['stanene', 1], costs: { Knowledge: 590000, Aluminium: 500000, Infernite: 1000 }, effect: '解锁斯坦烯生产。' },
-  { id: 'nano_tubes', name: '纳米管', description: '制造碳纳米管。', category: 'crafting', era: '深空', reqs: { high_tech: 10 }, grant: ['nano', 1], costs: { Knowledge: 375000, Coal: 100000, Neutronium: 1000 }, effect: '解锁纳米管生产。' },
-  { id: 'scarletite_craft', name: '猩红石', description: '制造猩红石材料。', category: 'crafting', era: '维度', reqs: { hell_ruins: 4 }, grant: ['scarletite', 1], costs: { Knowledge: 26750000, Iron: 100000000, Adamantite: 15000000, Orichalcum: 8000000 }, effect: '解锁猩红石生产。' },
   { id: 'quantum_manufacturing', name: '量子制造', description: '使用量子技术制造。', category: 'crafting', era: '深空', reqs: { high_tech: 11 }, grant: ['q_factory', 1], costs: { Knowledge: 465000 }, effect: '解锁量子制造。' },
 
   // ===== 军事补充科技 (Military Extended) =====
 
-  { id: 'garrison', name: '驻军', description: '建立驻军系统。', category: 'military', era: '文明', reqs: { science: 1, housing: 1 }, grant: ['military', 1], costs: { Knowledge: 350 }, effect: '解锁驻军建筑。' },
-  { id: 'bunk_beds', name: '双层床', description: '在兵营安装双层床。', category: 'military', era: '文明', reqs: { military: 2 }, grant: ['morale', 1], costs: { Knowledge: 450, Lumber: 200 }, effect: '提升兵营容量。' },
-  { id: 'mercs', name: '雇佣兵', description: '招募雇佣兵。', category: 'military', era: '发现', reqs: { military: 3, currency: 3 }, grant: ['mercs', 1], costs: { Knowledge: 12000 }, effect: '解锁雇佣兵系统。' },
-  { id: 'machine_gun', name: '机枪', description: '研发机枪武器。', category: 'military', era: '工业化', reqs: { military: 4, high_tech: 3 }, grant: ['military', 5], costs: { Knowledge: 38000 }, effect: '大幅提升军队火力。' },
+  { id: 'machine_gun', name: '机枪', description: '研发机枪武器。', category: 'military', era: '工业化', reqs: { military: 3, oil: 1 }, grant: ['military', 4], costs: { Knowledge: 33750, Oil: 1500 }, effect: '大幅提升军队火力。' },
   { id: 'kevlar', name: '凯夫拉', description: '研发凯夫拉防弹衣。', category: 'military', era: '全球化', reqs: { military: 5, high_tech: 5 }, grant: ['armor', 6], costs: { Knowledge: 85000, Polymer: 5000 }, effect: '大幅提升军队防御力。' },
-  { id: 'rail_guns_mil', name: '电磁炮', description: '研发电磁炮武器。', category: 'military', era: '星际', reqs: { military: 8, high_tech: 13 }, grant: ['military', 9], costs: { Knowledge: 800000, Elerium: 500 }, effect: '大幅提升军队火力。' },
-  { id: 'disruptor_rifles', name: '干扰步枪', description: '装备干扰步枪。', category: 'military', era: '星系际', reqs: { military: 9, xeno: 5 }, grant: ['military', 10], costs: { Knowledge: 5000000 }, effect: '进一步提升军队火力。' },
+  { id: 'disruptor_rifles', name: '干扰步枪', description: '装备干扰步枪。', category: 'military', era: '星际', reqs: { military: 8, high_tech: 14, science: 15, infernite: 1 }, grant: ['military', 9], costs: { Knowledge: 1000000, Infernite: 1000 }, effect: '进一步提升军队火力。' },
   { id: 'plasma_rifles', name: '等离子步枪', description: '装备等离子步枪。', category: 'military', era: '星系际', reqs: { military: 10, high_tech: 16 }, grant: ['military', 11], costs: { Knowledge: 6000000, Vitreloy: 100000 }, effect: '大幅提升军队火力。' },
   { id: 'gauss_rifles', name: '高斯步枪', description: '装备高斯步枪。', category: 'military', era: '维度', reqs: { military: 11, high_tech: 18 }, grant: ['military', 12], costs: { Knowledge: 25000000, Orichalcum: 200000 }, effect: '顶级军队火力。' },
   { id: 'nanoweave_vest', name: '纳米织物背心', description: '制造纳米织物防弹背心。', category: 'military', era: '星系际', reqs: { armor: 5, nanoweave: 1 }, grant: ['armor', 7], costs: { Knowledge: 9000000, Nanoweave: 50000 }, effect: '顶级军队防御力。' },
 
   // ===== 娱乐补充科技 (Entertainment Extended) =====
 
-  { id: 'playwright', name: '剧作家', description: '培养剧作家。', category: 'entertainment', era: '文明', reqs: { theatre: 1, science: 2 }, grant: ['theatre', 2], costs: { Knowledge: 1080 }, effect: '提升剧院效果。' },
   { id: 'magic_ent', name: '魔术', description: '发展魔术表演。', category: 'entertainment', era: '发现', reqs: { theatre: 2 }, grant: ['theatre', 3], costs: { Knowledge: 15000 }, effect: '进一步提升剧院效果。' },
   { id: 'radio', name: '广播', description: '建立广播系统。', category: 'entertainment', era: '工业化', reqs: { theatre: 3, high_tech: 3 }, grant: ['broadcast', 1], costs: { Knowledge: 35000 }, effect: '解锁广播站。' },
   { id: 'tv', name: '电视', description: '发展电视技术。', category: 'entertainment', era: '全球化', reqs: { broadcast: 1, high_tech: 5 }, grant: ['broadcast', 2], costs: { Knowledge: 85000 }, effect: '解锁电视台。' },
-  { id: 'superstars', name: '超级明星', description: '培养超级明星。', category: 'entertainment', era: '全球化', reqs: { broadcast: 2 }, grant: ['broadcast', 3], costs: { Knowledge: 120000 }, effect: '大幅提升娱乐效果。' },
+  { id: 'superstars', name: '超级明星', description: '培养超级明星。', category: 'entertainment', era: '星际', reqs: { theatre: 3, high_tech: 12 }, grant: ['superstar', 1], costs: { Knowledge: 660000 }, effect: '大幅提升娱乐效果。' },
   { id: 'zoo', name: '动物园', description: '建造动物园。', category: 'entertainment', era: '星系际', reqs: { gateway: 3, xeno: 6 }, grant: ['zoo', 1], costs: { Knowledge: 4500000, Bolognium: 500000 }, effect: '解锁动物园建筑。' },
 
   // ===== 住房补充科技 (Housing Extended) =====
 
-  { id: 'cottages', name: '村舍', description: '建造村舍。', category: 'housing', era: '文明', reqs: { housing: 1, cement: 1 }, grant: ['housing', 2], costs: { Knowledge: 500, Stone: 200 }, effect: '解锁村舍建筑。' },
-  { id: 'apartment', name: '公寓', description: '建造公寓楼。', category: 'housing', era: '工业化', reqs: { housing: 2, high_tech: 3 }, grant: ['housing', 3], costs: { Knowledge: 35000 }, effect: '解锁公寓建筑。' },
-  { id: 'smart_housing', name: '智能住房', description: '建造智能家居。', category: 'housing', era: '全球化', reqs: { housing: 3, high_tech: 6 }, grant: ['housing', 4], costs: { Knowledge: 95000 }, effect: '提升住房效率。' },
   { id: 'mythril_beams', name: '秘银梁', description: '使用秘银加固建筑。', category: 'housing', era: '早期太空', reqs: { housing: 4, space: 3 }, grant: ['housing', 5], costs: { Knowledge: 160000, Mythril: 500 }, effect: '提升住房容量。' },
   { id: 'neutronium_housing', name: '中子星住房', description: '使用中子星材料建造住房。', category: 'housing', era: '星际', reqs: { housing: 5, neutron: 1 }, grant: ['housing', 6], costs: { Knowledge: 600000, Neutronium: 5000 }, effect: '大幅提升住房容量。' },
-  { id: 'arcology', name: '生态建筑', description: '建造自给自足的生态建筑。', category: 'housing', era: '维度', reqs: { high_tech: 18 }, grant: ['arcology', 1], costs: { Knowledge: 25000000 }, effect: '解锁生态建筑。' },
-  { id: 'luxury_condo', name: '豪华公寓', description: '建造豪华公寓。', category: 'housing', era: '星系际', reqs: { housing: 6, gateway: 3 }, grant: ['housing', 7], costs: { Knowledge: 5000000, Orichalcum: 100000 }, effect: '顶级住房容量。' },
+  { id: 'luxury_condo', name: '豪华公寓', description: '建造豪华公寓。', category: 'housing', era: '星系际', reqs: { high_tech: 17, alpha: 4 }, grant: ['alpha', 5], costs: { Knowledge: 15000000 }, effect: '顶级住房容量。' },
   { id: 'fertility_clinic', name: '生育诊所', description: '建立生育诊所。', category: 'housing', era: '星系际', reqs: { housing: 7, xeno: 6 }, grant: ['housing', 8], costs: { Knowledge: 6000000, Vitreloy: 200000 }, effect: '提升人口增长。' },
-  { id: 'hallowed_housing', name: '神圣住房', description: '建造神圣住房。', category: 'housing', era: '存在', reqs: { asphodel: 10, theology: 2 }, grant: ['asphodel', 11], costs: { Knowledge: 95000000, Omniscience: 19500 }, effect: '解锁神圣住房。' },
+  { id: 'hallowed_housing', name: '神圣住房', description: '建造神圣住房。', category: 'housing', era: '存在', reqs: { asphodel: 10, theology: 2 }, condition: (state) => state.race.warlord === undefined, grant: ['asphodel', 11], costs: { Knowledge: 95000000, Omniscience: 19500 }, effect: '解锁神圣住房。' },
 
   // ===== 农业补充科技 (Agriculture Extended) =====
 
-  { id: 'lodge', name: '小屋', description: '建造猎人小屋。', category: 'agriculture', era: '文明', reqs: { housing: 1 }, grant: ['hunting', 1], costs: { Knowledge: 45, Lumber: 20 }, effect: '解锁猎人岗位。' },
-  { id: 'mill', name: '磨坊', description: '建造磨坊。', category: 'agriculture', era: '文明', reqs: { farm: 3, smelting: 1 }, grant: ['farm', 4], costs: { Knowledge: 1800 }, effect: '提升粮食加工效率。' },
-  { id: 'windmill', name: '风车', description: '建造风车。', category: 'agriculture', era: '发现', reqs: { farm: 4, high_tech: 1 }, grant: ['farm', 5], costs: { Knowledge: 12000 }, effect: '进一步提升粮食产量。' },
-  { id: 'gmfood', name: '转基因食品', description: '研发转基因食品。', category: 'agriculture', era: '全球化', reqs: { farm: 5, genetics: 3 }, grant: ['farm', 6], costs: { Knowledge: 120000 }, effect: '大幅提升粮食产量。' },
-  { id: 'titanium_hoe', name: '钛锄', description: '制造钛合金锄头。', category: 'agriculture', era: '工业化', reqs: { farm: 4, high_tech: 3 }, grant: ['farm', 5], costs: { Knowledge: 40000, Titanium: 500 }, effect: '提升耕作效率。' },
-  { id: 'adamantite_hoe', name: '精金锄', description: '制造精金锄头。', category: 'agriculture', era: '星际', reqs: { farm: 6, alpha: 2 }, grant: ['farm', 7], costs: { Knowledge: 550000, Adamantite: 10000 }, effect: '进一步提升耕作效率。' },
 
   // ===== 科学补充科技 (Science Extended) =====
 
-  { id: 'library', name: '图书馆', description: '建造图书馆。', category: 'science', era: '文明', reqs: { science: 1 }, grant: ['science', 2], costs: { Knowledge: 50 }, effect: '提升知识获取。' },
-  { id: 'laboratory', name: '实验室', description: '建造实验室。', category: 'science', era: '发现', reqs: { science: 3, high_tech: 1 }, grant: ['science', 4], costs: { Knowledge: 12000 }, effect: '解锁实验室建筑。' },
-  { id: 'advanced_biotech', name: '高级生物技术', description: '研发高级生物技术。', category: 'science', era: '星际', reqs: { genetics: 8, kuiper: 1 }, grant: ['biotech', 1], costs: { Knowledge: 2400000, Orichalcum: 125000, Cipher: 15000 }, effect: '解锁高级生物技术。' },
-  { id: 'quantum_entanglement', name: '量子纠缠', description: '研究量子纠缠现象。', category: 'science', era: '星系际', reqs: { high_tech: 16 }, grant: ['high_tech', 17], costs: { Knowledge: 8000000 }, effect: '推进量子物理学。' },
-  { id: 'spirit_box', name: '灵魂盒', description: '研究灵魂存储技术。', category: 'science', era: '存在', reqs: { high_tech: 19, isle: 3 }, grant: ['spirit_box', 1], costs: { Knowledge: 125000000, Omniscience: 35000 }, effect: '解锁灵魂存储。' },
+  { id: 'laboratory', name: '实验室', description: '在半人马座 Alpha 建立星际实验室。', category: 'science', era: '星际', reqs: { science: 11, alpha: 2 }, grant: ['science', 12], costs: { Knowledge: 500000 }, effect: '解锁星际实验室。' },
+  { id: 'advanced_biotech', name: '高级生物技术', description: '研发高级生物技术。', category: 'science', era: '维度', reqs: { science: 19, high_tech: 18 }, grant: ['science', 20], costs: { Knowledge: 25500000 }, effect: '推进高级生物技术。' },
+  { id: 'quantum_entanglement', name: '量子纠缠', description: '研究量子纠缠现象。', category: 'science', era: '星际', reqs: { science: 14, neutron: 1 }, grant: ['science', 15], costs: { Knowledge: 850000, Neutronium: 7500, Soul_Gem: 2 }, effect: '推进量子通信与远程研究。' },
+  { id: 'spirit_box', name: '灵魂盒', description: '研究灵魂存储技术。', category: 'science', era: '存在', reqs: { science: 21, asphodel: 3 }, grant: ['science', 22], costs: { Knowledge: 62750000, Asphodel_Powder: 10000 }, effect: '显示全知资源并推进存在时代科学。' },
   { id: 'wisdom', name: '智慧', description: '追求终极智慧。', category: 'science', era: '存在', reqs: { elysium: 13 }, grant: ['elysium', 14], costs: { Knowledge: 118000000, Omniscience: 32000 }, effect: '解锁智慧档案馆。' },
 
   // ===== 银行补充科技 (Banking Extended) =====
 
-  { id: 'banking', name: '银行业', description: '建立银行系统。', category: 'banking', era: '文明', reqs: { currency: 1 }, grant: ['banking', 1], costs: { Knowledge: 250 }, effect: '解锁银行建筑。' },
-  { id: 'home_safe', name: '家用保险箱', description: '制造家用保险箱。', category: 'banking', era: '文明', reqs: { banking: 1 }, grant: ['banking', 2], costs: { Knowledge: 500, Iron: 100 }, effect: '提升金钱存储。' },
-  { id: 'fire_proof_safe', name: '防火保险箱', description: '制造防火保险箱。', category: 'banking', era: '发现', reqs: { banking: 3, smelting: 2 }, grant: ['banking', 4], costs: { Knowledge: 8000, Steel: 500 }, effect: '大幅提升金钱存储。' },
-  { id: 'mythril_vault', name: '秘银金库', description: '建造秘银金库。', category: 'banking', era: '早期太空', reqs: { banking: 5, space: 3 }, grant: ['banking', 6], costs: { Knowledge: 160000, Mythril: 500 }, effect: '进一步提升金钱存储。' },
-  { id: 'adamantite_vault', name: '精金金库', description: '建造精金金库。', category: 'banking', era: '星际', reqs: { banking: 7, alpha: 2 }, grant: ['banking', 8], costs: { Knowledge: 550000, Adamantite: 15000 }, effect: '大幅提升金钱存储。' },
-  { id: 'bolognium_vaults', name: '博洛尼乌姆金库', description: '建造博洛尼乌姆金库。', category: 'banking', era: '星系际', reqs: { banking: 9, gateway: 3 }, grant: ['banking', 10], costs: { Knowledge: 4000000, Bolognium: 100000 }, effect: '顶级金钱存储。' },
-  { id: 'online_gambling', name: '在线赌博', description: '发展在线赌博业。', category: 'banking', era: '深空', reqs: { gambling: 1, high_tech: 10 }, grant: ['gambling', 2], costs: { Knowledge: 350000 }, effect: '提升赌博收入。' },
-  { id: 'crypto_currency', name: '加密货币', description: '发展加密货币。', category: 'banking', era: '星际', reqs: { banking: 10, high_tech: 13 }, grant: ['banking', 11], costs: { Knowledge: 850000 }, effect: '解锁加密货币系统。' },
+  { id: 'crypto_currency', name: '加密货币', description: '发展加密货币。', category: 'banking', era: '存在', reqs: { banking: 13, high_tech: 19 }, grant: ['banking', 14], costs: { Money: 10000000000, Knowledge: 127500000, Omniscience: 38500 }, effect: '解锁加密货币系统。' },
   { id: 'eternal_bank', name: '永恒银行', description: '建造永恒银行。', category: 'banking', era: '存在', reqs: { elysium: 12 }, grant: ['elysium', 13], costs: { Knowledge: 115000000, Omniscience: 30000 }, effect: '解锁永恒银行。' },
 
   // ===== 更多补充科技 =====
@@ -4216,48 +4051,25 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // 更多军事科技
   { id: 'cyborg_soldiers', name: '生化战士', description: '开发生化战士技术。', category: 'military', era: '维度', reqs: { military: 12, cybernetics: 1 }, grant: ['military', 13], costs: { Knowledge: 30000000, Orichalcum: 300000 }, effect: '解锁生化战士。' },
-  { id: 'war_drones', name: '战争无人机', description: '部署战争无人机。', category: 'military', era: '星际', reqs: { portal: 3 }, grant: ['portal', 4], costs: { Knowledge: 700000 }, effect: '解锁战争无人机。' },
-  { id: 'combat_droids', name: '战斗机器人', description: '部署战斗机器人。', category: 'military', era: '星际', reqs: { portal: 5 }, grant: ['portal', 6], costs: { Knowledge: 762000, Soul_Gem: 1 }, effect: '解锁战斗机器人。' },
 
   // 更多锻造科技
   { id: 'aerogel', name: '气凝胶', description: '研发气凝胶材料。', category: 'crafting', era: '星际', reqs: { high_tech: 12 }, grant: ['aerogel', 1], costs: { Knowledge: 600000 }, effect: '解锁气凝胶生产。' },
-  { id: 'graphene_craft', name: '石墨烯', description: '大规模生产石墨烯。', category: 'crafting', era: '星际', reqs: { high_tech: 12, proxima: 2 }, grant: ['graphene', 1], costs: { Knowledge: 650000 }, effect: '解锁石墨烯生产。' },
 
   // 更多存储科技
-  { id: 'adamantite_crates', name: '精金箱', description: '制造精金集装箱。', category: 'storage', era: '星际', reqs: { container: 5, alpha: 2 }, grant: ['container', 6], costs: { Knowledge: 525000, Adamantite: 17500 }, effect: '提升集装箱容量。' },
-  { id: 'aerogel_containers', name: '气凝胶集装箱', description: '制造气凝胶集装箱。', category: 'storage', era: '星际', reqs: { steel_container: 5, aerogel: 1 }, grant: ['steel_container', 6], costs: { Knowledge: 775000, Aerogel: 500 }, effect: '提升集装箱容量。' },
-
-  // 更多科学科技
-  { id: 'artifical_intelligence', name: '人工智能', description: '研发人工智能。', category: 'science', era: '深空', reqs: { high_tech: 10 }, grant: ['high_tech', 11], costs: { Knowledge: 350000 }, effect: '解锁 AI 技术。' },
-  { id: 'quantum_computing', name: '量子计算', description: '研发量子计算机。', category: 'science', era: '深空', reqs: { high_tech: 9 }, grant: ['high_tech', 10], costs: { Knowledge: 260000 }, effect: '大幅提升计算能力。' },
-  { id: 'virtual_reality', name: '虚拟现实', description: '开发虚拟现实技术。', category: 'science', era: '全球化', reqs: { high_tech: 6 }, grant: ['high_tech', 7], costs: { Knowledge: 120000 }, effect: '解锁虚拟现实系统。' },
+  { id: 'adamantite_crates', name: '精金箱', description: '制造精金集装箱。', category: 'storage', era: '太阳系', reqs: { container: 5, titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['container', 6], costs: { Knowledge: 525000, Adamantite: 12500 }, effect: '提升集装箱容量。' },
 
   // 更多太空探索科技
-  { id: 'mass_driver', name: '质量驱动器', description: '建造质量驱动器。', category: 'space_exploration', era: '早期太空', reqs: { mars: 3 }, grant: ['mars', 4], costs: { Knowledge: 220000 }, effect: '解锁质量驱动器建筑。' },
-  { id: 'higgs_boson', name: '希格斯玻色子', description: '研究希格斯玻色子。', category: 'science', era: '早期太空', reqs: { particles: 2, supercollider: 2 }, grant: ['particles', 3], costs: { Knowledge: 125000 }, effect: '推进粒子物理学。' },
+  { id: 'mass_driver', name: '质量驱动器', description: '建造质量驱动器。', category: 'power_generation', era: '早期太空', reqs: { oil: 6, space: 3 }, grant: ['mass', 1], costs: { Knowledge: 160000 }, effect: '解锁质量驱动器建筑。' },
 
   // 更多 portal 科技
-  { id: 'portal_tech', name: '传送门技术', description: '研究传送门技术。', category: 'hell_dimension', era: '星际', reqs: { wsc: 1 }, grant: ['portal', 1], costs: { Knowledge: 500000 }, effect: '解锁传送门技术。' },
-  { id: 'fortifications', name: '要塞化', description: '在地狱入口建造防御要塞。', category: 'hell_dimension', era: '星际', reqs: { portal: 1 }, grant: ['portal', 2], costs: { Knowledge: 550000, Stone: 1000000 }, effect: '解锁地狱门区域和要塞防御系统。' },
-  { id: 'demon_attractor', name: '恶魔吸引器', description: '建造吸引恶魔的装置。', category: 'hell_dimension', era: '星际', reqs: { portal: 3, stanene: 1 }, grant: ['portal', 4], costs: { Knowledge: 745000 }, effect: '解锁恶魔吸引器建筑。' },
-  { id: 'repair_droids', name: '维修机器人', description: '部署地狱维修机器人。', category: 'hell_dimension', era: '星际', reqs: { portal: 5 }, grant: ['portal', 6], costs: { Knowledge: 794000, Soul_Gem: 1 }, effect: '解锁维修机器人。' },
-  { id: 'advanced_predators', name: '高级掠食者', description: '升级地狱防御系统。', category: 'hell_dimension', era: '星系际', reqs: { portal: 6, xeno: 4 }, grant: ['portal', 7], costs: { Knowledge: 5000000, Bolognium: 500000, Vitreloy: 250000 }, effect: '大幅提升地狱防御能力。' },
 
   // 更多维度科技
-  { id: 'arcology_tech', name: '生态建筑技术', description: '研发生态建筑技术。', category: 'housing', era: '维度', reqs: { high_tech: 18 }, grant: ['arcology', 1], costs: { Knowledge: 25000000 }, effect: '解锁生态建筑。' },
-  { id: 'cybernetics_tech', name: '控制论', description: '研究人机融合技术。', category: 'science', era: '维度', reqs: { high_tech: 18 }, grant: ['cybernetics', 1], costs: { Knowledge: 28000000 }, effect: '解锁控制论升级。' },
 
   // 更多存在时代科技
-  { id: 'divinity_tech', name: '神性', description: '追求神性。', category: 'religion', era: '存在', reqs: { theology: 5, science: 20 }, grant: ['divinity', 1], costs: { Knowledge: 80000000, Omniscience: 20000 }, effect: '接近神性。' },
-  { id: 'reincarnation_tech', name: '轮回', description: '研究轮回转世。', category: 'religion', era: '存在', reqs: { divinity: 1, elysium: 16 }, grant: ['reincarnation', 1], costs: { Knowledge: 130000000, Omniscience: 40000 }, effect: '解锁轮回系统。' },
 
   // ===== 最后一批补充科技 =====
 
   // 农业链补充
-  { id: 'lodge', name: '小屋', description: '建造猎人小屋。', category: 'agriculture', era: '文明', reqs: { housing: 1 }, grant: ['hunting', 2], costs: { Knowledge: 45, Lumber: 20 }, effect: '解锁猎人岗位。' },
-  { id: 'windmill', name: '风车', description: '建造风车。', category: 'agriculture', era: '发现', reqs: { farm: 4, high_tech: 1 }, grant: ['farm', 5], costs: { Knowledge: 12000 }, effect: '进一步提升粮食产量。' },
-  { id: 'gmfood', name: '转基因食品', description: '研发转基因食品。', category: 'agriculture', era: '全球化', reqs: { farm: 5, genetics: 3 }, grant: ['farm', 6], costs: { Knowledge: 120000 }, effect: '大幅提升粮食产量。' },
-  { id: 'titanium_hoe', name: '钛锄', description: '制造钛合金锄头。', category: 'agriculture', era: '工业化', reqs: { farm: 4, high_tech: 3 }, grant: ['hoe', 4], costs: { Knowledge: 40000, Titanium: 500 }, effect: '提升耕作效率。' },
 
   // 远古族科技
   { id: 'mind_break', name: '心灵破碎', description: '破碎敌人的心灵。', category: 'eldritch', era: '文明', reqs: { psychic: 3 }, condition: (state) => state.race.unfathomable !== undefined, grant: ['psychicthrall', 1], costs: { Knowledge: 5000 }, effect: '解锁心灵破碎能力。' },
@@ -4268,24 +4080,21 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'rotary_kiln', name: '回转窑', description: '建造回转窑。', category: 'mining', era: '工业化', reqs: { copper: 1 }, grant: ['copper', 2], costs: { Knowledge: 25000 }, effect: '提升铜矿冶炼效率。' },
 
   // 科学补充
-  { id: 'quantum_entanglement', name: '量子纠缠', description: '研究量子纠缠现象。', category: 'science', era: '星际', reqs: { science: 15 }, grant: ['science', 16], costs: { Knowledge: 1500000 }, effect: '推进量子物理学。' },
-  { id: 'subspace_sensors', name: '亚空间传感器', description: '研发亚空间传感器。', category: 'science', era: '星系际', reqs: { science: 17 }, grant: ['science', 18], costs: { Knowledge: 8000000 }, effect: '解锁亚空间探测。' },
+  { id: 'subspace_sensors', name: '亚空间传感器', description: '研发亚空间传感器。', category: 'science', era: '星系际', reqs: { science: 16, high_tech: 16 }, grant: ['science', 17], costs: { Knowledge: 6000000 }, effect: '解锁亚空间探测。' },
 
   // 娱乐补充
-  { id: 'ambrosia', name: '仙馔', description: '制作仙馔。', category: 'entertainment', era: '存在', reqs: { elysium: 12 }, grant: ['elysium', 13], costs: { Knowledge: 112000000, Omniscience: 28000 }, effect: '解锁仙馔餐厅。' },
+  { id: 'ambrosia', name: '仙馔', description: '制作仙馔。', category: 'entertainment', era: '存在', reqs: { elysium: 11 }, grant: ['elysium', 12], costs: { Knowledge: 112000000, Omniscience: 28000 }, effect: '解锁仙馔餐厅。' },
   { id: 'rushmore', name: '总统山', description: '建造总统山雕像。', category: 'entertainment', era: '存在', reqs: { high_tech: 19, elysium: 15 }, grant: ['elysium', 16], costs: { Knowledge: 125000000, Omniscience: 37250 }, effect: '解锁总统山建筑。' },
 
   // 住房补充
   { id: 'neutronium_walls', name: '中子星墙壁', description: '使用中子星材料加固墙壁。', category: 'housing', era: '星际', reqs: { housing: 5, neutron: 1 }, grant: ['housing_reduction', 3], costs: { Knowledge: 600000, Neutronium: 5000 }, effect: '提升住房容量。' },
 
   // 伐木补充
-  { id: 'titanium_axes', name: '钛斧', description: '制造钛斧。', category: 'lumber_gathering', era: '工业化', reqs: { lumber: 4, high_tech: 3 }, grant: ['axe', 5], costs: { Knowledge: 35000, Titanium: 250 }, effect: '大幅提升伐木效率。' },
 
   // 军事补充
-  { id: 'machine_gun', name: '机枪', description: '研发机枪武器。', category: 'military', era: '工业化', reqs: { military: 4, high_tech: 3 }, grant: ['military', 5], costs: { Knowledge: 38000 }, effect: '大幅提升军队火力。' },
 
   // 人类学补充
-  { id: 'alt_anthropology', name: '人类学（替代）', description: '研究种族文化。', category: 'religion', era: '文明', reqs: { theology: 2 }, grant: ['anthropology', 1], costs: { Knowledge: 2500 }, effect: '解锁人类学研究。' },
+  { id: 'alt_anthropology', name: '人类学（替代）', description: '研究种族文化。', category: 'religion', era: '文明', reqs: { theology: 2 }, condition: (state) => (state.genes['transcendence'] ?? 0) > 0, grant: ['anthropology', 1], costs: { Knowledge: 2500 }, effect: '在 transcendence 路线中解锁人类学研究。' },
 
   // 量子材料
   { id: 'quantium', name: '量子材料', description: '研发量子材料。', category: 'crafting', era: '太阳系', reqs: { supercollider: 10, enceladus: 3 }, grant: ['quantium', 1], costs: { Knowledge: 2400000, Orichalcum: 125000, Cipher: 15000 }, effect: '解锁量子材料生产。' },
@@ -4297,7 +4106,6 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'quantum_signatures', name: '量子签名', description: '检测量子签名。', category: 'space_militarization', era: '太阳系', reqs: { syard_sensor: 3 }, grant: ['syard_sensor', 4], costs: { Knowledge: 800000 }, effect: '提升船坞传感器精度。' },
 
   // 钛锤
-  { id: 'titanium_sledgehammer', name: '钛锤', description: '制造钛锤。', category: 'mining', era: '工业化', reqs: { mining: 4, high_tech: 3 }, grant: ['hammer', 4], costs: { Knowledge: 35000, Titanium: 250 }, effect: '进一步提升采矿效率。' },
 
   // Womling
   { id: 'weasels', name: '鼬鼠', description: '与鼬鼠建立联系。', category: 'womling', era: 'Tauceti', reqs: { tau_red: 2 }, grant: ['tau_red', 3], costs: { Knowledge: 6250000 }, effect: '与鼬鼠建立外交关系。' },
@@ -4307,47 +4115,48 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== Solar/True Path 科技 =====
 
-  { id: 'adamantite_containers_tp', name: '精金集装箱（真相之路）', description: '制造精金集装箱。', category: 'storage', era: '太阳系', reqs: { steel_container: 4, alpha: 2 }, grant: ['steel_container', 5], costs: { Knowledge: 525000, Adamantite: 17500 }, effect: '提升集装箱容量。' },
-  { id: 'adamantite_vault_tp', name: '精金金库（真相之路）', description: '建造精金金库。', category: 'banking', era: '太阳系', reqs: { banking: 7, alpha: 2 }, grant: ['banking', 8], costs: { Knowledge: 550000, Adamantite: 15000 }, effect: '大幅提升金钱存储。' },
-  { id: 'ai_core_tp', name: 'AI 核心（真相之路）', description: '建造 AI 核心。', category: 'ai_core', era: '太阳系', reqs: { high_tech: 14, science: 15, blackhole: 3 }, grant: ['high_tech', 15], costs: { Knowledge: 1500000 }, effect: '解锁 AI 核心技术。' },
-  { id: 'ai_optimizations', name: 'AI 优化', description: '使用 AI 优化系统。', category: 'science', era: '太阳系', reqs: { high_tech: 15 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000 }, effect: 'AI 优化各项系统。' },
+  { id: 'adamantite_containers_tp', name: '精金集装箱（真相之路）', description: '制造精金集装箱。', category: 'storage', era: '太阳系', reqs: { steel_container: 4, titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['steel_container', 5], costs: { Knowledge: 575000, Adamantite: 17500 }, effect: '提升集装箱容量。' },
+  { id: 'adamantite_vault_tp', name: '精金金库（真相之路）', description: '建造精金金库。', category: 'banking', era: '太阳系', reqs: { vault: 2, titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['vault', 3], costs: { Money: 2000000, Knowledge: 560000, Adamantite: 20000 }, effect: '大幅提升金钱存储。' },
+  { id: 'ai_core_tp', name: 'AI 核心（真相之路）', description: '建造 AI 核心。', category: 'ai_core', era: '太阳系', reqs: { titan: 8 }, condition: (state) => state.race.truepath !== undefined, grant: ['titan', 9], costs: { Knowledge: 3000000, Cipher: 100000 }, effect: '解锁 AI 核心技术。' },
+  { id: 'ai_optimizations', name: 'AI 优化', description: '使用 AI 优化系统。', category: 'science', era: '太阳系', reqs: { eris: 3, titan: 9, titan_ai_core: 1, dig_control: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['titan_ai_core', 2], costs: { Knowledge: 3750000, Cipher: 75000 }, effect: 'AI 优化各项系统。' },
   { id: 'bac_tanks_tp', name: 'BAC 坦克（真相之路）', description: '建造 BAC 坦克。', category: 'military', era: '太阳系', reqs: { medic: 1, triton: 2 }, grant: ['medic', 2], costs: { Knowledge: 1750000 }, effect: '提升医疗能力。' },
   { id: 'data_analysis', name: '数据分析', description: '进行数据分析。', category: 'science', era: '太阳系', reqs: { outer: 3 }, grant: ['outer', 4], costs: { Knowledge: 2000000 }, effect: '提升数据处理能力。' },
   { id: 'data_cracker', name: '数据破解', description: '破解加密数据。', category: 'science', era: '太阳系', reqs: { outer: 4 }, grant: ['outer', 5], costs: { Knowledge: 2500000 }, effect: '解锁加密数据。' },
-  { id: 'elerium_extraction', name: '埃勒里提取', description: '提取埃勒里资源。', category: 'mining', era: '太阳系', reqs: { elerium: 1 }, grant: ['elerium', 2], costs: { Knowledge: 300000 }, effect: '提升埃勒里提取效率。' },
-  { id: 'graphene_tp', name: '石墨烯（真相之路）', description: '生产石墨烯。', category: 'crafting', era: '太阳系', reqs: { high_tech: 12, proxima: 2 }, grant: ['graphene', 1], costs: { Knowledge: 650000 }, effect: '解锁石墨烯生产。' },
-  { id: 'iridium_smelting', name: '铱冶炼', description: '冶炼铱金属。', category: 'mining', era: '太阳系', reqs: { smelting: 5 }, grant: ['smelting', 6], costs: { Knowledge: 200000 }, effect: '解锁铱冶炼。' },
+  { id: 'elerium_extraction', name: '埃勒里提取', description: '提取埃勒里资源。', category: 'mining', era: '太阳系', reqs: { kuiper: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['kuiper', 2], costs: { Knowledge: 2500000, Orichalcum: 100000, Cipher: 12000 }, effect: '提升埃勒里提取效率。' },
+  { id: 'graphene_tp', name: '石墨烯（真相之路）', description: '生产石墨烯。', category: 'crafting', era: '太阳系', reqs: { titan: 5 }, condition: (state) => state.race.truepath !== undefined, grant: ['graphene', 1], costs: { Knowledge: 640000, Adamantite: 25000 }, effect: '解锁石墨烯生产。' },
+  { id: 'iridium_smelting', name: '铱冶炼', description: '冶炼铱金属。', category: 'mining', era: '太阳系', reqs: { m_smelting: 1, graphene: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['m_smelting', 2], costs: { Knowledge: 825000, Graphene: 125000 }, effect: '解锁铱冶炼。' },
   { id: 'long_range_probes', name: '远程探测器', description: '发射远程探测器。', category: 'space_exploration', era: '太阳系', reqs: { outer: 5 }, grant: ['outer', 6], costs: { Knowledge: 3000000 }, effect: '解锁远程探测。' },
   { id: 'mass_relay', name: '质量中继器', description: '建造质量中继器。', category: 'space_exploration', era: '太阳系', reqs: { outer: 6 }, grant: ['outer', 7], costs: { Knowledge: 4000000 }, effect: '解锁质量中继器。' },
   { id: 'photon_engine', name: '光子引擎', description: '研发光子引擎。', category: 'space_militarization', era: '太阳系', reqs: { syard_engine: 1 }, grant: ['syard_engine', 2], costs: { Knowledge: 500000 }, effect: '解锁光子引擎。' },
   { id: 'pulse_engine', name: '脉冲引擎', description: '研发脉冲引擎。', category: 'space_militarization', era: '太阳系', reqs: { syard_engine: 2 }, grant: ['syard_engine', 3], costs: { Knowledge: 800000 }, effect: '解锁脉冲引擎。' },
-  { id: 'quantium_containers', name: '量子集装箱', description: '制造量子集装箱。', category: 'storage', era: '太阳系', reqs: { steel_container: 6, quantium: 1 }, grant: ['steel_container', 7], costs: { Knowledge: 2500000, Quantium: 50000 }, effect: '提升集装箱容量。' },
-  { id: 'ship_elerium', name: '舰船埃勒里', description: '为舰船装备埃勒里。', category: 'space_militarization', era: '太阳系', reqs: { syard_weapon: 3 }, grant: ['syard_weapon', 4], costs: { Knowledge: 880000, Elerium: 2500 }, effect: '提升舰船武器威力。' },
-  { id: 'ship_fusion', name: '舰船聚变', description: '为舰船装备聚变引擎。', category: 'space_militarization', era: '太阳系', reqs: { syard_engine: 1 }, grant: ['syard_engine', 2], costs: { Knowledge: 500000 }, effect: '提升舰船速度。' },
-  { id: 'stanene_tp', name: '斯坦烯（真相之路）', description: '生产斯坦烯。', category: 'crafting', era: '太阳系', reqs: { infernite: 1 }, grant: ['stanene', 1], costs: { Knowledge: 590000, Aluminium: 500000, Infernite: 1000 }, effect: '解锁斯坦烯生产。' },
+  { id: 'quantium_containers', name: '量子集装箱', description: '制造量子集装箱。', category: 'storage', era: '太阳系', reqs: { steel_container: 5, quantium: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['steel_container', 6], costs: { Knowledge: 1150000, Quantium: 100000 }, effect: '提升集装箱容量。' },
+  { id: 'ship_elerium', name: '舰船埃勒里', description: '为舰船装备埃勒里。', category: 'space_militarization', era: '太阳系', reqs: { syard_power: 4, outer: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['syard_power', 5], costs: { Knowledge: 1900000, Cipher: 18000 }, effect: '提升舰船动力。' },
+  { id: 'ship_fusion', name: '舰船聚变', description: '为舰船装备聚变引擎。', category: 'space_militarization', era: '太阳系', reqs: { syard_power: 3, quantium: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['syard_power', 4], costs: { Knowledge: 1100000, Quantium: 65000 }, effect: '提升舰船动力。' },
+  { id: 'stanene_tp', name: '斯坦烯（真相之路）', description: '生产斯坦烯。', category: 'crafting', era: '太阳系', reqs: { titan: 1, enceladus: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['stanene', 1], costs: { Knowledge: 525000, Aluminium: 500000, Nano_Tube: 100000 }, effect: '解锁斯坦烯生产。' },
   { id: 'zero_g_lab', name: '零重力实验室', description: '建造零重力实验室。', category: 'science', era: '太阳系', reqs: { high_tech: 13, graphene: 1, enceladus: 2 }, grant: ['enceladus', 3], costs: { Knowledge: 900000 }, effect: '解锁零重力实验室。' },
 
   // ===== Interstellar 补充科技 =====
 
   { id: 'adamantite_hammer', name: '精金锤', description: '制造精金锤。', category: 'mining', era: '星际', reqs: { mining: 7, alpha: 2 }, grant: ['mining', 8], costs: { Knowledge: 500000, Adamantite: 10000 }, effect: '大幅提升采矿效率。' },
   { id: 'chainsaws', name: '电锯', description: '制造电锯。', category: 'lumber_gathering', era: '星际', reqs: { lumber: 6, high_tech: 12 }, grant: ['lumber', 7], costs: { Knowledge: 600000, Elerium: 100 }, effect: '大幅提升伐木效率。' },
-  { id: 'cruiser', name: '巡洋舰', description: '建造巡洋舰。', category: 'military', era: '星际', reqs: { military: 9, alpha: 4 }, grant: ['military', 10], costs: { Knowledge: 5000000 }, effect: '解锁巡洋舰。' },
+  { id: 'cruiser', name: '巡洋舰', description: '建造巡洋舰。', category: 'military', era: '星际', reqs: { high_tech: 14, proxima: 2, aerogel: 1 }, grant: ['cruiser', 1], costs: { Knowledge: 860000 }, effect: '解锁巡洋舰。' },
   { id: 'elerium_prospecting', name: '埃勒里勘探', description: '勘探埃勒里资源。', category: 'space_mining', era: '星际', reqs: { elerium: 2 }, grant: ['elerium', 3], costs: { Knowledge: 400000 }, effect: '提升埃勒里勘探效率。' },
-  { id: 'exchange', name: '交易所', description: '建造星际交易所。', category: 'banking', era: '星际', reqs: { banking: 10, alpha: 2 }, grant: ['banking', 11], costs: { Knowledge: 800000 }, effect: '解锁星际交易所。' },
-  { id: 'graphene_vault', name: '石墨烯金库', description: '建造石墨烯金库。', category: 'banking', era: '星际', reqs: { banking: 8, graphene: 1 }, grant: ['banking', 9], costs: { Knowledge: 700000, Graphene: 75000 }, effect: '提升金钱存储。' },
-  { id: 'virtual_assistant', name: '虚拟助手', description: '开发虚拟助手。', category: 'science', era: '星际', reqs: { high_tech: 13 }, grant: ['high_tech', 14], costs: { Knowledge: 850000 }, effect: '提升效率。' },
-  { id: 'vr_training', name: 'VR 训练', description: '使用 VR 进行训练。', category: 'military', era: '星际', reqs: { military: 9, high_tech: 13 }, grant: ['military', 10], costs: { Knowledge: 800000 }, effect: '提升训练效率。' },
+  { id: 'exchange', name: '交易所', description: '建造星际交易所。', category: 'banking', era: '星际', reqs: { banking: 11, alpha: 2, graphene: 1 }, grant: ['banking', 12], costs: { Money: 1000000, Knowledge: 675000 }, effect: '解锁星际交易所。' },
+  { id: 'graphene_vault', name: '石墨烯金库', description: '建造石墨烯金库。', category: 'banking', era: '星际', reqs: { vault: 3, graphene: 1 }, grant: ['vault', 4], costs: { Money: 3000000, Knowledge: 750000, Graphene: 400000 }, effect: '提升金钱存储。' },
+  { id: 'virtual_assistant', name: '虚拟助手', description: '开发虚拟助手。', category: 'science', era: '星际', reqs: { science: 12, high_tech: 12 }, grant: ['science', 13], costs: { Knowledge: 635000 }, effect: '提升星际研究效率。' },
+  { id: 'vr_training', name: 'VR 训练', description: '使用 VR 进行训练。', category: 'military', era: '星际', reqs: { boot_camp: 1, high_tech: 12 }, grant: ['boot_camp', 2], costs: { Knowledge: 625000 }, effect: '提升训练效率。' },
 
   // ===== Intergalactic 补充科技 =====
 
   { id: 'advanced_telemetry', name: '高级遥测', description: '研发高级遥测技术。', category: 'science', era: '星系际', reqs: { xeno: 5 }, grant: ['telemetry', 1], costs: { Knowledge: 4200000, Vitreloy: 10000 }, effect: '提升遥测精度。' },
   { id: 'coordinates', name: '坐标', description: '获取星际坐标。', category: 'space_exploration', era: '星系际', reqs: { xeno: 4 }, grant: ['xeno', 5], costs: { Knowledge: 3500000 }, effect: '解锁星际导航。' },
-  { id: 'expedition', name: '远征', description: '组织星际远征。', category: 'space_exploration', era: '星系际', reqs: { xeno: 6 }, grant: ['xeno', 7], costs: { Knowledge: 4600000 }, effect: '解锁远征行动。' },
-  { id: 'foreign_investment', name: '外星投资', description: '进行外星投资。', category: 'banking', era: '星系际', reqs: { xeno: 7 }, grant: ['xeno', 8], costs: { Knowledge: 5500000, Infernite: 125000 }, effect: '解锁外星投资。' },
+  { id: 'expedition', name: '远征', description: '组织星际远征。', category: 'science', era: '星系际', reqs: { science: 15, xeno: 4 }, grant: ['science', 16], costs: { Knowledge: 5350000 }, effect: '推进星系际科研。' },
+  { id: 'shore_leave', name: '岸上休假', description: '为外星访客建立休假与消费设施。', category: 'banking', era: '星系际', reqs: { xeno: 6 }, grant: ['xeno', 7], costs: { Knowledge: 4600000 }, effect: '推进异星文化交流。' },
+  { id: 'foreign_investment', name: '外星投资', description: '进行外星投资。', category: 'banking', era: '星系际', reqs: { banking: 12, xeno: 10 }, grant: ['banking', 13], costs: { Money: 100000000, Knowledge: 8000000 }, effect: '解锁外星投资。' },
   { id: 'gateway_depot', name: '网关仓库', description: '建造网关仓库。', category: 'storage', era: '星系际', reqs: { gateway: 5 }, grant: ['gateway', 6], costs: { Knowledge: 4000000, Neutronium: 80000, Stanene: 500000 }, effect: '提供大量存储容量。' },
-  { id: 'mega_manufacturing', name: '超级制造', description: '发展超级制造技术。', category: 'crafting', era: '星系际', reqs: { high_tech: 17, alpha: 4, factory: 3 }, grant: ['factory', 4], costs: { Knowledge: 13500000, Vitreloy: 500000, Orichalcum: 300000 }, effect: '解锁超级制造。' },
+  { id: 'mega_manufacturing', name: '超级制造', description: '发展超级制造技术。', category: 'crafting', era: '星系际', reqs: { high_tech: 16, alpha: 3 }, grant: ['alpha', 4], costs: { Knowledge: 5650000 }, effect: '解锁超级制造。' },
   { id: 'metaphysics', name: '形而上学', description: '研究形而上学。', category: 'science', era: '星系际', reqs: { high_tech: 15, xeno: 5 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000, Vitreloy: 10000, Soul_Gem: 10 }, effect: '推进科学前沿。' },
-  { id: 'ore_processor', name: '矿石处理器', description: '建造矿石处理器。', category: 'mining', era: '星系际', reqs: { gateway: 3 }, grant: ['gateway', 4], costs: { Knowledge: 3900000 }, effect: '提升矿石处理效率。' },
+  { id: 'ore_processor', name: '矿石处理器', description: '建造矿石处理器。', category: 'mining', era: '星系际', reqs: { conflict: 2 }, grant: ['conflict', 3], costs: { Knowledge: 7500000 }, effect: '提升矿石处理效率。' },
   { id: 'orichalcum_analysis', name: '奥利哈康分析', description: '分析奥利哈康材料。', category: 'science', era: '星系际', reqs: { high_tech: 16, chthonian: 3 }, grant: ['high_tech', 17], costs: { Knowledge: 8000000, Orichalcum: 200000 }, effect: '解锁奥利哈康应用。' },
 
   // ===== Existential 补充科技 =====
@@ -4357,7 +4166,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'bliss_den', name: '极乐窝', description: '建造极乐窝。', category: 'entertainment', era: '存在', reqs: { asphodel: 9 }, grant: ['asphodel', 10], costs: { Knowledge: 90000000, Omniscience: 16666 }, effect: '解锁极乐窝建筑。' },
   { id: 'camouflage', name: '伪装', description: '研发伪装技术。', category: 'military', era: '存在', reqs: { elysium: 3 }, grant: ['celestial_warfare', 1], costs: { Knowledge: 83000000, Omniscience: 15000, Asphodel_Powder: 100000 }, effect: '解锁伪装技术。' },
   { id: 'celestial_tactics', name: '天界战术', description: '研发天界战术。', category: 'military', era: '存在', reqs: { celestial_warfare: 1 }, grant: ['celestial_warfare', 2], costs: { Knowledge: 86000000, Omniscience: 17500 }, effect: '提升天界战斗能力。' },
-  { id: 'dimensional_tap', name: '维度抽取', description: '从维度中抽取能量。', category: 'power_generation', era: '存在', reqs: { high_tech: 19 }, grant: ['dimensional_tap', 1], costs: { Knowledge: 150000000, Omniscience: 50000 }, effect: '解锁维度能量抽取。' },
+  { id: 'dimensional_tap', name: '维度抽取', description: '从维度中抽取知识。', category: 'science', era: '存在', reqs: { science: 23, ascension: 7 }, grant: ['science', 24], costs: { Knowledge: 87500000, Omniscience: 13333 }, effect: '完成存在时代科学链。' },
   { id: 'elerium_cannon', name: '埃勒里炮', description: '建造埃勒里炮。', category: 'military', era: '存在', reqs: { elysium: 9, isle: 1 }, grant: ['elysium', 10], costs: { Knowledge: 105000000, Omniscience: 25000, Steel: 1000000000, Nano_Tube: 500000000 }, effect: '解锁埃勒里炮。' },
   { id: 'elerium_containment', name: '埃勒里收容', description: '建造埃勒里收容设施。', category: 'storage', era: '存在', reqs: { elysium: 10 }, grant: ['elysium', 11], costs: { Knowledge: 106500000, Omniscience: 26500 }, effect: '提升埃勒里存储容量。' },
   { id: 'elysanite_mining', name: '伊利桑奈特采矿', description: '开采伊利桑奈特。', category: 'mining', era: '存在', reqs: { elysium: 5 }, grant: ['elysium', 6], costs: { Knowledge: 93000000, Omniscience: 18500 }, effect: '解锁伊利桑奈特采矿。' },
@@ -4368,47 +4177,30 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   // ===== 其他补充科技 =====
 
   { id: 'wooden_tools', name: '木制工具', description: '制造木制工具。', category: 'stone_gathering', era: '原始', reqs: { primitive: 1 }, grant: ['stone', 1], costs: { Knowledge: 5 }, effect: '提升采石效率。' },
-  { id: 'metal_working', name: '金属加工', description: '学习金属加工技术。', category: 'mining', era: '文明', reqs: { mining: 2 }, grant: ['mining', 3], costs: { Knowledge: 250 }, effect: '解锁金属加工。' },
-  { id: 'iron_mining', name: '铁矿开采', description: '开采铁矿资源。', category: 'mining', era: '文明', reqs: { mining: 3 }, grant: ['mining', 4], costs: { Knowledge: 500 }, effect: '解锁铁矿开采。' },
   { id: 'silo', name: '粮仓', description: '建造粮仓。', category: 'agriculture', era: '文明', reqs: { farm: 2 }, grant: ['farm', 3], costs: { Knowledge: 650 }, effect: '提升粮食存储。' },
-  { id: 'cottage', name: '村舍', description: '建造村舍。', category: 'housing', era: '文明', reqs: { housing: 1, cement: 1 }, grant: ['housing', 2], costs: { Knowledge: 500, Stone: 200 }, effect: '解锁村舍建筑。' },
-  { id: 'portland_cement', name: '波特兰水泥', description: '发明波特兰水泥。', category: 'cement', era: '工业化', reqs: { cement: 3, high_tech: 3 }, grant: ['cement', 4], costs: { Knowledge: 45000 }, effect: '提升水泥质量。' },
+  { id: 'portland_cement', name: '波特兰水泥', description: '发明波特兰水泥。', category: 'cement', era: '工业化', reqs: { cement: 3, high_tech: 3 }, grant: ['cement', 4], costs: { Knowledge: 32000 }, effect: '提升水泥质量。' },
   { id: 'anfo', name: '铵油炸药', description: '研发铵油炸药。', category: 'mining', era: '工业化', reqs: { explosives: 2, oil: 1 }, grant: ['explosives', 3], costs: { Knowledge: 42000, Oil: 2500 }, effect: '提升爆破效率。' },
-  { id: 'uranium', name: '铀', description: '发现铀资源。', category: 'power_generation', era: '全球化', reqs: { high_tech: 4 }, grant: ['uranium', 1], costs: { Knowledge: 72000 }, effect: '解锁铀资源。' },
-  { id: 'massive_trades', name: '大规模交易', description: '进行大规模交易。', category: 'banking', era: '全球化', reqs: { currency: 4 }, grant: ['currency', 5], costs: { Knowledge: 6750 }, effect: '提升交易规模。' },
 
   // ===== 农业链补充 =====
 
-  { id: 'windturbine', name: '风力涡轮', description: '升级风力涡轮机。', category: 'agriculture', era: '全球化', reqs: { farm: 5, high_tech: 6 }, grant: ['farm', 6], costs: { Knowledge: 95000 }, effect: '进一步提升粮食产量。' },
 
   // ===== 冶炼链补充 =====
 
-  { id: 'hellfire_furnace', name: '地狱火熔炉', description: '建造地狱火熔炉。', category: 'mining', era: '维度', reqs: { smelting: 6, hell_gate: 4 }, grant: ['smelting', 7], costs: { Knowledge: 33000000, Infernite: 50000 }, effect: '解锁地狱火熔炉冶炼。' },
+  { id: 'hellfire_furnace', name: '地狱火熔炉', description: '建造地狱火熔炉。', category: 'mining', era: '星际', reqs: { smelting: 6, infernite: 1 }, grant: ['smelting', 7], costs: { Knowledge: 615000, Infernite: 2000, Soul_Gem: 2 }, effect: '解锁地狱火熔炉冶炼。' },
   { id: 'infernium_fuel', name: '地狱火燃料', description: '使用地狱火作为燃料。', category: 'power_generation', era: '维度', reqs: { smelting: 7 }, grant: ['smelting', 8], costs: { Knowledge: 35000000, Infernite: 100000 }, effect: '解锁地狱火燃料发电。' },
 
   // ===== 科学链补充 =====
 
-  { id: 'laboratory', name: '实验室', description: '建造实验室。', category: 'science', era: '发现', reqs: { science: 3, high_tech: 1 }, grant: ['science', 4], costs: { Knowledge: 12000 }, effect: '解锁实验室建筑。' },
-  { id: 'science_12', name: '高级科学', description: '推进科学研究。', category: 'science', era: '星际', reqs: { science: 11 }, grant: ['science', 12], costs: { Knowledge: 700000 }, effect: '推进科学前沿。' },
-  { id: 'science_13', name: '星际科学', description: '星际科学研究。', category: 'science', era: '星际', reqs: { science: 12 }, grant: ['science', 13], costs: { Knowledge: 850000 }, effect: '推进星际科学。' },
-  { id: 'science_14', name: '高级星际科学', description: '高级星际科学研究。', category: 'science', era: '星际', reqs: { science: 13 }, grant: ['science', 14], costs: { Knowledge: 1000000 }, effect: '推进高级星际科学。' },
-  { id: 'science_15', name: '深空科学', description: '深空科学研究。', category: 'science', era: '深空', reqs: { science: 14 }, grant: ['science', 15], costs: { Knowledge: 1500000 }, effect: '推进深空科学。' },
-  { id: 'science_16', name: '高级深空科学', description: '高级深空科学研究。', category: 'science', era: '深空', reqs: { science: 15 }, grant: ['science', 16], costs: { Knowledge: 2000000 }, effect: '推进高级深空科学。' },
-  { id: 'science_17', name: '星系际科学', description: '星系际科学研究。', category: 'science', era: '星系际', reqs: { science: 16 }, grant: ['science', 17], costs: { Knowledge: 5000000 }, effect: '推进星系际科学。' },
-  { id: 'science_18', name: '高级星系际科学', description: '高级星系际科学研究。', category: 'science', era: '星系际', reqs: { science: 17 }, grant: ['science', 18], costs: { Knowledge: 8000000 }, effect: '推进高级星系际科学。' },
-  { id: 'science_19', name: '维度科学', description: '维度科学研究。', category: 'science', era: '维度', reqs: { science: 18 }, grant: ['science', 19], costs: { Knowledge: 20000000 }, effect: '推进维度科学。' },
-  { id: 'science_20', name: '高级维度科学', description: '高级维度科学研究。', category: 'science', era: '维度', reqs: { science: 19 }, grant: ['science', 20], costs: { Knowledge: 30000000 }, effect: '推进高级维度科学。' },
-  { id: 'science_21', name: '存在科学', description: '存在科学研究。', category: 'science', era: '存在', reqs: { science: 20 }, grant: ['science', 21], costs: { Knowledge: 80000000, Omniscience: 20000 }, effect: '推进存在科学。' },
-  { id: 'science_22', name: '高级存在科学', description: '高级存在科学研究。', category: 'science', era: '存在', reqs: { science: 21 }, grant: ['science', 22], costs: { Knowledge: 100000000, Omniscience: 30000 }, effect: '推进高级存在科学。' },
-  { id: 'science_23', name: '终极科学', description: '终极科学研究。', category: 'science', era: '存在', reqs: { science: 22 }, grant: ['science', 23], costs: { Knowledge: 120000000, Omniscience: 40000 }, effect: '推进终极科学。' },
-  { id: 'science_24', name: '维度抽取', description: '从维度中抽取知识。', category: 'science', era: '存在', reqs: { science: 23 }, grant: ['science', 24], costs: { Knowledge: 150000000, Omniscience: 50000 }, effect: '解锁维度知识抽取。' },
+  { id: 'science_11_bridge', name: '深空理论', description: '整理世界对撞机后的深空研究成果。', category: 'science', era: '星际', reqs: { science: 10, alpha: 2 }, grant: ['science', 11], costs: { Knowledge: 425000 }, effect: '补足 EvoZen 当前简化科技链中的 science 11 过渡层级。' },
+  { id: 'dimensional_readings', name: '维度读数', description: '解析地狱维度传感器读数。', category: 'science', era: '星际', reqs: { science: 13, infernite: 2 }, grant: ['science', 14], costs: { Knowledge: 750000 }, effect: '推进维度科学。' },
+  { id: 'alien_database', name: '外星数据库', description: '整理外星文明数据库。', category: 'progress', era: '星系际', reqs: { science: 17, conflict: 5 }, grant: ['science', 18], costs: { Knowledge: 8250000 }, effect: '推进星系际资料研究。' },
+  { id: 'orichalcum_capacitor', name: '奥利哈康电容器', description: '制造奥利哈康电容器。', category: 'science', era: '星系际', reqs: { science: 18, high_tech: 17 }, grant: ['science', 19], costs: { Knowledge: 12500000, Orichalcum: 250000 }, effect: '推进奥利哈康应用研究。' },
+  { id: 'codex_infinium', name: '无限法典', description: '研究无限法典。', category: 'science', era: '维度', reqs: { science: 20, sphinx_bribe: 1 }, grant: ['science', 21], costs: { Knowledge: 40100000, Codex: 1 }, effect: '推进维度时代科学。' },
+  { id: 'spirit_researcher', name: '灵魂研究员', description: '训练灵魂研究员。', category: 'science', era: '存在', reqs: { science: 22, asphodel: 8 }, grant: ['science', 23], costs: { Knowledge: 80000000, Omniscience: 12500 }, effect: '推进存在时代科研。' },
 
   // ===== 金库链补充 =====
 
-  { id: 'mythril_vault', name: '秘银金库', description: '建造秘银金库。', category: 'banking', era: '早期太空', reqs: { banking: 5, space: 3 }, grant: ['banking', 6], costs: { Knowledge: 160000, Mythril: 500 }, effect: '提升金钱存储。' },
-  { id: 'neutronium_vault', name: '中子星金库', description: '建造中子星金库。', category: 'banking', era: '星际', reqs: { banking: 8, neutron: 1 }, grant: ['banking', 9], costs: { Knowledge: 600000, Neutronium: 5000 }, effect: '大幅提升金钱存储。' },
-  { id: 'adamantite_vault', name: '精金金库', description: '建造精金金库。', category: 'banking', era: '星际', reqs: { banking: 7, alpha: 2 }, grant: ['banking', 8], costs: { Knowledge: 550000, Adamantite: 15000 }, effect: '提升金钱存储。' },
-  { id: 'graphene_vault', name: '石墨烯金库', description: '建造石墨烯金库。', category: 'banking', era: '星际', reqs: { banking: 8, graphene: 1 }, grant: ['banking', 9], costs: { Knowledge: 700000, Graphene: 75000 }, effect: '提升金钱存储。' },
+  { id: 'neutronium_vault', name: '中子星金库', description: '建造中子星金库。', category: 'banking', era: '深空', reqs: { vault: 1, gas_moon: 1 }, grant: ['vault', 2], costs: { Money: 750000, Knowledge: 280000, Neutronium: 650 }, effect: '大幅提升金钱存储。' },
 
   // ===== 集装箱链补充 =====
 
@@ -4417,30 +4209,20 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 军事链补充 =====
 
-  { id: 'laser_rifles', name: '激光步枪', description: '装备激光步枪。', category: 'military', era: '深空', reqs: { military: 7, high_tech: 10 }, grant: ['military', 8], costs: { Knowledge: 350000, Elerium: 250 }, effect: '大幅提升军队战斗力。' },
-  { id: 'hammocks', name: '吊床', description: '在兵营安装吊床。', category: 'military', era: '文明', reqs: { military: 2 }, grant: ['morale', 1], costs: { Knowledge: 450, Lumber: 200 }, effect: '提升兵营容量。' },
+  { id: 'hammocks', name: '吊床', description: '在太空兵营安装吊床。', category: 'military', era: '星系际', reqs: { marines: 1, nanoweave: 1 }, grant: ['marines', 2], costs: { Knowledge: 8900000, Nanoweave: 30000 }, effect: '提升太空兵营容量。' },
   { id: 'anitgrav_bunk', name: '反重力床', description: '安装反重力床。', category: 'military', era: '星际', reqs: { military: 9, high_tech: 13 }, grant: ['morale', 2], costs: { Knowledge: 800000 }, effect: '提升兵营容量。' },
 
   // ===== 赌博链补充 =====
 
-  { id: 'online_gambling', name: '在线赌博', description: '发展在线赌博业。', category: 'banking', era: '深空', reqs: { gambling: 1, high_tech: 10 }, grant: ['gambling', 2], costs: { Knowledge: 350000 }, effect: '提升赌博收入。' },
-  { id: 'iso_gambling', name: '异星赌博', description: '发展异星赌博业。', category: 'banking', era: '星系际', reqs: { gambling: 2, xeno: 6 }, grant: ['gambling', 3], costs: { Knowledge: 5000000, Bolognium: 500000 }, effect: '提升异星赌博收入。' },
+  { id: 'iso_gambling', name: '异星赌博', description: '发展异星赌博业。', category: 'banking', era: 'Tauceti', reqs: { gambling: 4, isolation: 1 }, grant: ['iso_gambling', 1], costs: { Knowledge: 8650000 }, effect: '提升异星赌博收入。' },
 
   // ===== 住房链补充 =====
 
-  { id: 'mythril_beams', name: '秘银梁', description: '使用秘银加固建筑。', category: 'housing', era: '早期太空', reqs: { housing: 4, space: 3 }, grant: ['housing', 5], costs: { Knowledge: 160000, Mythril: 500 }, effect: '提升住房容量。' },
-  { id: 'bolognium_alloy_beams', name: '博洛尼乌姆合金梁', description: '使用博洛尼乌姆合金加固建筑。', category: 'housing', era: '星系际', reqs: { housing: 6, gateway: 3 }, grant: ['housing', 7], costs: { Knowledge: 5000000, Orichalcum: 100000 }, effect: '提升住房容量。' },
-  { id: 'neutronium_housing', name: '中子星住房', description: '使用中子星材料建造住房。', category: 'housing', era: '星际', reqs: { housing: 5, neutron: 1 }, grant: ['housing', 6], costs: { Knowledge: 600000, Neutronium: 5000 }, effect: '大幅提升住房容量。' },
-  { id: 'fertility_clinic', name: '生育诊所', description: '建立生育诊所。', category: 'housing', era: '星系际', reqs: { housing: 7, xeno: 6 }, grant: ['housing', 8], costs: { Knowledge: 6000000, Vitreloy: 200000 }, effect: '提升人口增长。' },
+  { id: 'bolognium_alloy_beams', name: '博洛尼乌姆合金梁', description: '使用博洛尼乌姆合金加固建筑。', category: 'housing', era: '星系际', reqs: { housing_reduction: 3, gateway: 3 }, grant: ['housing_reduction', 4], costs: { Knowledge: 3750000, Adamantite: 2500000, Bolognium: 100000 }, effect: '提升住房容量。' },
 
   // ===== 太空船坞补充 =====
 
-  { id: 'ship_fusion', name: '舰船聚变', description: '为舰船装备聚变引擎。', category: 'space_militarization', era: '太阳系', reqs: { syard_engine: 1 }, grant: ['syard_engine', 2], costs: { Knowledge: 500000 }, effect: '提升舰船速度。' },
-  { id: 'ship_elerium', name: '舰船埃勒里', description: '为舰船装备埃勒里。', category: 'space_militarization', era: '太阳系', reqs: { syard_weapon: 3 }, grant: ['syard_weapon', 4], costs: { Knowledge: 880000, Elerium: 2500 }, effect: '提升舰船武器威力。' },
-  { id: 'photon_engine', name: '光子引擎', description: '研发光子引擎。', category: 'space_militarization', era: '太阳系', reqs: { syard_engine: 1 }, grant: ['syard_engine', 2], costs: { Knowledge: 500000 }, effect: '解锁光子引擎。' },
   { id: 'vacuum_drive', name: '真空驱动', description: '研发真空驱动。', category: 'space_militarization', era: '太阳系', reqs: { syard_engine: 3 }, grant: ['syard_engine', 4], costs: { Knowledge: 1200000 }, effect: '解锁真空驱动。' },
-  { id: 'elerium_extraction', name: '埃勒里提取', description: '提取埃勒里资源。', category: 'mining', era: '太阳系', reqs: { elerium: 1 }, grant: ['elerium', 2], costs: { Knowledge: 300000 }, effect: '提升埃勒里提取效率。' },
-  { id: 'elerium_prospecting', name: '埃勒里勘探', description: '勘探埃勒里资源。', category: 'space_mining', era: '星际', reqs: { elerium: 2 }, grant: ['elerium', 3], costs: { Knowledge: 400000 }, effect: '提升埃勒里勘探效率。' },
 
   // ===== Edenic/Asphodel 补充 =====
 
@@ -4452,68 +4234,54 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'outer_plane_study', name: '外层位面研究', description: '研究外层位面。', category: 'science', era: '存在', reqs: { asphodel: 3, science: 22 }, grant: ['elysium', 1], costs: { Knowledge: 75000000, Omniscience: 11655 }, effect: '解锁外层位面研究。' },
   { id: 'fire_support_base', name: '火力支援基地', description: '建造火力支援基地。', category: 'military', era: '存在', reqs: { elysium: 7 }, grant: ['elysium', 8], costs: { Knowledge: 100000000, Omniscience: 22500 }, effect: '解锁火力支援基地。' },
   { id: 'pillbox', name: '碉堡', description: '建造碉堡。', category: 'military', era: '存在', reqs: { elysium: 8 }, grant: ['elysium', 9], costs: { Knowledge: 102500000, Omniscience: 23500 }, effect: '解锁碉堡建筑。' },
-  { id: 'reincarnation', name: '轮回', description: '研究轮回转世。', category: 'housing', era: '存在', reqs: { elysium: 16 }, grant: ['elysium', 17], costs: { Knowledge: 130000000, Omniscience: 40000 }, effect: '解锁轮回系统。' },
 
   // ===== 地狱/Portal 补充 =====
 
   { id: 'codex_infernium', name: '地狱法典', description: '研究地狱法典。', category: 'progress', era: '维度', reqs: { hell_ruins: 3 }, grant: ['hell_ruins', 4], costs: { Knowledge: 23500000, Codex: 1 }, effect: '解锁地狱知识。' },
-  { id: 'infernium_power', name: '地狱火发电', description: '使用地狱火发电。', category: 'power_generation', era: '维度', reqs: { infernite: 2, high_tech: 18 }, grant: ['infernium', 1], costs: { Knowledge: 30000000, Infernite: 50000 }, effect: '解锁地狱火发电。' },
 
   // ===== 镐链补充 =====
 
   { id: 'jackhammer_mk2', name: '风镐 Mk2', description: '升级风镐。', category: 'mining', era: '全球化', reqs: { mining: 5, high_tech: 5 }, grant: ['mining', 6], costs: { Knowledge: 80000, Alloy: 500 }, effect: '提升采矿效率。' },
-  { id: 'adamantite_hammer', name: '精金锤', description: '制造精金锤。', category: 'mining', era: '星际', reqs: { mining: 7, alpha: 2 }, grant: ['mining', 8], costs: { Knowledge: 500000, Adamantite: 10000 }, effect: '大幅提升采矿效率。' },
   { id: 'elysanite_hammer', name: '伊利桑奈特锤', description: '制造伊利桑奈特锤。', category: 'mining', era: '存在', reqs: { mining: 8, elysium: 6 }, grant: ['mining', 9], costs: { Knowledge: 95000000, Omniscience: 20000, Elysanite: 50000000 }, effect: '顶级采矿效率。' },
 
   // ===== 锄头补充 =====
 
-  { id: 'adamantite_hoe', name: '精金锄', description: '制造精金锄头。', category: 'agriculture', era: '星际', reqs: { hoe: 4, alpha: 2 }, grant: ['hoe', 5], costs: { Knowledge: 550000, Adamantite: 10000 }, effect: '进一步提升耕作效率。' },
 
   // ===== 斧头补充 =====
 
-  { id: 'chainsaws', name: '电锯', description: '制造电锯。', category: 'lumber_gathering', era: '星际', reqs: { axe: 5, high_tech: 12 }, grant: ['axe', 6], costs: { Knowledge: 600000, Elerium: 100 }, effect: '大幅提升伐木效率。' },
 
   // ===== 冶炼补充 =====
 
-  { id: 'rotary_kiln', name: '回转窑', description: '建造回转窑。', category: 'mining', era: '工业化', reqs: { smelting: 4 }, grant: ['smelting', 5], costs: { Knowledge: 50000 }, effect: '提升冶炼效率。' },
-  { id: 'kroll_process', name: '克罗尔法', description: '使用克罗尔法冶炼。', category: 'mining', era: '全球化', reqs: { smelting: 5, high_tech: 6 }, grant: ['smelting', 6], costs: { Knowledge: 95000 }, effect: '解锁克罗尔法冶炼。' },
-  { id: 'cambridge_process', name: '剑桥法', description: '使用剑桥法冶炼。', category: 'mining', era: '早期太空', reqs: { smelting: 6, space: 3 }, grant: ['smelting', 7], costs: { Knowledge: 160000 }, effect: '解锁剑桥法冶炼。' },
-  { id: 'mercury_smelting', name: '汞冶炼', description: '冶炼汞金属。', category: 'mining', era: '早期太空', reqs: { smelting: 6 }, grant: ['smelting', 7], costs: { Knowledge: 180000 }, effect: '解锁汞冶炼。' },
-  { id: 'iridium_smelting', name: '铱冶炼', description: '冶炼铱金属。', category: 'mining', era: '早期太空', reqs: { smelting: 6 }, grant: ['smelting', 7], costs: { Knowledge: 200000 }, effect: '解锁铱冶炼。' },
+  { id: 'kroll_process', name: '克罗尔法', description: '使用克罗尔法加工钛。', category: 'mining', era: '全球化', reqs: { titanium: 1, high_tech: 4 }, grant: ['titanium', 2], costs: { Knowledge: 78000, Titanium: 10000 }, effect: '提升钛加工效率。' },
+  { id: 'cambridge_process', name: '剑桥法', description: '使用剑桥法冶炼。', category: 'mining', era: '全球化', reqs: { titanium: 2, high_tech: 6 }, grant: ['titanium', 3], costs: { Knowledge: 90000, Titanium: 25000 }, effect: '解锁剑桥法冶炼。' },
+  { id: 'mercury_smelting', name: '汞冶炼', description: '冶炼汞金属。', category: 'mining', era: '太阳系', reqs: { hell: 1, titan: 4, smelting: 6 }, condition: (state) => state.race.truepath !== undefined, grant: ['m_smelting', 1], costs: { Knowledge: 625000, Adamantite: 50000 }, effect: '解锁汞冶炼。' },
 
   // ===== 疾病系统补充 =====
 
   { id: 'infectious_disease_lab', name: '传染病实验室', description: '建造传染病实验室。', category: 'science', era: 'Tauceti', reqs: { disease: 1 }, grant: ['disease', 2], costs: { Knowledge: 8000000 }, effect: '解锁传染病实验室。' },
-  { id: 'isolation_protocol', name: '隔离协议', description: '实施隔离协议。', category: 'plague', era: 'Tauceti', reqs: { disease: 2 }, grant: ['disease', 3], costs: { Knowledge: 8500000 }, effect: '实施隔离措施。' },
-  { id: 'focus_cure', name: '集中治疗', description: '集中力量研发治疗方法。', category: 'plague', era: 'Tauceti', reqs: { disease: 2 }, grant: ['disease', 3], costs: { Knowledge: 8500000 }, effect: '加速疾病研究。' },
+  { id: 'isolation_protocol', name: '隔离协议', description: '实施隔离协议。', category: 'plague', era: 'Tauceti', reqs: { disease: 2 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor === undefined, grant: ['disease', 3], costs: { Knowledge: 8500000 }, effect: '实施隔离措施。' },
+  { id: 'focus_cure', name: '集中治疗', description: '集中力量研发治疗方法。', category: 'plague', era: 'Tauceti', reqs: { disease: 2 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor === undefined, grant: ['disease', 3], costs: { Knowledge: 8500000 }, effect: '加速疾病研究。' },
 
   // ===== AI/Tech 补充 =====
 
-  { id: 'ai_optimizations', name: 'AI 优化', description: '使用 AI 优化系统。', category: 'science', era: '太阳系', reqs: { high_tech: 15 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000 }, effect: 'AI 优化各项系统。' },
-  { id: 'synthetic_life', name: '合成生命', description: '创造合成生命。', category: 'science', era: '太阳系', reqs: { high_tech: 16 }, grant: ['high_tech', 17], costs: { Knowledge: 8000000 }, effect: '解锁合成生命技术。' },
-  { id: 'cybernetics', name: '控制论', description: '研究人机融合技术。', category: 'science', era: '维度', reqs: { high_tech: 18 }, grant: ['cybernetics', 1], costs: { Knowledge: 28000000 }, effect: '解锁控制论升级。' },
-  { id: 'divinity', name: '神性', description: '追求神性。', category: 'religion', era: '存在', reqs: { theology: 5, science: 20 }, grant: ['divinity', 1], costs: { Knowledge: 80000000, Omniscience: 20000 }, effect: '接近神性。' },
-  { id: 'virtual_reality', name: '虚拟现实', description: '开发虚拟现实技术。', category: 'science', era: '全球化', reqs: { high_tech: 6 }, grant: ['high_tech', 7], costs: { Knowledge: 120000 }, effect: '解锁虚拟现实系统。' },
-  { id: 'digital_paradise', name: '数字天堂', description: '创造数字天堂。', category: 'science', era: '存在', reqs: { high_tech: 19, elysium: 15 }, grant: ['elysium', 16], costs: { Knowledge: 125000000, Omniscience: 37250 }, effect: '解锁数字天堂。' },
+  { id: 'synthetic_life', name: '合成生命', description: '创造合成生命。', category: 'science', era: '太阳系', reqs: { titan_ai_core: 2 }, condition: (state) => state.race.truepath !== undefined, grant: ['titan_ai_core', 3], costs: { Knowledge: 4000000, Cipher: 75000 }, effect: '解锁合成生命技术。' },
+  { id: 'digital_paradise', name: '数字天堂', description: '创造数字天堂。', category: 'science', era: 'Tauceti', reqs: { cloning: 2 }, condition: (state) => state.race.truepath !== undefined, grant: ['matrix', 1], costs: { Knowledge: 10500000, Cipher: 200000 }, effect: '解锁数字天堂。' },
 
   // ===== 星际补充 =====
 
-  { id: 'interstellar', name: '星际', description: '开始星际探索。', category: 'space_exploration', era: '深空', reqs: { genesis: 3 }, grant: ['genesis', 4], costs: { Knowledge: 400000 }, effect: '解锁星际探索。' },
-  { id: 'wormholes', name: '虫洞', description: '研究虫洞技术。', category: 'science', era: '星系际', reqs: { high_tech: 15 }, grant: ['high_tech', 16], costs: { Knowledge: 5000000 }, effect: '解锁虫洞旅行。' },
-  { id: 'gateway_depot', name: '网关仓库', description: '建造网关仓库。', category: 'storage', era: '星系际', reqs: { gateway: 5 }, grant: ['gateway', 6], costs: { Knowledge: 4000000, Neutronium: 80000, Stanene: 500000 }, effect: '提供大量存储容量。' },
-];
+  { id: 'interstellar', name: '星际', description: '开始星际探索。', category: 'space_exploration', era: '深空', reqs: { genesis: 3 }, grant: ['genesis', 4], costs: { Knowledge: 400000 }, effect: '解锁星际探索。' },];
 
-function dedupeTechDefinitions(techs: TechDefinition[]): TechDefinition[] {
+function assertUniqueTechDefinitions(techs: TechDefinition[]): TechDefinition[] {
   const seen = new Set<string>();
-  const result: TechDefinition[] = [];
 
   for (const tech of techs) {
-    if (seen.has(tech.id)) continue;
+    if (seen.has(tech.id)) {
+      throw new Error(`Duplicate tech definition id: ${tech.id}`);
+    }
     seen.add(tech.id);
-    result.push(tech);
   }
 
-  return result;
+  return techs;
 }
 
-export const BASIC_TECHS: TechDefinition[] = dedupeTechDefinitions(RAW_BASIC_TECHS);
+export const BASIC_TECHS: TechDefinition[] = assertUniqueTechDefinitions(RAW_BASIC_TECHS);

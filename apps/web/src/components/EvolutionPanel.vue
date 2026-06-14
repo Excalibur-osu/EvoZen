@@ -10,8 +10,9 @@
 -->
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
+import { BASIC_CHALLENGE_UNLOCK_LEVEL, SCENARIO_CHALLENGE_UNLOCK_LEVEL, type ChallengeStartOptions } from '../stores/game'
 import { computed, ref, onMounted } from 'vue'
-import { getSpeciesTraitDescriptors, type EvoUpgrade } from '@evozen/game-core'
+import { applyCustomRace, getSpeciesTraitDescriptors, type EvoUpgrade } from '@evozen/game-core'
 
 const game = useGameStore()
 
@@ -71,20 +72,80 @@ const activeTraits = computed(() =>
 const selectedSpecies = ref('human')
 const selectedPtrait = ref('none')
 const useCustom = ref(false)
+type ChallengeMode = NonNullable<ChallengeStartOptions['mode']>
+const selectedChallengeMode = ref<ChallengeMode>('standard')
+const noPlasmidChallenge = ref(false)
+const weakMasteryChallenge = ref(false)
+const noTradeChallenge = ref(false)
+const noCraftChallenge = ref(false)
+const noCrisprChallenge = ref(false)
+const nerfedChallenge = ref(false)
+const badGenesChallenge = ref(false)
 const hasCustomRace = computed(() => {
   const cust = (game.state as Record<string, unknown>)['custom'] as { race0?: unknown } | undefined
   return !!cust?.race0
 })
+const challengeLevel = computed(() => Number((game.state.genes as Record<string, number>)['challenge'] ?? 0))
+const isChallengeUnlocked = computed(() => challengeLevel.value >= 1)
+
+const challengeModes = [
+  { id: 'standard', name: '标准', desc: '正常文明开局。', minChallenge: 0 },
+  { id: 'cataclysm', name: '灾变', desc: '自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.cataclysm },
+  { id: 'banana', name: '香蕉共和国', desc: '自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.banana },
+  { id: 'truepath', name: '真相之路', desc: '启用 Truepath，并自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.truepath },
+  { id: 'lone_survivor', name: '孤独幸存者', desc: '自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.lone_survivor },
+  { id: 'warlord', name: '战争之主', desc: '启用 evil/warlord，并自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.warlord },
+] as const
+
+const challengeOptions = computed<ChallengeStartOptions>(() => {
+  if (!isChallengeUnlocked.value) return { mode: 'standard' }
+  const mode = selectedChallengeMode.value
+  if (mode !== 'standard') return { mode }
+  return {
+    mode,
+    noPlasmid: noPlasmidChallenge.value,
+    weakMastery: weakMasteryChallenge.value,
+    noTrade: noTradeChallenge.value,
+    noCraft: noCraftChallenge.value,
+    noCrispr: noCrisprChallenge.value,
+    nerfed: nerfedChallenge.value,
+    badGenes: badGenesChallenge.value,
+  }
+})
+
+const selectedChallengePreset = computed(() => {
+  if (selectedChallengeMode.value === 'truepath' || selectedChallengeMode.value === 'lone_survivor') {
+    return ['削弱', '坏基因', '禁贸易', '禁制造']
+  }
+  if (selectedChallengeMode.value === 'cataclysm' || selectedChallengeMode.value === 'warlord' || selectedChallengeMode.value === 'banana') {
+    return ['无质粒', '禁 CRISPR', '禁贸易', '禁制造']
+  }
+  return []
+})
+
+function canSelectChallengeMode(mode: { minChallenge: number }) {
+  return challengeLevel.value >= mode.minChallenge
+}
+
+function isChallengeFlagUnlocked(flag: keyof Omit<ChallengeStartOptions, 'mode'>) {
+  return challengeLevel.value >= BASIC_CHALLENGE_UNLOCK_LEVEL[flag]
+}
+
+function selectChallengeMode(mode: typeof challengeModes[number]) {
+  if (!canSelectChallengeMode(mode)) return
+  selectedChallengeMode.value = mode.id
+}
 
 function chooseRaceFinal() {
-  game.chooseRace(selectedSpecies.value, selectedPtrait.value)
+  game.chooseRace(selectedSpecies.value, selectedPtrait.value, challengeOptions.value)
   // 选择后若启用自定义种族，应用 trait
   if (useCustom.value && hasCustomRace.value) {
-    // 延迟到种族切换完成后应用
-    import('@evozen/game-core').then((mod) => {
-      mod.applyCustomRace(game.state, false)
-    })
+    applyCustomRace(game.state, false)
   }
+}
+
+function quickStart() {
+  game.startCivilization('human', 'none', challengeOptions.value)
 }
 
 // ---- 辅助 ----
@@ -156,7 +217,7 @@ const stageDesc = computed(() => {
             <p class="quick-start-desc">跳过进化阶段，直接以人类身份开始文明。</p>
           </div>
         </div>
-        <button class="btn primary quick-start-btn" @click="game.startCivilization('human')">
+        <button class="btn primary quick-start-btn" @click="quickStart()">
           🚀 直接跳过进化
         </button>
       </div>
@@ -348,6 +409,63 @@ const stageDesc = computed(() => {
         >
           {{ useCustom ? '✓' : '⚙️' }} 使用自定义种族
         </button>
+      </div>
+
+      <div class="challenge-section">
+        <div class="challenge-head">
+          <h4>⚑ 挑战开局</h4>
+          <span class="challenge-level">Challenge Lv. {{ challengeLevel }}/5</span>
+        </div>
+        <div v-if="!isChallengeUnlocked" class="challenge-lock">
+          在 CRISPR 中购买挑战基因后可选择挑战开局。
+        </div>
+        <div class="challenge-grid">
+          <button
+            v-for="mode in challengeModes"
+            :key="mode.id"
+            class="challenge-card"
+            :class="{ active: selectedChallengeMode === mode.id, locked: !canSelectChallengeMode(mode) }"
+            :disabled="!canSelectChallengeMode(mode)"
+            @click="selectChallengeMode(mode)"
+          >
+            <span class="challenge-name">{{ mode.name }}</span>
+            <span class="challenge-desc">{{ mode.desc }}</span>
+          </button>
+        </div>
+        <div v-if="selectedChallengePreset.length > 0" class="challenge-preset">
+          <span>自动限制</span>
+          <span v-for="flag in selectedChallengePreset" :key="flag" class="challenge-chip">{{ flag }}</span>
+        </div>
+        <div v-if="isChallengeUnlocked && selectedChallengeMode === 'standard'" class="challenge-flags">
+          <label class="challenge-toggle">
+            <input v-model="noPlasmidChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('noPlasmid')">
+            <span>无质粒</span>
+          </label>
+          <label class="challenge-toggle">
+            <input v-model="weakMasteryChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('weakMastery')">
+            <span>弱化精通</span>
+          </label>
+          <label class="challenge-toggle">
+            <input v-model="noTradeChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('noTrade')">
+            <span>禁贸易</span>
+          </label>
+          <label class="challenge-toggle">
+            <input v-model="noCraftChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('noCraft')">
+            <span>禁制造</span>
+          </label>
+          <label class="challenge-toggle">
+            <input v-model="noCrisprChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('noCrispr')">
+            <span>禁 CRISPR</span>
+          </label>
+          <label class="challenge-toggle">
+            <input v-model="nerfedChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('nerfed')">
+            <span>削弱</span>
+          </label>
+          <label class="challenge-toggle">
+            <input v-model="badGenesChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('badGenes')">
+            <span>坏基因</span>
+          </label>
+        </div>
       </div>
 
       <!-- 费用展示 + 进化按钮 -->
@@ -590,6 +708,99 @@ const stageDesc = computed(() => {
 .ptrait-emoji { font-size: 16px; }
 .ptrait-name { font-size: 10px; font-weight: 700; }
 .ptrait-desc { font-size: 9px; line-height: 1.2; color: var(--text-secondary); text-align: center; }
+
+.challenge-section { margin-top: 16px; }
+.challenge-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.challenge-section h4 { font-size: 12px; margin: 0; color: var(--text-secondary); text-align: left; }
+.challenge-level {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.challenge-lock {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: left;
+}
+.challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+}
+.challenge-card {
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.challenge-card:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+.challenge-card.active { border-color: var(--accent); background: rgba(34, 197, 94, 0.05); }
+.challenge-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.challenge-card.locked:hover {
+  border-color: var(--border-color);
+  background: var(--bg-input);
+}
+.challenge-name { font-size: 11px; font-weight: 700; }
+.challenge-desc { font-size: 10px; line-height: 1.3; color: var(--text-secondary); }
+.challenge-preset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.challenge-chip {
+  padding: 3px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.challenge-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.challenge-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.challenge-toggle input { margin: 0; }
 
 /* 最终进化按钮 */
 .sentience-cost {

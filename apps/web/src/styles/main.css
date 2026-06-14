@@ -258,7 +258,7 @@ html, body {
 /* ============================================================
    全局 Tooltip 系统
    用法: <span data-tooltip="提示文字">...</span>
-   可选方向: data-tooltip-pos="bottom" (默认 top)
+   可选方向: data-tooltip-pos="bottom" / "right" (默认 top)
    ============================================================ */
 [data-tooltip] {
   position: relative;
@@ -271,7 +271,7 @@ label[data-tooltip] {
   cursor: help;
 }
 /* 上方气泡（默认） */
-[data-tooltip]:not([data-tooltip-pos="bottom"])::after,
+[data-tooltip]:not([data-tooltip-pos="bottom"]):not([data-tooltip-pos="right"])::after,
 [data-tooltip][data-tooltip-pos="top"]::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -323,8 +323,34 @@ label[data-tooltip] {
   letter-spacing: normal;
   text-transform: none;
 }
+/* 右侧气泡 */
+[data-tooltip][data-tooltip-pos="right"]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  transform: translateX(-4px) translateY(-50%);
+  background: #0f172a;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  white-space: pre-line;
+  width: max-content;
+  max-width: min(360px, 80vw);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  letter-spacing: normal;
+  text-transform: none;
+}
 /* 小箭头（上方） */
-[data-tooltip]:not([data-tooltip-pos="bottom"])::before,
+[data-tooltip]:not([data-tooltip-pos="bottom"]):not([data-tooltip-pos="right"])::before,
 [data-tooltip][data-tooltip-pos="top"]::before {
   content: '';
   position: absolute;
@@ -352,9 +378,27 @@ label[data-tooltip] {
   transition: opacity 0.15s ease, transform 0.15s ease;
   z-index: 9999;
 }
-[data-tooltip]:hover::after,
-[data-tooltip]:hover::before {
+[data-tooltip][data-tooltip-pos="right"]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 2px);
+  transform: translateX(-4px) translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: #475569;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 9999;
+}
+[data-tooltip]:not([data-tooltip-pos="right"]):hover::after,
+[data-tooltip]:not([data-tooltip-pos="right"]):hover::before {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+[data-tooltip][data-tooltip-pos="right"]:hover::after,
+[data-tooltip][data-tooltip-pos="right"]:hover::before {
+  opacity: 1;
+  transform: translateX(0) translateY(-50%);
 }
 

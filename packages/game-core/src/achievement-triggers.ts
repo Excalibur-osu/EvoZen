@@ -6,7 +6,16 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
-import { unlockAchievement, unlockFeat } from './achievements';
+import {
+  getAchievementLevel,
+  getUniverseAffix,
+  unlockAchievement,
+  unlockFeat,
+  type AchievementRecord,
+} from './achievements';
+
+type ChallengeTaskId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5';
+type ChallengeTaskStats = Record<ChallengeTaskId, Partial<Record<keyof AchievementRecord, boolean>>>;
 
 /**
  * 主成就触发器 — 每 tick 调用一次
@@ -103,6 +112,13 @@ export function checkAchievements(state: GameState): void {
     unlockAchievement(state, 'scrooge');
   }
 
+  if (state.race['inflation'] && (state.resource['Money']?.amount ?? 0) >= 250_000_000_000) {
+    unlockAchievement(state, 'wheelbarrow');
+  }
+
+  checkBananaChallengeTasks(state);
+  checkEndlessHungerChallengeTasks(state);
+
   // godwin: 完成神化转生（在 resets.ts 中触发，这里冗余检查）
   if ((state.tech['apotheosis'] ?? 0) >= 1) {
     unlockAchievement(state, 'godwin');
@@ -156,23 +172,116 @@ export function checkAchievements(state: GameState): void {
   }
 }
 
+function ensureTaskStats(state: GameState, key: 'banana' | 'endless_hunger'): ChallengeTaskStats {
+  const stats = state.stats as Record<string, unknown>;
+  const current = (stats[key] ??= {}) as Partial<ChallengeTaskStats>;
+  for (const task of ['b1', 'b2', 'b3', 'b4', 'b5'] as ChallengeTaskId[]) {
+    current[task] ??= {};
+  }
+  return current as ChallengeTaskStats;
+}
+
+export function markChallengeTask(state: GameState, key: 'banana' | 'endless_hunger', task: ChallengeTaskId): void {
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  const taskStats = ensureTaskStats(state, key);
+  taskStats[task][affix] = true;
+  if (affix !== 'm' && affix !== 'l') {
+    taskStats[task].l = true;
+  }
+  updateTaskAchievement(state, key);
+}
+
+function updateTaskAchievement(state: GameState, key: 'banana' | 'endless_hunger'): void {
+  const stats = (state.stats as Record<string, unknown>)[key] as ChallengeTaskStats | undefined;
+  if (!stats) return;
+
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  const tasks = ['b1', 'b2', 'b3', 'b4', 'b5'] as ChallengeTaskId[];
+  const standardRank = tasks.filter((task) => stats[task]?.l).length;
+  if (standardRank > 0) {
+    unlockAchievement(state, key, false, standardRank);
+  }
+
+  if (affix !== 'l') {
+    const universeRank = tasks.filter((task) => stats[task]?.[affix]).length;
+    if (universeRank > 0) {
+      unlockAchievement(state, key, false, universeRank);
+    }
+  }
+}
+
+function checkBananaChallengeTasks(state: GameState): void {
+  if (!state.race['banana']) return;
+
+  if ((state.tech['monuments'] ?? 0) >= 50) {
+    markChallengeTask(state, 'banana', 'b5');
+  }
+
+  const stellar = state.interstellar['stellar_engine'] as { mass?: number; exotic?: number } | undefined;
+  if ((stellar?.mass ?? 0) >= 12 && (stellar?.exotic ?? 0) === 0) {
+    markChallengeTask(state, 'banana', 'b3');
+  }
+
+  const routes = state.city.trade_routes ?? [];
+  const exporting = routes.filter((route) => route.action === 'sell' && route.qty >= 500);
+  const importing = routes
+    .filter((route) => route.action === 'buy')
+    .reduce((sum, route) => sum + route.qty, 0);
+  if (exporting.length > 0) {
+    markChallengeTask(state, 'banana', 'b4');
+    if (importing >= 500) {
+      unlockFeat(state, 'banana');
+    }
+  }
+}
+
+function checkEndlessHungerChallengeTasks(state: GameState): void {
+  if (!state.race['fasting']) return;
+
+  if ((state.tech['stock_exchange'] ?? 0) >= 80) {
+    markChallengeTask(state, 'endless_hunger', 'b3');
+  }
+
+  const species = state.race.species;
+  if ((state.resource[species]?.amount ?? 0) >= 1200) {
+    markChallengeTask(state, 'endless_hunger', 'b4');
+  }
+
+  updateTaskAchievement(state, 'endless_hunger');
+}
+
 /** 转生时触发的成就（在 resets.ts 中调用） */
 export function checkResetAchievements(state: GameState, resetType: string): void {
   switch (resetType) {
     case 'mad':
       unlockAchievement(state, 'apocalypse');
+      if (state.race['truepath']) {
+        unlockAchievement(state, 'ashanddust');
+      }
       break;
     case 'ascend':
       unlockAchievement(state, 'ascended');
       break;
     case 'bioseed':
       unlockAchievement(state, 'seeder');
+      if (state.race['cataclysm']) {
+        unlockAchievement(state, 'iron_will', false, 5);
+      }
+      if (state.race['truepath']) {
+        unlockAchievement(state, 'exodus');
+      }
+      if (state.race['steelen']) {
+        unlockAchievement(state, 'steelen');
+      }
       break;
     case 'blackhole':
       unlockAchievement(state, 'blackhole');
       break;
     case 'cataclysm':
       unlockAchievement(state, 'red_dead');
+      if (state.race['cataclysm']) {
+        unlockAchievement(state, 'failed_history');
+      }
       break;
     case 'descend':
       unlockAchievement(state, 'pandemonium');
@@ -191,8 +300,13 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       break;
     case 'eden':
       unlockAchievement(state, 'paradise');
+      unlockAchievement(state, 'adam_eve');
       break;
   }
+
+  updatePathfinderAchievement(state);
+  updateBananaAchievement(state);
+  updateWarlordAchievement(state);
 
   // genus + species 灭绝
   const species = state.race.species;
@@ -207,5 +321,34 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
     if (extinctCount >= 60) {
       unlockAchievement(state, 'mass_extinction');
     }
+  }
+}
+
+function updatePathfinderAchievement(state: GameState): void {
+  const pathfinderParts = ['ashanddust', 'exodus', 'obsolete', 'bluepill', 'retired'];
+  const rank = pathfinderParts.filter((id) => getAchievementLevel(state, id) >= 5).length;
+  if (rank > 0) {
+    unlockAchievement(state, 'pathfinder', false, rank);
+  }
+}
+
+function updateBananaAchievement(state: GameState): void {
+  const bananaStats = (state.stats as Record<string, unknown>)['banana'] as Partial<ChallengeTaskStats> | undefined;
+  if (!bananaStats) return;
+
+  const rank = (['b1', 'b2', 'b3', 'b4', 'b5'] as ChallengeTaskId[]).filter((key) => bananaStats[key]?.l).length;
+  if (rank > 0) {
+    unlockAchievement(state, 'banana', false, rank);
+  }
+}
+
+function updateWarlordAchievement(state: GameState): void {
+  if (!state.race['warlord']) return;
+  const warlordStats = (state.stats as Record<string, unknown>)['warlord'] as Record<string, boolean> | undefined;
+  if (!warlordStats) return;
+
+  const rank = Object.values(warlordStats).filter(Boolean).length;
+  if (rank > 0) {
+    unlockAchievement(state, 'what_is_best', false, rank);
   }
 }

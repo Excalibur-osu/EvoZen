@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import type { ResourceState } from '@evozen/shared-types'
+import { buildResourceTooltip } from '../utils/resourceBreakdown'
 
 const game = useGameStore()
 
@@ -63,6 +64,10 @@ function fillColor(res: { id: string; amount: number; max: number }): string {
   if (pct > 75) return 'var(--warning)'
   return 'var(--success)'
 }
+
+function resourceTooltip(res: ResourceState & { id: string }): string {
+  return buildResourceTooltip(game.state, res)
+}
 </script>
 
 <template>
@@ -75,6 +80,8 @@ function fillColor(res: { id: string; amount: number; max: number }): string {
         v-for="res in visibleResources"
         :key="res.id"
         class="res-row"
+        :data-tooltip="resourceTooltip(res)"
+        data-tooltip-pos="right"
       >
         <div class="res-top">
           <span class="res-name">{{ res.name }}</span>

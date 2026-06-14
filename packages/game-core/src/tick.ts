@@ -7,7 +7,13 @@
  * （原版 main.js L1213）。
  */
 
-import type { GameState, GameTickResult, GameMessage } from '@evozen/shared-types';
+import type {
+  GameState,
+  GameTickResult,
+  GameMessage,
+  ResourceBreakdownEntry,
+  ResourceBreakdownState,
+} from '@evozen/shared-types';
 import { craftingTickWithSupport } from './crafting';
 import { tradeTick } from './trade';
 import {
@@ -180,6 +186,64 @@ function getOilBiomeMultiplier(state: GameState): number {
 export function gameTick(state: GameState): { state: GameState; result: GameTickResult } {
   const messages: GameMessage[] = [];
   const deltas: Record<string, number> = {};
+  const breakdownEntries: Record<string, ResourceBreakdownEntry[]> = {};
+  const lastBreakdownSnapshot: Record<string, number> = {};
+  const addBreakdownEntry = (
+    resId: string,
+    label: string,
+    amount: number,
+    kind: ResourceBreakdownEntry['kind'],
+    section?: string,
+    detail?: string,
+  ) => {
+    if (!Number.isFinite(amount) || Math.abs(amount) < 1e-9) return;
+    (breakdownEntries[resId] ??= []).push({ label, amount, kind, section, detail });
+  };
+  const captureDeltaSection = (
+    label: string,
+    kindForAmount: (amount: number) => ResourceBreakdownEntry['kind'] = (amount) => amount >= 0 ? 'source' : 'consume',
+    detail?: string,
+  ) => {
+    const ids = new Set([...Object.keys(deltas), ...Object.keys(lastBreakdownSnapshot)]);
+    for (const resId of ids) {
+      const current = deltas[resId] ?? 0;
+      const previous = lastBreakdownSnapshot[resId] ?? 0;
+      const amount = current - previous;
+      if (Math.abs(amount) >= 1e-9) {
+        addBreakdownEntry(resId, label, amount, kindForAmount(amount), label, detail);
+      }
+      lastBreakdownSnapshot[resId] = current;
+    }
+  };
+  const buildBreakdowns = (resourceState: GameState['resource']): Record<string, ResourceBreakdownState> => {
+    const result: Record<string, ResourceBreakdownState> = {};
+    const ids = new Set([...Object.keys(resourceState), ...Object.keys(deltas), ...Object.keys(breakdownEntries)]);
+    for (const resId of ids) {
+      const entries = breakdownEntries[resId] ?? [];
+      const net = deltas[resId] ?? 0;
+      const res = resourceState[resId];
+      let effectiveNet = net;
+      let truncated = 0;
+      if (res) {
+        if (res.max > 0 && res.amount >= res.max && net > 0) {
+          truncated = net;
+          effectiveNet = 0;
+        } else if (res.amount <= 0 && net < 0) {
+          truncated = net;
+          effectiveNet = 0;
+        }
+      }
+      result[resId] = {
+        entries,
+        grossSource: entries.filter((entry) => entry.amount > 0).reduce((sum, entry) => sum + entry.amount, 0),
+        grossConsume: entries.filter((entry) => entry.amount < 0).reduce((sum, entry) => sum + entry.amount, 0),
+        net,
+        effectiveNet,
+        truncated,
+      };
+    }
+    return result;
+  };
 
   // 进化阶段：执行 evo tick（RNA/DNA 自动产出 + 解锁触发）
   if (state.race.species === 'protoplasm') {
@@ -195,15 +259,21 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (newEvoState.resource['RNA']) {
       deltas['RNA'] = finalRNA - initialRNA;
       newEvoState.resource['RNA'].diff = finalRNA - initialRNA;
+      addBreakdownEntry('RNA', '进化自动生成', deltas['RNA'], 'source', '进化');
     }
     if (newEvoState.resource['DNA']) {
       deltas['DNA'] = finalDNA - initialDNA;
       newEvoState.resource['DNA'].diff = finalDNA - initialDNA;
+      addBreakdownEntry('DNA', '进化自动生成', deltas['DNA'], 'source', '进化');
+    }
+    const resourceBreakdowns = buildBreakdowns(newEvoState.resource);
+    for (const [resId, breakdown] of Object.entries(resourceBreakdowns)) {
+      if (newEvoState.resource[resId]) newEvoState.resource[resId].breakdown = breakdown;
     }
 
     return {
       state: newEvoState,
-      result: { resourceDeltas: deltas, messages },
+      result: { resourceDeltas: deltas, resourceBreakdowns, messages },
     };
   }
 
@@ -227,6 +297,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, delta] of Object.entries(powerResult.fuelDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
   }
+  captureDeltaSection('电力燃料', (amount) => amount >= 0 ? 'source' : 'consume');
   // 用电建筑实际开启数（含 city + space）
   const poweredOn = powerResult.activeConsumers;
 
@@ -249,6 +320,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       deltas['Uranium'] = (deltas['Uranium'] ?? 0) + ash;
     }
   }
+  captureDeltaSection('电力副产物');
 
   // 太空支援池解算（当前仅 moon 池）。
   // 对标 legacy/src/main.js L2256-2381 的 "Moon Bases, Spaceports, Etc" 块：
@@ -263,6 +335,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, drain] of Object.entries(interstellarSupport.fuelDrain)) {
     deltas[resId] = (deltas[resId] ?? 0) - drain;
   }
+  captureDeltaSection('支援燃料', (amount) => amount >= 0 ? 'source' : 'consume');
   const habitatPowered = interstellarSupport.supplierEffectiveOn['habitat'] ?? 0;
   const miningDroidSupported = interstellarSupport.supportOn['mining_droid'] ?? 0;
   const miningDroid = state.interstellar['mining_droid'] as
@@ -307,6 +380,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + alumDroids * 2.75;
     }
   }
+  captureDeltaSection('星际采矿机器人');
 
   // 月球采矿产出（对标 legacy prod.js L62-92 + main.js L6796-6884）：
   // - iridium_mine: 每座获得支援的建筑产出 0.035 Iridium/tick
@@ -320,6 +394,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (heliumSupported > 0) {
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + heliumSupported * 0.18;
   }
+  captureDeltaSection('月球支援采矿');
   const observatorySupported = spaceSupport.supportOn['observatory'] ?? 0;
   const livingQuartersSupported = spaceSupport.supportOn['living_quarters'] ?? 0;
   const vrCenterSupported = spaceSupport.supportOn['vr_center'] ?? 0;
@@ -344,6 +419,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     deltas['Titanium'] =
       (deltas['Titanium'] ?? 0) + redMineSupported * effectiveColonistWorkers * 0.02;
   }
+  captureDeltaSection('火星支援采矿');
 
   // ============================================================
   // 0. 士气 & 全局乘数
@@ -504,11 +580,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     + biodomeFood * prodMult
     - foodConsumption * foodConsumptionMul
     - tourismFoodDemand;
+  captureDeltaSection('食物生产与口粮');
 
   // ============================================================
   // 2. 毛皮（猎人副产品）
   // ============================================================
   deltas['Furs'] = hunterFurs * rageHuntMult;
+  captureDeltaSection('猎人副产物');
 
   // ============================================================
   // 3. 木材 — 伐木工
@@ -540,6 +618,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, lumberjacks)
     * getRitualMultiplier(state, 'lumberjack') * getSlaverBonus(state);
   deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * effectiveProdMult * lumberTraitMult;
+  captureDeltaSection('伐木工');
 
   // ============================================================
   // 4. 石头 — 石工
@@ -568,6 +647,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, quarryWorkers)
     * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
   deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * quarryPowerMult * effectiveProdMult * stoneTraitMult;
+  captureDeltaSection('采石工');
 
   // ============================================================
   // 4.5 铝 — 采石副产物 (Aluminium)
@@ -595,6 +675,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     alumDelta *= refineryMult;
     deltas['Aluminium'] = alumDelta;
   }
+  captureDeltaSection('铝副产物');
 
   // ============================================================
   // 5. 铜 / 铁 — 矿工
@@ -624,6 +705,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (techLevel('mining') >= 3) {
     deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * ironBiomeMult * minerPlanetMult * effectiveProdMult * minerTraitMult * getIronAllergyPenalty(state);
   }
+  captureDeltaSection('矿工');
 
   // ============================================================
   // 6. 煤炭 — 煤矿工人
@@ -637,6 +719,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     * getCalmGlobalBonus(state) * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, actualCoalMiners)
     * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
   deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * coalPowerMult * coalGeologyMult * effectiveProdMult * coalTraitMult;
+  captureDeltaSection('煤矿工');
 
   // 铀 — 煤矿副产物
   // 对标 legacy main.js L6595: uranium = coal_delta / 115
@@ -648,6 +731,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     }
     deltas['Uranium'] = uraniumDelta;
   }
+  captureDeltaSection('铀副产物');
 
   // ============================================================
   // 7. 水泥 — 水泥工人（消耗石头）
@@ -667,6 +751,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * cementPowerMult * effectiveProdMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
   }
+  captureDeltaSection('水泥生产');
 
   // ============================================================
   // 8. 知识 — 日晷基础 + 教授 + 科学家
@@ -722,6 +807,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const logicalKnowledge = getLogicalKnowledgePerCitizen(state) * pop * prodMult;
   // legacy L4261: delta *= library_mult — 对整体（含日晷）统一乘以图书馆加成
   deltas['Knowledge'] = (workerKnowledge + sundialKnowledge + logicalKnowledge) * libraryMult;
+  captureDeltaSection('知识生产');
 
   // ============================================================
   // 8a. 信仰（Faith）— 牧师产出
@@ -736,6 +822,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     faithRate *= getSpiritualTempleBonus(state);
     deltas['Faith'] = (deltas['Faith'] ?? 0) + faithRate;
   }
+  captureDeltaSection('信仰生产');
 
   // ============================================================
   // 9. 金币 — 税收 + 银行家
@@ -794,6 +881,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         * taxMoneyMult;
     }
   }
+  captureDeltaSection('税收与商业');
 
   // ============================================================
   // 9a. 冶金系统 (Metallurgy) — 对标 legacy main.js L4842-5146
@@ -911,6 +999,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
   }
+  captureDeltaSection('冶金系统');
 
   // ============================================================
   // 9b. 石油产出 — 对标 legacy main.js L6720-6760
@@ -927,6 +1016,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     oilPerWell *= getOilBiomeMultiplier(state);
     deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWells * oilPerWell * effectiveProdMult;
   }
+  captureDeltaSection('石油井');
 
   // ============================================================
   // 9c. 深空建筑产出分段 — 对标 legacy/src/prod.js
@@ -940,6 +1030,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (gasTech >= 5) gasRate = 0.85;
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + gasShipCount * gasRate;
   }
+  captureDeltaSection('气态巨行星采集');
 
   // oil_extractor (气态卫星石油) — prod.js L395-425
   const oilExtractorCount = (state.space['oil_extractor'] as { on?: number } | undefined)?.on ?? 0;
@@ -952,6 +1043,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     }
     deltas['Oil'] = (deltas['Oil'] ?? 0) + oilExtractorCount * extractRate;
   }
+  captureDeltaSection('气态巨行星石油');
 
   // space_station (小行星带) belt_mining — prod.js L430-460
   const stationCount = (state.space['space_station'] as { on?: number } | undefined)?.on ?? 0;
@@ -982,6 +1074,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
   }
+  captureDeltaSection('小行星采矿');
 
   // elerium_ship — 对标 legacy prod.js L168-171
   const eleriumShipSupported = spaceSupport.supportOn['elerium_ship'] ?? 0;
@@ -992,6 +1085,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (asteroidTech >= 7) eleriumRate = 0.009;
     deltas['Elerium'] = (deltas['Elerium'] ?? 0) + eleriumShipSupported * eleriumRate;
   }
+  captureDeltaSection('Elerium 采矿船');
 
   // iridium_ship — 对标 legacy prod.js L172-175
   const iridiumShipSupported = spaceSupport.supportOn['iridium_ship'] ?? 0;
@@ -1002,6 +1096,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (asteroidTech >= 7) iridiumRate = 0.1;
     deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumShipSupported * iridiumRate;
   }
+  captureDeltaSection('Iridium 采矿船');
 
   // iron_ship — 对标 legacy prod.js L176-179
   const ironShipSupported = spaceSupport.supportOn['iron_ship'] ?? 0;
@@ -1012,6 +1107,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (asteroidTech >= 7) ironRate = 4;
     deltas['Iron'] = (deltas['Iron'] ?? 0) + ironShipSupported * ironRate;
   }
+  captureDeltaSection('Iron 采矿船');
 
   // space_barracks Oil 消耗 — 对标 legacy main.js L2393-2403
   // 每座 on 消耗 2 Oil/tick
@@ -1023,6 +1119,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       deltas['Oil'] = (deltas['Oil'] ?? 0) - oilConsume;
     }
   }
+  captureDeltaSection('太空军营燃料');
 
   // ============================================================
   // 10a. 工匠合成产线（自动消耗原料、产出合成品）
@@ -1035,6 +1132,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, delta] of Object.entries(craftDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
   }
+  captureDeltaSection('手工合成');
 
   // ============================================================
   // 10b. 贸易路线自动执行
@@ -1043,11 +1141,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, delta] of Object.entries(tradeDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
   }
+  captureDeltaSection('自动贸易');
 
   // 对标 legacy/src/main.js L2406-2410：每座 powered red_factory 额外消耗 1 Helium_3/tick。
   if (redFactoryPowered > 0) {
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) - redFactoryPowered;
   }
+  captureDeltaSection('红色工厂燃料');
 
   // ============================================================
   // 10. 应用 time_multiplier 并写入状态
@@ -1057,6 +1157,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const resId of Object.keys(deltas)) {
     deltas[resId] *= TIME_MULTIPLIER;
   }
+  captureDeltaSection('时间缩放', () => 'modifier', `x${TIME_MULTIPLIER}`);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
 
@@ -1418,6 +1519,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         deltas['Furs'] = (deltas['Furs'] ?? 0) + fursProd;
       }
     }
+    captureDeltaSection('军队狩猎');
 
     // 14d. 厌战衰减
     if (newState.civic.garrison.protest > 0) {
@@ -1453,6 +1555,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     redFactoryPowered,
     redFactoryMaxLines,
   );
+  captureDeltaSection('工厂产线');
 
   // ============================================================
   // 15a. Portal 要塞入侵 tick + 建筑产出
@@ -1460,6 +1563,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if ((newState.tech['portal'] ?? 0) >= 2) {
     fortressTick(newState, TIME_MULTIPLIER);
     portalProductionTick(newState, TIME_MULTIPLIER, deltas);
+    captureDeltaSection('Portal 建筑');
     mechBuildTick(newState, TIME_MULTIPLIER);
     // Mech Station 巡逻（asphodel mech_station 通电时启用）
     const edenObj = newState.eden as Record<string, { on?: number }>;
@@ -1478,8 +1582,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   if (newState.race['truepath']) {
     truepathProductionTick(newState, TIME_MULTIPLIER, deltas);
+    captureDeltaSection('Truepath 建筑');
     syndicateTick(newState, TIME_MULTIPLIER);
     womlingTick(newState, TIME_MULTIPLIER, deltas);
+    captureDeltaSection('Womling');
   }
 
   // ============================================================
@@ -1488,6 +1594,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if ((newState.tech['edenic'] ?? 0) >= 1) {
     edenicTick(newState, TIME_MULTIPLIER);
     edenicProductionTick(newState, TIME_MULTIPLIER, deltas);
+    captureDeltaSection('Edenic 建筑');
     siegeTick(newState, TIME_MULTIPLIER);
   }
 
@@ -1520,9 +1627,20 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const pillarBonus = ((newState.race as Record<string, unknown>)['_pillar_bonus'] as number) ?? 1;
   const globalTraitMul = seleno * pillarBonus;
   if (globalTraitMul !== 1) {
+    const beforeTraitDeltas: Record<string, number> = {};
+    for (const resId of Object.keys(deltas)) {
+      beforeTraitDeltas[resId] = deltas[resId];
+    }
     for (const resId of Object.keys(deltas)) {
       if (deltas[resId] > 0) {
         deltas[resId] *= globalTraitMul;
+      }
+    }
+    for (const resId of Object.keys(deltas)) {
+      const amount = deltas[resId] - (beforeTraitDeltas[resId] ?? 0);
+      if (Math.abs(amount) >= 1e-9) {
+        addBreakdownEntry(resId, '全局 trait 修正', amount, 'modifier', '全局 trait', `x${globalTraitMul.toFixed(3)}`);
+        lastBreakdownSnapshot[resId] = deltas[resId];
       }
     }
   }
@@ -1550,11 +1668,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       newState.resource[resId].diff = delta;
     }
   }
+  const resourceBreakdowns = buildBreakdowns(newState.resource);
+  for (const [resId, breakdown] of Object.entries(resourceBreakdowns)) {
+    if (newState.resource[resId]) {
+      newState.resource[resId].breakdown = breakdown;
+    }
+  }
 
   return {
     state: newState,
     result: {
       resourceDeltas: deltas,
+      resourceBreakdowns,
       messages,
     },
   };

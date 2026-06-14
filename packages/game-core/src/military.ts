@@ -10,6 +10,7 @@ import type { GameState, GameMessage } from '@evozen/shared-types';
 import { applyDerivedStateInPlace } from './derived-state';
 import { getTrainingSpeedDivisor, getBruteTrainingBonus, getMercCostMultiplier } from './traits';
 import { hasPlanetTrait, rageVars } from './planet-traits';
+import { markChallengeTask } from './achievement-triggers';
 
 // ============================================================
 // 武器科技倍率
@@ -535,6 +536,9 @@ export function warCampaign(state: GameState, govIndex: number): WarResult {
         gov.occ = true;
         garrison.max -= occCost;
         garrison.workers -= occCost;
+        if (state.race['banana']) {
+          markChallengeTask(state, 'banana', 'b1');
+        }
         messages.push({
           text: '敌方政府已被占领！',
           type: 'special',

@@ -210,6 +210,37 @@ import {
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
+export interface ChallengeStartOptions {
+  mode?: 'standard' | 'cataclysm' | 'lone_survivor' | 'truepath' | 'warlord' | 'banana'
+  noPlasmid?: boolean
+  weakMastery?: boolean
+  noTrade?: boolean
+  noCraft?: boolean
+  noCrispr?: boolean
+  nerfed?: boolean
+  badGenes?: boolean
+}
+
+type ChallengeMode = NonNullable<ChallengeStartOptions['mode']>
+
+export const BASIC_CHALLENGE_UNLOCK_LEVEL: Record<keyof Omit<ChallengeStartOptions, 'mode'>, number> = {
+  noPlasmid: 1,
+  noTrade: 1,
+  noCraft: 1,
+  noCrispr: 1,
+  weakMastery: 2,
+  nerfed: 2,
+  badGenes: 2,
+}
+
+export const SCENARIO_CHALLENGE_UNLOCK_LEVEL: Record<Exclude<ChallengeMode, 'standard'>, number> = {
+  cataclysm: 2,
+  banana: 3,
+  truepath: 3,
+  lone_survivor: 4,
+  warlord: 4,
+}
+
 export const useGameStore = defineStore('game', () => {
   // ---- 间谍外交操作 ----
   
@@ -603,26 +634,26 @@ export const useGameStore = defineStore('game', () => {
   }
 
   /** 快速开始（跳过进化阶段，直接以人类身份开始文明） */
-  function startCivilization(speciesId: string, ptrait: string = 'none') {
-    _applyStartCivilization(speciesId, ptrait)
+  function startCivilization(speciesId: string, ptrait: string = 'none', challenges?: ChallengeStartOptions) {
+    _applyStartCivilization(speciesId, ptrait, challenges)
   }
 
   /**
    * 最终进化：选择种族 → sentience → 进入文明
    * 对标 legacy L5195-5212 action() + sentience()
    */
-  function chooseRace(speciesId: string, ptrait: string = 'none') {
+  function chooseRace(speciesId: string, ptrait: string = 'none', challenges?: ChallengeStartOptions) {
     const sentienceResult = coreEvolveSentience(state.value, speciesId)
     if (!sentienceResult) {
       addMessage('进化条件不满足或资源不足，请确认 RNA/DNA 充足且已完成人形化进化。', 'warning', 'progress')
       return
     }
     state.value = sentienceResult
-    _applyStartCivilization(speciesId, ptrait)
+    _applyStartCivilization(speciesId, ptrait, challenges)
   }
 
   /** 内部：初始化文明阶段状态 */
-  function _applyStartCivilization(speciesId: string, ptrait: string = 'none') {
+  function _applyStartCivilization(speciesId: string, ptrait: string = 'none', challenges?: ChallengeStartOptions) {
     const speciesLabels: Record<string, string> = {
       human: '人类', elven: '精灵', orc: '兽人', dwarf: '矮人', goblin: '地精',
     }
@@ -636,6 +667,7 @@ export const useGameStore = defineStore('game', () => {
     state.value.race.species = speciesId
     state.value.city.ptrait = ptrait
     syncRaceTraits()
+    applyChallengeStartOptions(challenges)
 
     // 初始化种族人口资源（0个初始人口，上限0，需靠盖房）
     state.value.resource[speciesId] = {
@@ -683,7 +715,100 @@ export const useGameStore = defineStore('game', () => {
     if (traitSummary) {
       addMessage(`🧬 当前种族特质：${traitSummary}`, 'info', 'progress')
     }
+    const challengeSummary = describeChallengeStartOptions(challenges)
+    if (challengeSummary) {
+      addMessage(`⚑ 开局挑战：${challengeSummary}`, 'special', 'progress')
+    }
     addMessage(`💡 提示：万幸的是你已经懂得如何在荒野中收集木材。先从周围捡拾一些木头，看能发掘出什么吧。`, 'info', 'progress')
+  }
+
+  function applyChallengeStartOptions(challenges?: ChallengeStartOptions) {
+    const challengeLevel = Number((state.value.genes as Record<string, number>)['challenge'] ?? 0)
+    const requestedMode = challenges?.mode ?? 'standard'
+    const mode = requestedMode !== 'standard' && challengeLevel < SCENARIO_CHALLENGE_UNLOCK_LEVEL[requestedMode]
+      ? 'standard'
+      : requestedMode
+    const scenarioFlags = ['cataclysm', 'lone_survivor', 'truepath', 'warlord', 'banana']
+    const challengeFlags = ['no_plasmid', 'weak_mastery', 'no_trade', 'no_craft', 'no_crispr', 'nerfed', 'badgenes']
+    for (const flag of scenarioFlags) {
+      delete state.value.race[flag]
+    }
+    for (const flag of challengeFlags) {
+      delete state.value.race[flag]
+    }
+    if (state.value.race['universe'] === 'evil') {
+      delete state.value.race['universe']
+    }
+
+    if (!challenges || challengeLevel < 1) {
+      return
+    }
+
+    if (mode !== 'standard') {
+      state.value.race[mode] = 1
+    }
+    if (mode === 'warlord') {
+      state.value.race['universe'] = 'evil'
+    }
+
+    if (mode === 'truepath' || mode === 'lone_survivor') {
+      state.value.race['nerfed'] = 1
+      state.value.race['badgenes'] = 1
+      state.value.race['no_trade'] = 1
+      state.value.race['no_craft'] = 1
+      return
+    }
+
+    if (mode === 'cataclysm' || mode === 'warlord' || mode === 'banana') {
+      state.value.race['no_plasmid'] = 1
+      state.value.race['no_crispr'] = 1
+      state.value.race['no_trade'] = 1
+      state.value.race['no_craft'] = 1
+      return
+    }
+
+    if (challenges.noPlasmid && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.noPlasmid) state.value.race['no_plasmid'] = 1
+    if (challenges.weakMastery && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.weakMastery) state.value.race['weak_mastery'] = 1
+    if (challenges.noTrade && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.noTrade) state.value.race['no_trade'] = 1
+    if (challenges.noCraft && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.noCraft) state.value.race['no_craft'] = 1
+    if (challenges.noCrispr && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.noCrispr) state.value.race['no_crispr'] = 1
+    if (challenges.nerfed && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.nerfed) state.value.race['nerfed'] = 1
+    if (challenges.badGenes && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL.badGenes) state.value.race['badgenes'] = 1
+  }
+
+  function describeChallengeFlags(challenges: ChallengeStartOptions): string[] {
+    const mode = challenges.mode ?? 'standard'
+    if (mode === 'truepath' || mode === 'lone_survivor') {
+      return ['削弱', '坏基因', '禁贸易', '禁制造']
+    }
+    if (mode === 'cataclysm' || mode === 'warlord' || mode === 'banana') {
+      return ['无质粒', '禁 CRISPR', '禁贸易', '禁制造']
+    }
+    const parts: string[] = []
+    if (challenges.noPlasmid) parts.push('无质粒')
+    if (challenges.weakMastery) parts.push('弱化精通')
+    if (challenges.noTrade) parts.push('禁贸易')
+    if (challenges.noCraft) parts.push('禁制造')
+    if (challenges.noCrispr) parts.push('禁 CRISPR')
+    if (challenges.nerfed) parts.push('削弱')
+    if (challenges.badGenes) parts.push('坏基因')
+    return parts
+  }
+
+  function describeChallengeStartOptions(challenges?: ChallengeStartOptions): string {
+    const labels: Record<NonNullable<ChallengeStartOptions['mode']>, string> = {
+      standard: '',
+      cataclysm: '灾变',
+      lone_survivor: '孤独幸存者',
+      truepath: '真相之路',
+      warlord: '战争之主',
+      banana: '香蕉共和国',
+    }
+    const parts: string[] = []
+    const mode = challenges?.mode ?? 'standard'
+    if (mode !== 'standard') parts.push(labels[mode])
+    if (challenges) parts.push(...describeChallengeFlags(challenges))
+    return parts.join(' / ')
   }
 
   /** 手动搜集资源（早期采集） */

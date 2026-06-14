@@ -30,6 +30,7 @@ import PortalPanel from './components/PortalPanel.vue'
 import GovernorPanel from './components/GovernorPanel.vue'
 import MagicPanel from './components/MagicPanel.vue'
 import AchievementsPanel from './components/AchievementsPanel.vue'
+import StatsPanel from './components/StatsPanel.vue'
 import RacesPanel from './components/RacesPanel.vue'
 import TruepathPanel from './components/TruepathPanel.vue'
 import EdenicPanel from './components/EdenicPanel.vue'
@@ -44,7 +45,7 @@ import CustomRacePanel from './components/CustomRacePanel.vue'
 const game = useGameStore()
 type TabId = 'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'
   | 'portal' | 'governor' | 'magic' | 'achievements' | 'races' | 'truepath' | 'edenic' | 'prestige'
-  | 'mech' | 'womling' | 'crispr' | 'custom_race'
+  | 'mech' | 'womling' | 'crispr' | 'custom_race' | 'stats'
 
 const activeTab = ref<TabId>('evolution')
 /** 市政 Tab 下的子 Tab */
@@ -111,6 +112,7 @@ const tabs = computed(() => {
       { id: 'prestige', label: '♻️ 转生', visible: (game.state.tech['mad'] ?? 0) >= 1 || (game.state.tech['genesis'] ?? 0) >= 7 || (game.state.tech['blackhole'] ?? 0) >= 5 || (game.state.tech['ascension'] ?? 0) >= 1 },
       { id: 'crispr', label: '🧬 CRISPR', visible: (game.state.tech['genetics'] ?? 0) >= 1 && (((game.state.prestige as Record<string, { count?: number }>)?.['Plasmid']?.count ?? 0) > 0) },
       { id: 'achievements', label: '🏆 成就', visible: true },
+      { id: 'stats', label: '📊 统计', visible: true },
       { id: 'races', label: '🧬 种族', visible: true },
       { id: 'custom_race', label: '🛠️ 编辑种族', visible: (game.state.tech['genetics'] ?? 0) >= 4 },
     )
@@ -218,6 +220,7 @@ const cityTabLabel = computed(() => {
             <CrisprPanel v-if="activeTab === 'crispr'" />
             <CustomRacePanel v-if="activeTab === 'custom_race'" />
             <AchievementsPanel v-if="activeTab === 'achievements'" />
+            <StatsPanel v-if="activeTab === 'stats'" />
             <RacesPanel v-if="activeTab === 'races'" />
           </template>
         </div>

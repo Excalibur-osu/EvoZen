@@ -23,6 +23,7 @@ import {
   canBuildInterstellarStructure,
   getInterstellarBuildCost,
 } from './interstellar';
+import { markChallengeTask } from './achievement-triggers';
 
 const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
 export type FactoryLineId = 'Lux' | 'Furs' | 'Alloy' | 'Polymer' | 'Nano' | 'Stanene';
@@ -254,6 +255,9 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       if (controller.count < 1) {
         controller.count = 1;
         controller.on = Math.max(controller.on ?? 0, 1);
+      }
+      if (next.race['banana']) {
+        markChallengeTask(next, 'banana', 'b2');
       }
     }
   }
@@ -519,6 +523,50 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'study':
       // legacy tech.js L8479: global.tech['ancient_study'] = 1;
       next.tech['ancient_study'] = 1;
+      break;
+    case 'fanaticism':
+      // legacy tech.js L8392: choosing this branch also seeds the fanaticism tech line.
+      next.tech['fanaticism'] = Math.max(next.tech['fanaticism'] ?? 0, 1);
+      break;
+    case 'alt_fanaticism':
+      // legacy tech.js L8420: alt branch grants fanaticism directly and advances theology when needed.
+      if ((next.tech['theology'] ?? 0) === 2) {
+        next.tech['theology'] = 3;
+      }
+      break;
+    case 'anthropology':
+      // legacy tech.js L8686: choosing this branch also seeds the anthropology tech line.
+      next.tech['anthropology'] = Math.max(next.tech['anthropology'] ?? 0, 1);
+      break;
+    case 'alt_anthropology':
+      // legacy tech.js L8711: alt branch grants anthropology directly and advances theology when needed.
+      if ((next.tech['theology'] ?? 0) === 2) {
+        next.tech['theology'] = 3;
+      }
+      break;
+    case 'deify':
+      // legacy tech.js L8547: deify seeds the ancient_deify branch.
+      next.tech['ancient_deify'] = Math.max(next.tech['ancient_deify'] ?? 0, 1);
+      break;
+    case 'isolation_protocol':
+      // legacy tech.js L13764: selecting isolation writes the branch key used by Tau Ceti follow-up techs.
+      next.tech['isolation'] = Math.max(next.tech['isolation'] ?? 0, 1);
+      break;
+    case 'focus_cure':
+      // legacy tech.js L13787: focus cure advances disease and seeds the cure research branch.
+      next.tech['focus_cure'] = Math.max(next.tech['focus_cure'] ?? 0, 1);
+      break;
+    case 'matter_replicator':
+      // legacy tech.js L4872: standard replicator starts by copying Stone.
+      next.race['replicator'] = { res: 'Stone', pow: 1 };
+      break;
+    case 'replicator_tp':
+      // legacy tech.js L14349: lone-survivor truepath replicator starts on Unobtainium.
+      next.race['replicator'] = { res: 'Unobtainium', pow: 1 };
+      break;
+    case 'terraforming':
+    case 'terraforming_tp':
+      ensureSpaceStructure(next, 'terraformer');
       break;
 
     // ===== 太阳能 / 戴森 =====

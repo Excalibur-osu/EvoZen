@@ -51,6 +51,25 @@ export type SpaceResourceId =
 
 export type ResourceId = BasicResourceId | EvoResourceId | SpaceResourceId | string;
 
+export type ResourceBreakdownKind = 'source' | 'consume' | 'modifier' | 'system';
+
+export interface ResourceBreakdownEntry {
+  label: string;
+  amount: number;
+  kind: ResourceBreakdownKind;
+  section?: string;
+  detail?: string;
+}
+
+export interface ResourceBreakdownState {
+  entries: ResourceBreakdownEntry[];
+  grossSource: number;
+  grossConsume: number;
+  net: number;
+  effectiveNet: number;
+  truncated?: number;
+}
+
 /** 单个资源的状态 */
 export interface ResourceState {
   name: string;
@@ -64,6 +83,7 @@ export interface ResourceState {
   diff: number;
   delta: number;
   trade?: number;
+  breakdown?: ResourceBreakdownState;
 }
 
 // ============================================================
@@ -541,6 +561,8 @@ export interface GameState {
 export interface GameTickResult {
   /** 本 tick 各资源的产量变化 */
   resourceDeltas: Record<string, number>;
+  /** 本 tick 各资源的结构化变化来源 */
+  resourceBreakdowns?: Record<string, ResourceBreakdownState>;
   /** 消息队列 */
   messages: GameMessage[];
 }

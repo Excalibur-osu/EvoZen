@@ -21,9 +21,27 @@ export interface CrisprUpgrade {
   /** 成本生成函数（基于当前等级） */
   plasmidCost: (level: number) => number;
   phageCost?: (level: number) => number;
+  maxLevel?: number;
+  /** 非 trait 型基因使用独立存储 key；默认等于 id。 */
+  geneId?: string;
+  /** 购买后是否同步写入 race trait。 */
+  appliesRaceTrait?: boolean;
+  condition?: (state: GameState, level: number) => boolean;
 }
 
+const CHALLENGE_GENE_COSTS = [5, 50, 400, 2500, 4000];
+
 export const CRISPR_UPGRADES: CrisprUpgrade[] = [
+  {
+    id: 'challenge',
+    traitId: 'challenge',
+    name: '挑战基因',
+    desc: '解锁并强化挑战开局选项，对标 hardened genes → mastered 的 challenge 等级链。',
+    plasmidCost: (lvl) => CHALLENGE_GENE_COSTS[lvl] ?? CHALLENGE_GENE_COSTS[CHALLENGE_GENE_COSTS.length - 1],
+    maxLevel: CHALLENGE_GENE_COSTS.length,
+    appliesRaceTrait: false,
+    condition: (state, lvl) => lvl < 2 || (state.race.universe ?? 'standard') !== 'standard',
+  },
   {
     id: 'minor_creative',
     traitId: 'creative',
@@ -140,8 +158,9 @@ export const CRISPR_UPGRADES: CrisprUpgrade[] = [
 
 /** 获取某 CRISPR 升级当前已购买的等级 */
 export function getCrisprLevel(state: GameState, upgradeId: string): number {
+  const upg = CRISPR_UPGRADES.find((u) => u.id === upgradeId);
   const genes = state.genes as Record<string, number>;
-  return genes[upgradeId] ?? 0;
+  return genes[upg?.geneId ?? upgradeId] ?? 0;
 }
 
 /** 检查是否能购买（资源 + 等级 < 5）*/
@@ -149,7 +168,8 @@ export function canPurchaseCrispr(state: GameState, upgradeId: string): boolean 
   const upg = CRISPR_UPGRADES.find((u) => u.id === upgradeId);
   if (!upg) return false;
   const lvl = getCrisprLevel(state, upgradeId);
-  if (lvl >= 5) return false;
+  if (lvl >= (upg.maxLevel ?? 5)) return false;
+  if (upg.condition && !upg.condition(state, lvl)) return false;
   const plasmidCost = upg.plasmidCost(lvl);
   const phageCost = upg.phageCost?.(lvl) ?? 0;
 
@@ -173,11 +193,12 @@ export function purchaseCrispr(state: GameState, upgradeId: string): boolean {
   if (phageCost > 0 && prestige['Phage']) prestige['Phage'].count -= phageCost;
 
   const genes = state.genes as Record<string, number>;
-  genes[upgradeId] = lvl + 1;
+  const geneKey = upg.geneId ?? upgradeId;
+  genes[geneKey] = lvl + 1;
 
   // 同步设置 race trait 等级（minor trait 立即生效）
-  const newLevel = (genes[upgradeId] ?? 0) * 0.25;  // 5 级对应 rank=1.25 即接近 rank=1 上限
-  if (upg.traitId !== 'untapped') {
+  const newLevel = (genes[geneKey] ?? 0) * 0.25;  // 5 级对应 rank=1.25 即接近 rank=1 上限
+  if (upg.traitId !== 'untapped' && upg.appliesRaceTrait !== false) {
     state.race[upg.traitId] = Math.min(1, newLevel);  // minor trait 跨转生保留
   }
   return true;

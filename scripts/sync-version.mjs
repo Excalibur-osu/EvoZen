@@ -1,7 +1,11 @@
 /**
  * sync-version.mjs
- * 将 root package.json 的版本号同步到 workspace package.json
- * 与 package-lock.json 的 workspace 元数据。
+ * 将版本号同步到 root package.json、workspace package.json、
+ * package-lock.json 的 workspace 元数据，以及 SAVE_VERSION。
+ *
+ * 用法：
+ *   npm run version            # 使用 root package.json 当前版本同步
+ *   npm run version -- 0.9.4   # 先把 root package.json 改为 0.9.4，再同步
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -13,6 +17,7 @@ const root = resolve(__dirname, '..');
 
 const pkgPath = resolve(root, 'package.json');
 const lockPath = resolve(root, 'package-lock.json');
+const saveVersionPath = resolve(root, 'packages', 'game-core', 'src', 'version.ts');
 const workspaces = [
   {
     packageJsonPath: resolve(root, 'apps', 'web', 'package.json'),
@@ -53,9 +58,28 @@ function syncVersion(target, next) {
   return true;
 }
 
+function validateVersion(next) {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(next)) {
+    throw new Error(`无效版本号：${next}`);
+  }
+}
+
 const pkg = readJson(pkgPath);
-const next = pkg.version;
+const requested = process.argv[2]?.trim();
+const next = requested || pkg.version;
+validateVersion(next);
+
 let changed = 0;
+
+if (pkg.version === next) {
+  console.log(`[sync-version] ${rel(pkgPath)} 已是最新 (${next})`);
+} else {
+  const prev = pkg.version;
+  pkg.version = next;
+  writeJson(pkgPath, pkg);
+  console.log(`[sync-version] ${rel(pkgPath)}: ${prev} → ${next}`);
+  changed += 1;
+}
 
 for (const workspace of workspaces) {
   const targetPath = workspace.packageJsonPath;
@@ -70,6 +94,25 @@ for (const workspace of workspaces) {
   writeJson(targetPath, target);
   console.log(`[sync-version] ${rel(targetPath)}: ${prev} → ${next}`);
   changed += 1;
+}
+
+if (existsSync(saveVersionPath)) {
+  const source = readFileSync(saveVersionPath, 'utf-8');
+  const pattern = /export const SAVE_VERSION = ['"]([^'"]+)['"];?/;
+  const match = source.match(pattern);
+
+  if (!match) {
+    console.log(`[sync-version] ${rel(saveVersionPath)} 未找到 SAVE_VERSION，跳过。`);
+  } else if (match[1] === next) {
+    console.log(`[sync-version] ${rel(saveVersionPath)} SAVE_VERSION 已是最新 (${next})`);
+  } else {
+    const updated = source.replace(pattern, `export const SAVE_VERSION = '${next}';`);
+    writeFileSync(saveVersionPath, updated, 'utf-8');
+    console.log(`[sync-version] ${rel(saveVersionPath)} SAVE_VERSION: ${match[1]} → ${next}`);
+    changed += 1;
+  }
+} else {
+  console.log(`[sync-version] 未找到 ${rel(saveVersionPath)}，跳过 SAVE_VERSION 同步。`);
 }
 
 let lockChanged = 0;
