@@ -6,6 +6,10 @@
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { QueueItem } from '@evozen/shared-types'
+import AppIcon from './ui/AppIcon.vue'
+import EmptyState from './ui/EmptyState.vue'
+import IconButton from './ui/IconButton.vue'
+import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
 
@@ -26,7 +30,10 @@ function getProgressPercent(item: QueueItem): number {
 <template>
   <div class="queue-panel" v-if="game.isQueueUnlocked">
     <div class="queue-header">
-      <span class="queue-title">🚧 建造队列</span>
+      <span class="queue-title">
+        <AppIcon name="industry" />
+        <span>建造队列</span>
+      </span>
       <span class="queue-count font-mono">{{ game.state.queue.queue?.length || 0 }} / {{ game.queueMax }}</span>
     </div>
 
@@ -38,11 +45,15 @@ function getProgressPercent(item: QueueItem): number {
       >
         <div class="qi-main">
           <span class="qi-label">{{ index + 1 }}. {{ item.label }}</span>
-          <button class="qi-cancel" @click="game.dequeueBuilding(index)" title="取消并返还资源">✕</button>
+          <IconButton
+            icon="close"
+            label="取消并返还资源"
+            tone="danger"
+            size="sm"
+            @click="game.dequeueBuilding(index)"
+          />
         </div>
-        <div class="qi-progress-bar">
-          <div class="qi-progress-fill" :style="{ width: getProgressPercent(item) + '%' }"></div>
-        </div>
+        <ProgressBar class="qi-progress-bar" :value="getProgressPercent(item)" tone="warning" size="sm" />
         <div class="qi-details">
           <span v-for="(amount, resId) in item.cost" :key="resId" class="qi-cost-tag">
             {{ getResourceName(resId as string) }}: 
@@ -52,9 +63,7 @@ function getProgressPercent(item: QueueItem): number {
       </div>
     </div>
     
-    <div class="queue-empty" v-else>
-      <span>队列为空</span>
-    </div>
+    <EmptyState v-else text="队列为空。" icon="industry" />
   </div>
 </template>
 
@@ -74,6 +83,9 @@ function getProgressPercent(item: QueueItem): number {
   margin-bottom: 8px;
 }
 .queue-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
   font-size: 13px;
   color: var(--warning);
@@ -81,9 +93,9 @@ function getProgressPercent(item: QueueItem): number {
 .queue-count {
   font-size: 12px;
   color: var(--text-secondary);
-  background: rgba(255,255,255,0.05);
+  background: var(--surface-pressed);
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .queue-list {
@@ -93,9 +105,9 @@ function getProgressPercent(item: QueueItem): number {
 }
 
 .queue-item {
-  background: rgba(0,0,0,0.15);
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 6px 8px;
 }
 
@@ -110,29 +122,7 @@ function getProgressPercent(item: QueueItem): number {
   font-weight: 600;
   color: var(--text-primary);
 }
-.qi-cancel {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0 4px;
-}
-.qi-cancel:hover {
-  color: var(--danger);
-}
-
-.qi-progress-bar {
-  height: 4px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-.qi-progress-fill {
-  height: 100%;
-  background: var(--warning);
-  transition: width 0.2s;
-}
+.qi-progress-bar { margin-bottom: 4px; }
 
 .qi-details {
   display: flex;
@@ -142,15 +132,8 @@ function getProgressPercent(item: QueueItem): number {
   color: var(--text-secondary);
 }
 .qi-cost-tag {
-  background: rgba(0,0,0,0.2);
+  background: var(--surface-pressed);
   padding: 1px 4px;
-  border-radius: 2px;
-}
-
-.queue-empty {
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 8px 0;
+  border-radius: var(--radius-sm);
 }
 </style>

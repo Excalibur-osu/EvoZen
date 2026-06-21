@@ -9,6 +9,7 @@ import { useGameStore } from '../stores/game'
 import { BASIC_STRUCTURES, type StructureDefinition } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
 import QueuePanel from './QueuePanel.vue'
+import AppIcon from './ui/AppIcon.vue'
 
 const game = useGameStore()
 
@@ -19,7 +20,6 @@ interface GatherAction {
   label: string
   icon: GatherActionIcon
   visible: boolean
-  colorVar: string
 }
 
 const categoryLabels: Record<StructureDefinition['category'], string> = {
@@ -77,7 +77,6 @@ const gatherActions = computed(() => {
       label: '搜集食物', 
       icon: 'food',
       visible: true,
-      colorVar: 'var(--res-food)'
     })
   }
 
@@ -86,7 +85,6 @@ const gatherActions = computed(() => {
     label: '捡拾木材', 
     icon: 'lumber',
     visible: true,
-    colorVar: 'var(--res-lumber)'
   })
 
   // 有了骨制工具后可以搜集石头
@@ -96,7 +94,6 @@ const gatherActions = computed(() => {
       label: '采集石头', 
       icon: 'stone',
       visible: true,
-      colorVar: 'var(--res-stone)'
     })
   }
   return actions.filter(a => a.visible)
@@ -139,7 +136,7 @@ function buildingTooltip(def: StructureDefinition): string {
     <!-- 手动采集区 -->
     <div class="gather-section">
       <div class="section-header">
-        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v4"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V3a2 2 0 0 0-4 0v9"/><path d="M6 14v-2a2 2 0 1 0-4 0v5a11 11 0 0 0 11 11h2.5a6.5 6.5 0 0 0 6.5-6.5v-7a2 2 0 0 0-4 0v3"/></svg>
+        <AppIcon name="resources" class="section-icon" />
         <span class="section-title">手动采集</span>
       </div>
       <div class="gather-grid">
@@ -147,10 +144,9 @@ function buildingTooltip(def: StructureDefinition): string {
           v-for="action in gatherActions"
           :key="action.resId"
           class="gather-btn"
-          :class="{ disabled: isStorageFull(action.resId) }"
+          :class="[`gather-${action.icon}`, { disabled: isStorageFull(action.resId) }]"
           :disabled="isStorageFull(action.resId)"
           @click="game.gather(action.resId)"
-          :style="{ color: action.colorVar }"
         >
           <span class="gather-icon-wrapper">
             <svg
@@ -189,7 +185,7 @@ function buildingTooltip(def: StructureDefinition): string {
               <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
             </svg>
           </span>
-          <span class="gather-label" style="color: var(--text-primary)">{{ action.label }}</span>
+          <span class="gather-label">{{ action.label }}</span>
         </button>
       </div>
     </div>
@@ -197,7 +193,7 @@ function buildingTooltip(def: StructureDefinition): string {
     <!-- 建筑列表 -->
     <div class="build-section" v-if="availableBuildings.length > 0">
       <div class="section-header">
-        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><path d="M9 4v16"/><path d="M4 9h16"/><path d="M4 15h16"/></svg>
+        <AppIcon name="city" class="section-icon" />
         <span class="section-title">设施建造</span>
       </div>
       <div class="build-category-stack">
@@ -229,7 +225,7 @@ function buildingTooltip(def: StructureDefinition): string {
                   @click.stop="game.enqueueBuilding(def.id)"
                   title="加入建造队列"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                  <AppIcon name="queue" />
                   队列
                 </button>
               </div>
@@ -267,7 +263,7 @@ function buildingTooltip(def: StructureDefinition): string {
   gap: 8px;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .section-icon {
@@ -315,6 +311,15 @@ function buildingTooltip(def: StructureDefinition): string {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.gather-btn.gather-food {
+  color: var(--res-food);
+}
+.gather-btn.gather-lumber {
+  color: var(--res-lumber);
+}
+.gather-btn.gather-stone {
+  color: var(--res-stone);
+}
 
 .gather-icon-wrapper {
   display: flex;
@@ -328,6 +333,7 @@ function buildingTooltip(def: StructureDefinition): string {
 }
 
 .gather-label {
+  color: var(--text-primary);
   font-size: 12px;
 }
 
@@ -390,7 +396,7 @@ function buildingTooltip(def: StructureDefinition): string {
   color: var(--text-accent);
   padding: 1px 6px;
   font-size: 11px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -412,9 +418,9 @@ function buildingTooltip(def: StructureDefinition): string {
 .build-count {
   font-size: 13px;
   color: var(--text-accent);
-  background: rgba(79,124,218,0.1);
+  background: var(--surface-pressed);
   padding: 0 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .build-effect {

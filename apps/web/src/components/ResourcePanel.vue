@@ -7,6 +7,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import type { ResourceState } from '@evozen/shared-types'
 import { buildResourceTooltip } from '../utils/resourceBreakdown'
+import AppIcon from './ui/AppIcon.vue'
+import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
 
@@ -49,20 +51,19 @@ function getEffectiveRate(res: { amount: number; max: number; diff: number }): n
 /** 种族（人口）资源 ID 集合：满载是正常状态，不应显示红色 */
 const SPECIES_IDS = new Set(['human', 'elven', 'orc', 'dwarf', 'goblin'])
 
-function fillColor(res: { id: string; amount: number; max: number }): string {
-  if (res.id === 'RNA') return 'linear-gradient(90deg, #7c3aed, #a78bfa)'
-  if (res.id === 'DNA') return 'linear-gradient(90deg, #f43f5e, #fb7185)'
-
+function fillTone(res: { id: string; amount: number; max: number }): 'success' | 'warning' | 'danger' | 'info' | 'rna' | 'dna' {
+  if (res.id === 'RNA') return 'rna'
+  if (res.id === 'DNA') return 'dna'
   const pct = fillPercent(res)
 
   // 人口资源：满载 = 需要建更多住房（蓝色提示），不是危险状态
   if (SPECIES_IDS.has(res.id)) {
-    return pct >= 100 ? 'var(--info)' : 'var(--success)'
+    return pct >= 100 ? 'info' : 'success'
   }
 
-  if (pct > 99) return 'var(--danger)'
-  if (pct > 75) return 'var(--warning)'
-  return 'var(--success)'
+  if (pct > 99) return 'danger'
+  if (pct > 75) return 'warning'
+  return 'success'
 }
 
 function resourceTooltip(res: ResourceState & { id: string }): string {
@@ -73,7 +74,10 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 <template>
   <div class="resource-list">
     <div class="res-header">
-      <span class="res-section-title">📦 资源</span>
+      <span class="res-section-title">
+        <AppIcon name="resources" />
+        <span>资源</span>
+      </span>
     </div>
     <div class="res-scroll">
       <div
@@ -93,15 +97,7 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
           </span>
           <span class="res-max font-mono" v-if="res.max > 0">/ {{ formatNum(res.max) }}</span>
         </div>
-        <div class="progress-bar" v-if="res.max > 0" style="height: 3px; margin-top: 2px">
-          <div
-            class="fill"
-            :style="{
-              width: fillPercent(res) + '%',
-              background: fillColor(res)
-            }"
-          />
-        </div>
+        <ProgressBar v-if="res.max > 0" class="res-progress" :value="fillPercent(res)" :tone="fillTone(res)" />
       </div>
     </div>
   </div>
@@ -119,15 +115,22 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 .res-header {
   padding: 4px 8px;
   flex-shrink: 0;
-  background: rgba(255,255,255,0.015);
+  background: var(--surface-raised);
   border-bottom: 1px solid var(--border-color);
 }
 .res-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.res-section-title svg {
+  width: 13px;
+  height: 13px;
 }
 
 .res-scroll {
@@ -138,7 +141,7 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 
 .res-row {
   padding: 3px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--surface-pressed);
 }
 .res-row:last-child {
   border-bottom: none;
@@ -178,4 +181,5 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
   color: var(--text-muted);
   margin-left: auto;
 }
+.res-progress { margin-top: 2px; }
 </style>

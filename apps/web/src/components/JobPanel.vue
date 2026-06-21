@@ -7,6 +7,8 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { BASE_JOBS } from '@evozen/game-core'
+import AppIcon from './ui/AppIcon.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -57,8 +59,8 @@ function canAssignMore(jobId: string): boolean {
   <div class="job-panel">
     <div class="panel-header">
       <h3 class="section-title">
-        <span class="title-icon">👷</span>
-        岗位中心
+        <AppIcon name="civic" />
+        <span>岗位中心</span>
       </h3>
       
       <!-- 待分配劳动力移至头部，作为紧凑的 Badge -->
@@ -67,8 +69,7 @@ function canAssignMore(jobId: string): boolean {
         v-if="visibleJobs.some(j => j.id === 'unemployed')"
         :class="{ 'has-unemployed': getWorkers('unemployed') > 0 }"
       >
-        <span class="ub-icon" v-if="getWorkers('unemployed') > 0">⚡</span>
-        <span class="ub-icon" v-else>👥</span>
+        <AppIcon class="ub-icon" :name="getWorkers('unemployed') > 0 ? 'zap' : 'users'" />
         <span class="ub-label">待分配:</span>
         <span class="ub-count">{{ getWorkers('unemployed') }}</span>
       </div>
@@ -85,13 +86,13 @@ function canAssignMore(jobId: string): boolean {
           </div>
           
           <div class="jw-controls">
-            <button 
-              class="jw-btn" 
-              @click="game.removeWorker(job.id)" 
+            <StepperButton
+              label="−"
+              :aria-label="`移除 ${job.name}`"
+              tone="danger"
               :disabled="getWorkers(job.id) <= 0"
-            >
-              <svg viewBox="0 0 24 24" fill="none" class="icon-minus" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </button>
+              @click="game.removeWorker(job.id)"
+            />
             
             <div class="jw-value">
               <span class="val-curr" :class="{ 'val-active': getWorkers(job.id) > 0 }">{{ getWorkers(job.id) }}</span>
@@ -99,13 +100,13 @@ function canAssignMore(jobId: string): boolean {
               <span class="val-max">{{ getMax(job.id) >= 0 ? getMax(job.id) : '∞' }}</span>
             </div>
 
-            <button 
-              class="jw-btn" 
-              @click="game.assignWorker(job.id)" 
+            <StepperButton
+              label="+"
+              :aria-label="`分配 ${job.name}`"
+              tone="success"
               :disabled="!canAssignMore(job.id)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" class="icon-plus" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </button>
+              @click="game.assignWorker(job.id)"
+            />
           </div>
           
         </div>
@@ -126,22 +127,22 @@ function canAssignMore(jobId: string): boolean {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .section-title {
   font-size: 15px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
 }
 
-.title-icon {
-  font-size: 16px;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+.section-title svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 顶部紧凑 Badge */
@@ -150,23 +151,25 @@ function canAssignMore(jobId: string): boolean {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   transition: all 0.2s ease;
 }
 
 .unemployed-badge.has-unemployed {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+  background: color-mix(in srgb, var(--info) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--info) 45%, var(--border-color));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--info) 22%, transparent);
 }
 
 .ub-icon {
-  font-size: 13px;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 .has-unemployed .ub-icon {
-  color: #60a5fa;
+  color: var(--info);
   animation: pulse 1.5s infinite;
 }
 
@@ -178,19 +181,19 @@ function canAssignMore(jobId: string): boolean {
 
 .ub-label {
   font-size: 12px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
 }
 
 .ub-count {
   font-size: 14px;
   font-weight: 700;
   font-family: var(--font-mono);
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .has-unemployed .ub-count {
-  color: #60a5fa;
-  text-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+  color: var(--info);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--info) 45%, transparent);
 }
 
 /* 紧凑型网格 */
@@ -204,17 +207,17 @@ function canAssignMore(jobId: string): boolean {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   padding: 10px;
   transition: background 0.2s, transform 0.1s;
   cursor: default;
 }
 
 .job-widget:hover {
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
   transform: translateY(-1px);
 }
 
@@ -228,13 +231,13 @@ function canAssignMore(jobId: string): boolean {
 .jw-name {
   font-size: 13px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
 .jw-output {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -245,47 +248,10 @@ function canAssignMore(jobId: string): boolean {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 4px;
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
   padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.jw-btn {
-  width: 28px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  border-radius: 3px;
-  cursor: pointer;
-  transition: all 0.1s;
-}
-
-.jw-btn svg {
-  width: 12px;
-  height: 12px;
-}
-
-.jw-btn:not(:disabled):hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.jw-btn:not(:disabled):hover .icon-plus {
-  color: #10b981;
-}
-
-.jw-btn:not(:disabled):hover .icon-minus {
-  color: #f43f5e;
-}
-
-.jw-btn:disabled {
-  opacity: 0.2;
-  cursor: not-allowed;
+  border: 1px solid var(--border-color);
 }
 
 .jw-value {
@@ -298,22 +264,22 @@ function canAssignMore(jobId: string): boolean {
 
 .val-curr {
   font-weight: 700;
-  color: #64748b;
+  color: var(--text-muted);
   transition: color 0.1s;
 }
 .val-curr.val-active {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .val-sep {
   margin: 0 4px;
   font-size: 11px;
-  color: #475569;
+  color: var(--border-hover);
 }
 
 .val-max {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 /* 列表过渡动画 */

@@ -10,6 +10,8 @@ import {
   type PowerGeneratorDef,
 } from '@evozen/game-core'
 import { useGameStore } from '../stores/game'
+import AppIcon from './ui/AppIcon.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -90,7 +92,10 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
 
 <template>
   <div class="power-panel" v-if="hasPower">
-    <h3 class="section-title">⚡ 电力网格</h3>
+    <h3 class="section-title">
+      <AppIcon name="zap" />
+      <span>电力网格</span>
+    </h3>
 
     <!-- 电力摘要 -->
     <div class="power-summary">
@@ -112,7 +117,8 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
 
     <!-- 警告 -->
     <div class="power-warning" v-if="power.surplus < 0">
-      ⚠️ 电力不足！部分建筑已停工。
+      <AppIcon name="dangerAlert" />
+      <span>电力不足，部分建筑已停工。</span>
     </div>
 
     <!-- 发电站 -->
@@ -126,8 +132,8 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
           </span>
         </div>
         <div class="power-row-controls">
-          <button class="ctrl-btn" @click="adjustGeneratorOn(gen, -1)" :disabled="gen.configuredOn <= 0" data-tooltip="关闭一台">−</button>
-          <button class="ctrl-btn" @click="adjustGeneratorOn(gen, 1)" :disabled="gen.configuredOn >= gen.count" data-tooltip="开启一台">+</button>
+          <StepperButton label="−" aria-label="关闭一台" :disabled="gen.configuredOn <= 0" data-tooltip="关闭一台" @click="adjustGeneratorOn(gen, -1)" />
+          <StepperButton label="+" aria-label="开启一台" :disabled="gen.configuredOn >= gen.count" data-tooltip="开启一台" @click="adjustGeneratorOn(gen, 1)" />
         </div>
       </div>
     </div>
@@ -153,10 +159,17 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
 }
 
 .section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-accent);
   margin-bottom: 10px;
+}
+.section-title svg {
+  width: 15px;
+  height: 15px;
 }
 
 .power-summary {
@@ -189,19 +202,27 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
 }
 
 .stat-value.gen { color: var(--success); }
-.stat-value.con { color: var(--warning, #f59e0b); }
+.stat-value.con { color: var(--warning); }
 .stat-value.surplus { color: var(--success); }
 .stat-value.deficit { color: var(--danger); }
 
 .power-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 10px;
   margin-bottom: 10px;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: var(--danger-glow);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
   border-radius: var(--radius-sm);
   color: var(--danger);
   font-size: 12px;
   font-weight: 500;
+}
+.power-warning svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .subsection-title {
@@ -250,31 +271,4 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
   gap: 4px;
 }
 
-.ctrl-btn {
-  width: 22px;
-  height: 22px;
-  font-size: 14px;
-  font-weight: 700;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  color: var(--text-accent);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  padding: 0;
-  line-height: 1;
-}
-
-.ctrl-btn:hover:not(:disabled) {
-  background: var(--bg-card-hover);
-  border-color: var(--border-hover);
-}
-
-.ctrl-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
 </style>

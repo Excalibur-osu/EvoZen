@@ -6,6 +6,8 @@
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { GenusId } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
+import SegmentedTabs from './ui/SegmentedTabs.vue'
 
 const game = useGameStore()
 
@@ -18,6 +20,15 @@ const filteredRaces = computed(() => {
   if (activeGenus.value === 'all') return allRaces.value
   return allRaces.value.filter((r) => r.type === activeGenus.value)
 })
+
+const genusTabItems = computed(() => [
+  { id: 'all' as const, label: '全部', count: allRaces.value.length },
+  ...genusOptions.value.map((id) => ({
+    id,
+    label: genusLabel(id),
+    count: allRaces.value.filter((r) => r.type === id).length,
+  })),
+])
 
 function genusLabel(id: GenusId): string {
   return game.GENUS_DEFS[id]?.name ?? id
@@ -40,23 +51,9 @@ const currentSpecies = computed(() => game.state.race.species)
 
 <template>
   <div class="races-panel">
-    <div class="title-section">
-      <h2 class="title">🧬 种族图鉴</h2>
-      <p class="subtitle">原版 60+ 种族数据库。当前游戏种族会高亮显示。</p>
-    </div>
+    <PanelHeader icon="races" title="种族图鉴" subtitle="原版 60+ 种族数据库。当前游戏种族会高亮显示。" />
 
-    <div class="genus-tabs">
-      <button
-        :class="['tab', { active: activeGenus === 'all' }]"
-        @click="activeGenus = 'all'"
-      >全部 ({{ allRaces.length }})</button>
-      <button
-        v-for="g in genusOptions"
-        :key="g"
-        :class="['tab', { active: activeGenus === g }]"
-        @click="activeGenus = g"
-      >{{ genusLabel(g) }}</button>
-    </div>
+    <SegmentedTabs :items="genusTabItems" :active="activeGenus" @select="activeGenus = $event" />
 
     <div class="races-grid">
       <div
@@ -84,78 +81,75 @@ const currentSpecies = computed(() => game.state.race.species)
 </template>
 
 <style scoped>
-.races-panel { padding: 1rem; color: #e0e0e0; }
-.title-section { margin-bottom: 1rem; }
-.title { font-size: 1.3rem; color: #66ff99; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; }
-
-.genus-tabs {
+.races-panel {
+  max-width: 1100px;
   display: flex;
-  gap: 0.3rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-.tab {
-  background: #1a2a1f;
-  color: #ddd;
-  border: 1px solid #335544;
-  padding: 0.3rem 0.7rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.tab.active {
-  background: #335544;
-  color: #66ff99;
-  border-color: #66ff99;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .races-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0.6rem;
+  gap: 8px;
 }
 .race-card {
-  background: #131a14;
-  border: 1px solid #2a3a2a;
-  border-radius: 6px;
-  padding: 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  transition: border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
 }
 .race-card.current {
-  border-color: #66ff99;
-  background: rgba(102, 255, 153, 0.06);
+  border-color: var(--accent);
+  background: var(--accent-glow);
 }
 .race-card.locked { opacity: 0.55; }
 
 .race-header { display: flex; align-items: center; gap: 0.4rem; }
-.race-name { font-weight: bold; color: #66ff99; }
-.race-genus { font-size: 0.8rem; color: #aaa; }
+.race-name {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.race-genus {
+  font-size: 10px;
+  color: var(--text-muted);
+}
 .current-badge {
   margin-left: auto;
-  background: #4caa66;
-  color: #fff;
-  padding: 0.1rem 0.5rem;
-  border-radius: 12px;
-  font-size: 0.7rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
 }
-.race-desc { font-size: 0.8rem; color: #ccc; margin: 0.3rem 0; }
-.race-meta { font-size: 0.75rem; color: #888; }
+.race-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 5px 0;
+}
+.race-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
 
 .race-traits {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.2rem;
-  margin-top: 0.4rem;
+  gap: 4px;
+  margin-top: 7px;
 }
 .trait-chip {
-  background: #2a3a2a;
-  color: #aaffcc;
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
-  font-size: 0.72rem;
+  background: var(--surface-pressed);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
 }
 .rank {
-  color: #ffaa55;
+  color: var(--warning);
   margin-left: 0.2rem;
 }
 </style>

@@ -9,6 +9,12 @@ import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { PortalRegionId } from '@evozen/game-core'
 import { tunePillar, getTunedPillarCount } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
+import SegmentedTabs from './ui/SegmentedTabs.vue'
+import EmptyState from './ui/EmptyState.vue'
+import MetricCard from './ui/MetricCard.vue'
+import ProgressBar from './ui/ProgressBar.vue'
+import AppIcon from './ui/AppIcon.vue'
 
 const game = useGameStore()
 
@@ -18,6 +24,7 @@ const activeRegion = ref<PortalRegionId>('fortress')
 const visibleRegions = computed(() =>
   allRegions.filter((r) => game.isRegionUnlocked(r))
 )
+const regionTabs = computed(() => visibleRegions.value.map((r) => ({ id: r, label: regionLabel(r) })))
 
 const buildings = computed(() => {
   return game.getPortalBuildingsByRegion(activeRegion.value)
@@ -96,58 +103,42 @@ function fmtNum(n: number): string {
 
 <template>
   <div class="portal-panel">
-    <div class="title-section">
-      <h2 class="title">🔥 地狱门</h2>
-      <p class="subtitle">来自地狱深处的传送门正在开启，准备好对抗恶魔的入侵。</p>
-    </div>
+    <PanelHeader icon="portal" title="地狱门" subtitle="来自地狱深处的传送门正在开启，准备好对抗恶魔的入侵。" />
 
     <!-- 要塞威胁与墙体状态 -->
     <div class="fortress-status" v-if="game.isPortalUnlocked">
-      <div class="stat-card">
-        <span class="stat-label">威胁等级</span>
-        <span class="stat-value danger">{{ Math.floor(fortress?.threat ?? 0) }}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">城墙完整度</span>
-        <span class="stat-value">{{ Math.floor(fortress?.walls ?? 100) }} / {{ fortress?.max_walls ?? 100 }}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">巡逻队</span>
-        <span class="stat-value">{{ fortress?.patrols ?? 0 }} × {{ fortress?.patrol_size ?? 10 }}</span>
-      </div>
+      <MetricCard label="威胁等级" :value="Math.floor(fortress?.threat ?? 0)" tone="danger" />
+      <MetricCard label="城墙完整度" :value="`${Math.floor(fortress?.walls ?? 100)} / ${fortress?.max_walls ?? 100}`" />
+      <MetricCard label="巡逻队" :value="`${fortress?.patrols ?? 0} x ${fortress?.patrol_size ?? 10}`" />
     </div>
 
     <!-- 区域切换 Tab -->
-    <div class="region-tabs">
-      <button
-        v-for="r in visibleRegions"
-        :key="r"
-        :class="['region-tab', { active: activeRegion === r }]"
-        @click="activeRegion = r"
-      >
-        {{ regionLabel(r) }}
-      </button>
-    </div>
+    <SegmentedTabs :items="regionTabs" :active="activeRegion" @select="activeRegion = $event" />
 
     <!-- 远古石柱调谐 -->
-    <div v-if="activeRegion === 'ruins' && pillarCount > 0" class="pillar-section">
-      <h3 class="pillar-title">🏛️ 远古石柱调谐</h3>
+    <section v-if="activeRegion === 'ruins' && pillarCount > 0" class="special-section">
+      <h3 class="section-title">
+        <AppIcon name="columns" :size="14" />
+        远古石柱调谐
+      </h3>
       <div class="pillar-info">
         <span>已调谐：{{ tunedPillars }} / {{ pillarCount }}</span>
         <span>Harmony：{{ harmony.toFixed(2) }}</span>
-        <button class="tune-btn" :disabled="tunedPillars >= pillarCount || harmony < 1" @click="doTunePillar">
+        <button class="tune-btn btn primary sm" :disabled="tunedPillars >= pillarCount || harmony < 1" @click="doTunePillar">
+          <AppIcon name="sparkles" :size="14" />
           调谐一根 (消耗 1 Harmony)
         </button>
       </div>
       <p class="pillar-desc">每调谐一根柱子提供 +5% 全球产出。</p>
-    </div>
+    </section>
 
     <!-- 尖塔登顶 -->
-    <div v-if="activeRegion === 'spire'" class="spire-section">
+    <section v-if="activeRegion === 'spire'" class="special-section">
       <div class="spire-progress">
-        <span class="spire-label">尖塔层数：</span>
+        <span class="spire-label">尖塔层数</span>
         <span class="spire-value">{{ spireLevel }} / 100</span>
       </div>
+      <ProgressBar :value="spireLevel" tone="danger" size="sm" />
       <div class="spire-battle">
         <div class="battle-stat">
           <span class="bs-label">下一层 ({{ spireInfo.nextFloor }})</span>
@@ -162,21 +153,20 @@ function fmtNum(n: number): string {
           <span class="bs-value">{{ fmtNum(spireInfo.cost) }} Money</span>
         </div>
         <button
-          class="ascend-btn"
+          class="ascend-btn btn primary"
           :disabled="spireLevel >= 100"
           @click="tryAscendSpire"
         >
+          <AppIcon :name="spireLevel >= 100 ? 'shieldCheck' : 'flame'" :size="15" />
           {{ spireLevel >= 100 ? '已征服' : '挑战下一层' }}
         </button>
       </div>
-    </div>
+    </section>
 
     <!-- 建筑列表 -->
-    <div v-if="buildings.length === 0" class="locked-region">
-      <span>🔒 此区域当前无可用建筑（检查科技或种族特质）</span>
-    </div>
+    <EmptyState v-if="buildings.length === 0" text="此区域当前无可用建筑（检查科技或种族特质）。" icon="lock" />
 
-    <div v-for="b in buildings" :key="b.id" class="building-card">
+    <div v-for="b in buildings" :key="b.id" class="building-card card">
       <div class="building-header">
         <div class="building-info">
           <span class="building-name">{{ b.name }}</span>
@@ -186,10 +176,11 @@ function fmtNum(n: number): string {
           </span>
         </div>
         <button
-          class="build-btn"
+          class="build-btn btn primary sm"
           :disabled="!canAfford(b.id)"
           @click="build(b.id)"
         >
+          <AppIcon name="hammer" :size="14" />
           建造
         </button>
       </div>
@@ -218,107 +209,56 @@ function fmtNum(n: number): string {
 
 <style scoped>
 .portal-panel {
-  padding: 1rem;
-  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.title-section { margin-bottom: 1rem; }
-.title { font-size: 1.3rem; color: #ff6464; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; }
 
 .fortress-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.special-section {
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+.section-title {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0 0 6px;
 }
-.stat-card {
-  background: rgba(255, 100, 100, 0.1);
-  border: 1px solid #663030;
-  border-radius: 6px;
-  padding: 0.6rem 1rem;
-  flex: 1;
-  min-width: 140px;
-}
-.stat-label { display: block; font-size: 0.75rem; color: #aaa; }
-.stat-value { display: block; font-size: 1.2rem; font-weight: bold; color: #ffaa55; }
-.stat-value.danger { color: #ff5555; }
+.pillar-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+.tune-btn { margin-left: auto; }
+.pillar-desc { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
 
-.region-tabs {
+.spire-progress {
   display: flex;
-  gap: 0.3rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
 }
-.region-tab {
-  background: #2a1818;
-  color: #ddd;
-  border: 1px solid #4a2828;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.region-tab.active {
-  background: #663030;
-  color: #fff;
-  border-color: #ff6464;
-}
-
-.pillar-section {
-  background: rgba(255, 200, 100, 0.06);
-  border: 1px solid #886633;
-  padding: 0.8rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-.pillar-title { font-size: 1rem; color: #ffd24c; margin: 0 0 0.4rem; }
-.pillar-info { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; }
-.pillar-desc { font-size: 0.8rem; color: #aaa; margin-top: 0.4rem; }
-.tune-btn { background: #886633; color: #fff; border: none; padding: 0.3rem 0.8rem; border-radius: 4px; cursor: pointer; margin-left: auto; }
-.tune-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.tune-btn:hover:not(:disabled) { background: #aa8844; }
-
-.spire-section {
-  background: rgba(150, 100, 220, 0.1);
-  border: 1px solid #553388;
-  padding: 0.8rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-.spire-progress { display: flex; align-items: center; gap: 0.8rem; }
-.spire-label { font-size: 0.9rem; }
-.spire-value { font-size: 1.1rem; font-weight: bold; color: #cc99ff; }
+.spire-label { font-size: 12px; color: var(--text-secondary); }
+.spire-value { font-size: 15px; font-weight: 700; color: var(--accent); }
 .ascend-btn {
-  background: #553388;
-  color: #fff;
-  border: none;
-  padding: 0.5rem 1.2rem;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 0.6rem;
+  margin-top: 8px;
   width: 100%;
 }
-.ascend-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.ascend-btn:hover:not(:disabled) { background: #7733aa; }
-.spire-battle { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid #443366; }
+.spire-battle { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color); }
 .battle-stat { display: flex; justify-content: space-between; padding: 0.2rem 0; font-size: 0.85rem; }
-.bs-label { color: #aaa; }
-.bs-value { color: #cc99ff; font-weight: bold; }
-.bs-value.danger { color: #ff7777; }
-
-.locked-region {
-  text-align: center;
-  color: #888;
-  padding: 2rem;
-  font-style: italic;
-}
+.bs-label { color: var(--text-secondary); }
+.bs-value { color: var(--text-primary); font-weight: 700; }
+.bs-value.danger { color: var(--danger); }
 
 .building-card {
-  background: #1a1010;
-  border: 1px solid #3a2020;
-  border-radius: 6px;
-  padding: 0.8rem;
-  margin-bottom: 0.6rem;
+  padding: 10px;
 }
 .building-header {
   display: flex;
@@ -326,26 +266,17 @@ function fmtNum(n: number): string {
   align-items: center;
   margin-bottom: 0.3rem;
 }
-.building-name { font-weight: bold; color: #ffaa55; }
-.building-count { font-size: 0.85rem; color: #aaa; margin-left: 0.5rem; }
-.power-on { color: #4ecdc4; }
-.build-btn {
-  background: #884444;
-  color: #fff;
-  border: none;
-  padding: 0.4rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.build-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.build-btn:hover:not(:disabled) { background: #aa5555; }
-.building-desc { font-size: 0.8rem; color: #aaa; margin: 0.3rem 0; }
+.building-name { font-weight: 700; color: var(--text-primary); }
+.building-count { font-size: 0.85rem; color: var(--text-secondary); margin-left: 0.5rem; }
+.power-on { color: var(--info); }
+.building-desc { font-size: 0.8rem; color: var(--text-secondary); margin: 0.3rem 0; }
 .building-cost, .building-power, .building-effect {
   font-size: 0.8rem;
   margin-top: 0.2rem;
 }
-.cost-item { margin-right: 0.6rem; color: #ccc; }
-.power-cost { color: #ff8c8c; }
-.power-gen { color: #66ff99; }
-.effect-text { color: #99ccff; }
+.cost-label { color: var(--text-muted); }
+.cost-item { margin-right: 0.6rem; color: var(--text-primary); }
+.power-cost { color: var(--danger); }
+.power-gen { color: var(--success); }
+.effect-text { color: var(--accent); }
 </style>

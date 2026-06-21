@@ -1,16 +1,13 @@
 <script setup lang="ts">
 // 移动端提示页面组件
+import AppIcon from './ui/AppIcon.vue'
 </script>
 
 <template>
   <div class="mobile-not-supported">
     <div class="glass-panel">
       <div class="icon-container">
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="pc-icon">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-          <line x1="8" y1="21" x2="16" y2="21"></line>
-          <line x1="12" y1="17" x2="12" y2="21"></line>
-        </svg>
+        <AppIcon name="matrixReset" class="pc-icon" :size="64" :stroke-width="1.5" />
       </div>
       <h1 class="title">终端视野受限</h1>
       <p class="description">
@@ -27,7 +24,7 @@
 .mobile-not-supported {
   position: fixed;
   inset: 0;
-  z-index: 99999;
+  z-index: var(--z-modal);
   background: var(--bg-primary);
   display: flex;
   align-items: center;
@@ -36,14 +33,16 @@
 }
 
 .glass-panel {
-  background: rgba(30, 41, 59, 0.4);
+  background: color-mix(in srgb, var(--bg-card) 68%, transparent);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   padding: 40px 24px;
   max-width: 400px;
   text-align: center;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  box-shadow:
+    0 20px 40px color-mix(in srgb, var(--bg-primary) 70%, transparent),
+    inset 0 0 0 1px var(--surface-raised);
   animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -54,10 +53,10 @@
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: rgba(34, 197, 94, 0.05);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: var(--accent-glow);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
   margin-bottom: 24px;
-  box-shadow: 0 0 30px rgba(34, 197, 94, 0.1);
+  box-shadow: 0 0 30px var(--accent-glow);
   animation: float 6s ease-in-out infinite;
 }
 
@@ -90,7 +89,7 @@
   height: 1px;
   width: 60%;
   margin: 0 auto 24px;
-  background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
 }
 
 .tip {

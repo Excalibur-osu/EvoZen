@@ -5,6 +5,9 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
+import PanelHeader from './ui/PanelHeader.vue'
+import MetricCard from './ui/MetricCard.vue'
+import SegmentedTabs from './ui/SegmentedTabs.vue'
 
 const game = useGameStore()
 
@@ -24,6 +27,15 @@ const filteredAchievements = computed(() =>
 )
 
 const allFeats = computed(() => Object.values(game.FEATS))
+const categoryItems = computed(() =>
+  categories.map((id) => ({
+    id,
+    label: categoryLabel(id),
+    count: id === 'all'
+      ? allAchievements.value.length
+      : allAchievements.value.filter((a) => a.type === id).length,
+  })),
+)
 
 function getAchievementRecord(id: string) {
   const stats = game.state.stats as Record<string, unknown>
@@ -57,40 +69,16 @@ function rankStars(rank: number): string {
 
 <template>
   <div class="achievements-panel">
-    <div class="title-section">
-      <h2 class="title">🏆 成就</h2>
-      <p class="subtitle">解锁成就以获得永久加成。</p>
-    </div>
+    <PanelHeader icon="achievement" title="成就" subtitle="解锁成就以获得永久加成。" />
 
     <div class="stats-row">
-      <div class="stat-card">
-        <span class="stat-label">已解锁成就</span>
-        <span class="stat-value">{{ counts.achievements }} / {{ allAchievements.length }}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">已解锁 Feats</span>
-        <span class="stat-value">{{ counts.feats }} / {{ allFeats.length }}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">挑战等级</span>
-        <span class="stat-value">{{ universeLvl.aLvl }}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">掌握度加成</span>
-        <span class="stat-value">+{{ (mastery * 100).toFixed(1) }}%</span>
-      </div>
+      <MetricCard label="已解锁成就" :value="`${counts.achievements} / ${allAchievements.length}`" tone="accent" />
+      <MetricCard label="已解锁 Feats" :value="`${counts.feats} / ${allFeats.length}`" />
+      <MetricCard label="挑战等级" :value="universeLvl.aLvl" />
+      <MetricCard label="掌握度加成" :value="`+${(mastery * 100).toFixed(1)}%`" tone="accent" />
     </div>
 
-    <div class="category-tabs">
-      <button
-        v-for="c in categories"
-        :key="c"
-        :class="['cat-tab', { active: activeCategory === c }]"
-        @click="activeCategory = c"
-      >
-        {{ categoryLabel(c) }}
-      </button>
-    </div>
+    <SegmentedTabs :items="categoryItems" :active="activeCategory" @select="activeCategory = $event" />
 
     <h3 class="section-title">成就</h3>
     <div class="achievements-grid">
@@ -127,72 +115,64 @@ function rankStars(rank: number): string {
 </template>
 
 <style scoped>
-.achievements-panel { padding: 1rem; color: #e0e0e0; }
-.title-section { margin-bottom: 1rem; }
-.title { font-size: 1.3rem; color: #ffd700; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; }
+.achievements-panel {
+  max-width: 1040px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
 .stats-row {
-  display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-.stat-card {
-  background: rgba(255, 215, 0, 0.1);
-  border: 1px solid #665522;
-  padding: 0.5rem 0.8rem;
-  border-radius: 4px;
-  flex: 1;
-  min-width: 130px;
-}
-.stat-label { display: block; font-size: 0.75rem; color: #aaa; }
-.stat-value { display: block; font-size: 1.1rem; font-weight: bold; color: #ffd700; }
-
-.category-tabs {
-  display: flex;
-  gap: 0.3rem;
-  margin-bottom: 0.8rem;
-  flex-wrap: wrap;
-}
-.cat-tab {
-  background: #2a2010;
-  color: #ddd;
-  border: 1px solid #443322;
-  padding: 0.3rem 0.7rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.cat-tab.active {
-  background: #443322;
-  color: #ffd700;
-  border-color: #ffd700;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
 }
 
-.section-title { font-size: 1rem; color: #ffd700; margin: 0.8rem 0 0.5rem; }
+.section-title {
+  font-size: 13px;
+  color: var(--text-accent);
+  margin: 4px 0 0;
+}
 
 .achievements-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.5rem;
+  gap: 8px;
 }
 .ach-card {
-  background: #1a1810;
-  border: 1px solid #332e1a;
-  border-radius: 6px;
-  padding: 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px;
   opacity: 0.5;
+  transition: border-color 0.18s ease, opacity 0.18s ease, background 0.18s ease;
 }
 .ach-card.unlocked {
   opacity: 1;
-  border-color: #ffd700;
-  background: rgba(255, 215, 0, 0.06);
+  border-color: color-mix(in srgb, var(--success) 55%, transparent);
+  background: var(--success-glow);
 }
-.feat-card.unlocked { border-color: #ff5c5c; background: rgba(255, 92, 92, 0.06); }
+.feat-card.unlocked {
+  border-color: color-mix(in srgb, var(--info) 55%, transparent);
+  background: color-mix(in srgb, var(--info) 10%, transparent);
+}
 .ach-header { display: flex; justify-content: space-between; }
-.ach-name { font-weight: bold; }
-.ach-rank { color: #ffd700; font-size: 0.85rem; }
-.ach-desc { font-size: 0.8rem; color: #aaa; margin: 0.3rem 0; }
-.ach-flair { font-size: 0.75rem; color: #ffaa55; font-style: italic; }
+.ach-name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.ach-rank {
+  color: var(--accent);
+  font-size: 11px;
+}
+.ach-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 5px 0;
+}
+.ach-flair {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
 </style>

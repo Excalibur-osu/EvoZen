@@ -9,6 +9,15 @@ const rootPkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json')
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+  },
+  preview: {
+    host: '0.0.0.0',
+    port: 4173,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(rootPkg.version),
   },

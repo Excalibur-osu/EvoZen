@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { FactoryState, FactoryLineId } from '@evozen/game-core'
+import AppIcon from './ui/AppIcon.vue'
+import AllocationControl from './ui/AllocationControl.vue'
 
 const game = useGameStore()
 
@@ -73,7 +75,8 @@ function assigned(lineId: FactoryLineId): number {
 <template>
   <div v-if="isUnlocked" class="factory-panel">
     <h3 class="section-title">
-      <span class="icon">🏭</span> 工厂产线
+      <AppIcon name="factory" class="section-icon" />
+      <span>工厂产线</span>
       <span class="subtitle">产线: {{ totalAssigned }}/{{ totalFactories }}</span>
     </h3>
 
@@ -88,23 +91,15 @@ function assigned(lineId: FactoryLineId): number {
           <span class="factory-meta">{{ assigned(line.id) }}</span>
         </div>
         <p class="factory-desc">{{ line.desc }}</p>
-        <div class="controls">
-          <button
-            class="btn-minus"
-            :disabled="assigned(line.id) <= 0"
-            @click="game.removeFactoryLine(line.id)"
-          >
-            -
-          </button>
-          <span class="val">{{ assigned(line.id) }}</span>
-          <button
-            class="btn-plus"
-            :disabled="totalAssigned >= totalFactories"
-            @click="game.assignFactoryLine(line.id)"
-          >
-            +
-          </button>
-        </div>
+        <AllocationControl
+          :value="assigned(line.id)"
+          :decrement-disabled="assigned(line.id) <= 0"
+          :increment-disabled="totalAssigned >= totalFactories"
+          decrement-label="减少产线分配"
+          increment-label="增加产线分配"
+          @decrement="game.removeFactoryLine(line.id)"
+          @increment="game.assignFactoryLine(line.id)"
+        />
       </article>
     </div>
   </div>
@@ -124,6 +119,11 @@ function assigned(lineId: FactoryLineId): number {
   align-items: center;
   gap: 8px;
 }
+.section-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
 
 .subtitle {
   margin-left: auto;
@@ -140,9 +140,9 @@ function assigned(lineId: FactoryLineId): number {
 
 .factory-card {
   padding: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
 }
 
 .factory-head {
@@ -171,37 +171,4 @@ function assigned(lineId: FactoryLineId): number {
   color: var(--text-secondary);
 }
 
-.controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-minus,
-.btn-plus {
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--border-color);
-  background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.btn-minus:disabled,
-.btn-plus:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.val {
-  min-width: 20px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
 </style>

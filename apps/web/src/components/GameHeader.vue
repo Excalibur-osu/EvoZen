@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { computed, ref, watch } from 'vue'
+import AppIcon from './ui/AppIcon.vue'
 
 const game = useGameStore()
 const appVersion = __APP_VERSION__
@@ -69,16 +70,24 @@ watch(() => game.lastSaveTime, () => {
         :data-tooltip="moraleTooltip"
         data-tooltip-pos="bottom"
       >
-        😊 {{ game.morale }}%
+        <AppIcon name="smile" />
+        <span>{{ game.morale }}%</span>
       </span>
     </div>
 
     <div class="bar-right">
       <button class="bar-btn" @click="game.togglePause()">
-        {{ game.isPaused ? '▶ 继续' : '⏸ 暂停' }}
+        <AppIcon :name="game.isPaused ? 'play' : 'pause'" />
+        <span>{{ game.isPaused ? '继续' : '暂停' }}</span>
       </button>
-      <button class="bar-btn" @click="game.save()">💾 存档</button>
-      <button class="bar-btn" @click="game.toggleSettings()">⚙️ 设置</button>
+      <button class="bar-btn" @click="game.save()">
+        <AppIcon name="save" />
+        <span>存档</span>
+      </button>
+      <button class="bar-btn" @click="game.toggleSettings()">
+        <AppIcon name="settings" />
+        <span>设置</span>
+      </button>
     </div>
   </header>
 
@@ -96,10 +105,10 @@ watch(() => game.lastSaveTime, () => {
   justify-content: space-between;
   padding: 0 12px;
   height: 32px; /* reduced height */
-  background: rgba(2, 6, 23, 0.7); /* Deep darker background with transparency */
+  background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--bg-primary) 80%, transparent);
   flex-shrink: 0;
   z-index: 20;
   font-size: 12px;
@@ -114,11 +123,8 @@ watch(() => game.lastSaveTime, () => {
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.5px;
-  background: -webkit-linear-gradient(45deg, #a78bfa, #f472b6);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 10px rgba(167, 139, 250, 0.4);
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
 }
 
 .game-version {
@@ -144,7 +150,7 @@ watch(() => game.lastSaveTime, () => {
   font-size: 11px;
   color: var(--text-secondary);
   padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-raised);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
 }
@@ -167,10 +173,10 @@ watch(() => game.lastSaveTime, () => {
   font-weight: 600;
   font-size: 11px;
 }
-.season-0 { color: #4ade80; background: rgba(74,222,128,0.1); }
-.season-1 { color: #facc15; background: rgba(250,204,21,0.1); }
-.season-2 { color: #fb923c; background: rgba(251,146,60,0.1); }
-.season-3 { color: #60a5fa; background: rgba(96,165,250,0.1); }
+.season-0 { color: var(--success); background: var(--success-glow); }
+.season-1 { color: var(--warning); background: var(--warning-glow); }
+.season-2 { color: var(--res-copper); background: color-mix(in srgb, var(--res-copper) 18%, transparent); }
+.season-3 { color: var(--info); background: color-mix(in srgb, var(--info) 18%, transparent); }
 
 .bar-right {
   display: flex;
@@ -180,6 +186,9 @@ watch(() => game.lastSaveTime, () => {
 }
 
 .bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 2px 8px;
   font-size: 11px;
   font-family: var(--font-sans);
@@ -196,7 +205,7 @@ watch(() => game.lastSaveTime, () => {
   border-color: var(--border-hover);
 }
 .bar-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--danger-glow);
   color: var(--danger);
   border-color: var(--danger);
 }
@@ -220,6 +229,9 @@ watch(() => game.lastSaveTime, () => {
 
 /* 士气 */
 .morale-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -229,16 +241,16 @@ watch(() => game.lastSaveTime, () => {
   white-space: pre-line;
 }
 .morale-low {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  background: var(--danger-glow);
 }
 .morale-ok {
-  color: #eab308;
-  background: rgba(234, 179, 8, 0.1);
+  color: var(--warning);
+  background: var(--warning-glow);
 }
 .morale-high {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  background: var(--success-glow);
 }
 
 .global-save-toast {
@@ -252,12 +264,12 @@ watch(() => game.lastSaveTime, () => {
   font-size: 13px;
   color: var(--success);
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--bg-primary) 70%, transparent);
   opacity: 0;
   transform: translate(-50%, 20px);
   pointer-events: none;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  z-index: 9999;
+  z-index: var(--z-toast);
   letter-spacing: 0.5px;
 }
 .global-save-toast.toast-visible {

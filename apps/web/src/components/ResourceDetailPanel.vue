@@ -9,6 +9,8 @@ import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { ResourceState } from '@evozen/shared-types'
 import { buildResourceTooltip } from '../utils/resourceBreakdown'
+import AppIcon from './ui/AppIcon.vue'
+import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
 
@@ -42,6 +44,13 @@ function fillPercent(res: { amount: number; max: number }): number {
   return Math.min(100, (res.amount / res.max) * 100)
 }
 
+function fillTone(res: { amount: number; max: number }): 'success' | 'warning' | 'danger' {
+  const percent = fillPercent(res)
+  if (percent > 95) return 'danger'
+  if (percent > 75) return 'warning'
+  return 'success'
+}
+
 function resourceTooltip(res: ResourceState & { id: string }): string {
   return buildResourceTooltip(game.state, res)
 }
@@ -49,7 +58,10 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 
 <template>
   <div class="res-detail-panel">
-    <h3 class="section-title">📊 资源详情</h3>
+    <h3 class="section-title">
+      <AppIcon name="resources" />
+      <span>资源详情</span>
+    </h3>
 
     <table class="res-table">
       <thead>
@@ -70,18 +82,10 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
         >
           <td class="col-name">{{ res.name || getResourceName(res.id) }}</td>
           <td class="col-num font-mono">{{ formatNum(res.amount) }}</td>
-          <td class="col-num font-mono" style="color: var(--text-muted)">{{ res.max > 0 ? formatNum(res.max) : '∞' }}</td>
+          <td class="col-num font-mono muted-cell">{{ res.max > 0 ? formatNum(res.max) : '∞' }}</td>
           <td class="col-num font-mono" :class="rateClass(res.diff)">{{ formatRate(res.diff * 4) }}/s</td>
           <td class="col-bar">
-            <div class="mini-bar" v-if="res.max > 0">
-              <div
-                class="mini-fill"
-                :style="{
-                  width: fillPercent(res) + '%',
-                  background: fillPercent(res) > 95 ? 'var(--danger)' : fillPercent(res) > 75 ? 'var(--warning)' : 'var(--success)',
-                }"
-              />
-            </div>
+            <ProgressBar v-if="res.max > 0" :value="fillPercent(res)" :tone="fillTone(res)" size="md" />
           </td>
         </tr>
       </tbody>
@@ -95,10 +99,17 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 }
 
 .section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-accent);
   margin-bottom: 12px;
+}
+.section-title svg {
+  width: 15px;
+  height: 15px;
 }
 
 .res-table {
@@ -118,21 +129,10 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 }
 .res-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--surface-pressed);
 }
 .col-name { width: 25%; }
 .col-num { width: 18%; text-align: right; }
 .col-bar { width: 20%; }
-
-.mini-bar {
-  height: 6px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.mini-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
+.muted-cell { color: var(--text-muted); }
 </style>

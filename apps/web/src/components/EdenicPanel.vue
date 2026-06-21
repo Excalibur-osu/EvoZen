@@ -6,6 +6,9 @@
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { EdenicRegionId } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
+import SegmentedTabs from './ui/SegmentedTabs.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const game = useGameStore()
 
@@ -13,6 +16,7 @@ const regionsAll: EdenicRegionId[] = ['asphodel', 'elysium', 'isle', 'palace']
 const activeRegion = ref<EdenicRegionId>('asphodel')
 
 const visibleRegions = computed(() => regionsAll.filter((r) => game.isEdenicRegionUnlocked(r)))
+const regionTabs = computed(() => visibleRegions.value.map((r) => ({ id: r, label: regionLabel(r) })))
 
 const buildings = computed(() =>
   game.getEdenicBuildingsByRegion(activeRegion.value).filter((b) => {
@@ -55,40 +59,24 @@ function fmtNum(n: number): string {
 
 <template>
   <div class="edenic-panel">
-    <div class="title-section">
-      <h2 class="title">🌟 伊甸园</h2>
-      <p class="subtitle">飞升至神圣领域。这是终极目标 — 神化（Apotheosis）。</p>
-    </div>
+    <PanelHeader icon="edenic" title="伊甸园" subtitle="飞升至神圣领域，推进终极目标神化。" />
 
-    <div v-if="!game.isEdenicUnlocked" class="locked">
-      <span>🔒 需先飞升以解锁伊甸园。</span>
-    </div>
+    <EmptyState v-if="!game.isEdenicUnlocked" text="需先飞升以解锁伊甸园。" icon="lock" />
 
     <template v-else>
-      <div class="region-tabs">
-        <button
-          v-for="r in visibleRegions"
-          :key="r"
-          :class="['region-tab', { active: activeRegion === r }]"
-          @click="activeRegion = r"
-        >
-          {{ regionLabel(r) }}
-        </button>
-      </div>
+      <SegmentedTabs :items="regionTabs" :active="activeRegion" @select="activeRegion = $event" />
 
       <p class="region-desc">{{ regionDesc(activeRegion) }}</p>
 
-      <div v-if="buildings.length === 0" class="empty">
-        <span>🔒 此区域当前无可用建筑</span>
-      </div>
+      <EmptyState v-if="buildings.length === 0" text="此区域当前无可用建筑。" icon="lock" />
 
-      <div v-for="b in buildings" :key="b.id" class="building-card">
+      <div v-for="b in buildings" :key="b.id" class="building-card card">
         <div class="building-header">
           <span class="building-name">{{ b.name }}</span>
           <span class="building-count" v-if="buildingCount(b.id) > 0">
             ×{{ buildingCount(b.id) }} ({{ buildingPowered(b.id) }} 通电)
           </span>
-          <button class="build-btn" :disabled="!canBuild(b.id)" @click="build(b.id)">建造</button>
+          <button class="build-btn btn primary sm" :disabled="!canBuild(b.id)" @click="build(b.id)">建造</button>
         </div>
         <p class="building-desc">{{ b.desc }}</p>
         <div class="building-cost">
@@ -108,40 +96,30 @@ function fmtNum(n: number): string {
 </template>
 
 <style scoped>
-.edenic-panel { padding: 1rem; color: #e0e0e0; }
-.title-section { margin-bottom: 1rem; }
-.title { font-size: 1.3rem; color: #ffdd99; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; }
-.locked { text-align: center; color: #888; padding: 2rem; font-style: italic; }
-
-.region-tabs { display: flex; gap: 0.3rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
-.region-tab {
-  background: #2a2410; color: #ddd; border: 1px solid #554422;
-  padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;
+.edenic-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.region-tab.active { background: #886633; color: #fff; border-color: #ffdd99; }
 
-.region-desc { color: #aaa; font-size: 0.85rem; margin-bottom: 0.8rem; }
-.empty { text-align: center; color: #888; padding: 1.5rem; }
+.region-desc {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 0 0 2px;
+}
 
 .building-card {
-  background: #1f1a13; border: 1px solid #443322;
-  border-radius: 6px; padding: 0.7rem; margin-bottom: 0.5rem;
+  padding: 10px;
+  margin-bottom: 0;
 }
 .building-header { display: flex; align-items: center; gap: 0.5rem; }
-.building-name { font-weight: bold; color: #ffdd99; flex: 1; }
-.building-count { font-size: 0.8rem; color: #aaa; }
-.build-btn {
-  background: #886633; color: #fff; border: none; padding: 0.4rem 0.9rem;
-  border-radius: 4px; cursor: pointer;
-}
-.build-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.build-btn:hover:not(:disabled) { background: #aa8844; }
-.building-desc { font-size: 0.8rem; color: #aaa; margin: 0.3rem 0; }
-.building-cost { font-size: 0.8rem; }
-.cost-item { color: #ccc; margin-right: 0.6rem; }
+.building-name { font-weight: 700; color: var(--text-primary); flex: 1; }
+.building-count { font-size: 0.8rem; color: var(--text-secondary); }
+.building-desc { font-size: 0.8rem; color: var(--text-secondary); margin: 0.3rem 0; }
+.building-cost { font-size: 0.8rem; display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; }
+.cost-item { color: var(--text-primary); }
 .building-power { font-size: 0.8rem; margin: 0.3rem 0; }
-.pow-cost { color: #ff8c8c; }
-.pow-gen { color: #66ff99; }
-.building-effect { font-size: 0.8rem; color: #ccccff; }
+.pow-cost { color: var(--danger); }
+.pow-gen { color: var(--success); }
+.building-effect { font-size: 0.8rem; color: var(--accent); margin-bottom: 0; }
 </style>

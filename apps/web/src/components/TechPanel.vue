@@ -8,6 +8,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { BASIC_TECHS, type TechDefinition } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
+import AppIcon from './ui/AppIcon.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const game = useGameStore()
 
@@ -67,13 +69,11 @@ function techTooltip(tech: TechDefinition): string {
   <div class="tech-panel animate-in">
     <div class="tech-section">
       <div class="section-header">
-        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 2v7.31"/><path d="M8.5 2h7"/><path d="M14 9.3V1.99"/><path d="m14 9.3 5.48 9.2A2 2 0 0 1 17.76 22H6.24a2 2 0 0 1-1.72-3.5L10 9.3Z"/><path d="M6.52 16h10.96"/></svg>
+        <AppIcon name="crispr" class="section-icon" />
         <span class="section-title">可用研究</span>
       </div>
 
-      <div v-if="availableTechs.length === 0" class="empty-hint">
-        暂无可用研究项目
-      </div>
+      <EmptyState v-if="availableTechs.length === 0" text="暂无可用研究项目。" icon="lock" />
 
       <!-- 2 列 grid -->
       <div class="tech-grid" v-else>
@@ -109,7 +109,7 @@ function techTooltip(tech: TechDefinition): string {
     <!-- 已完成的研究 -->
     <div v-if="completedTechs.length > 0" class="completed-section">
       <div class="section-header completed-header">
-        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <AppIcon name="shieldCheck" class="section-icon" />
         <span class="section-title">已完成 ({{ completedTechs.length }})</span>
       </div>
       <div class="completed-list">
@@ -140,7 +140,7 @@ function techTooltip(tech: TechDefinition): string {
   gap: 8px;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .section-icon {
@@ -154,16 +154,6 @@ function techTooltip(tech: TechDefinition): string {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.empty-hint {
-  color: var(--text-muted);
-  font-size: 13px;
-  padding: 30px 0;
-  text-align: center;
-  background: rgba(255,255,255,0.01);
-  border-radius: var(--radius-md);
-  border: 1px dashed rgba(255,255,255,0.05);
 }
 
 /* 自适应列数 */
@@ -218,8 +208,8 @@ function techTooltip(tech: TechDefinition): string {
   font-size: 10px;
   color: var(--text-muted);
   padding: 1px 5px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 3px;
+  background: var(--surface-pressed);
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -240,8 +230,8 @@ function techTooltip(tech: TechDefinition): string {
   font-size: 10px;
   font-family: var(--font-mono);
   padding: 1px 6px;
-  border-radius: 3px;
-  background: rgba(52,211,153,0.08);
+  border-radius: var(--radius-sm);
+  background: var(--success-glow);
   color: var(--success);
 }
 
@@ -253,7 +243,7 @@ function techTooltip(tech: TechDefinition): string {
 }
 
 .cost-tag.unaffordable {
-  background: rgba(248,113,113,0.08);
+  background: var(--danger-glow);
   color: var(--danger);
 }
 
@@ -276,13 +266,13 @@ function techTooltip(tech: TechDefinition): string {
   font-weight: 500;
   color: var(--text-secondary);
   padding: 4px 10px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   transition: all 0.2s ease;
 }
 .completed-tag:hover {
-  background: rgba(255,255,255,0.05);
+  background: var(--surface-pressed);
   color: var(--text-primary);
 }
 .completed-tag .dot {
@@ -303,7 +293,7 @@ function techTooltip(tech: TechDefinition): string {
 .completed-tag[data-tooltip]::before {
   left: 20px !important;
   transform: translateX(-50%) translateY(4px) !important;
-  z-index: 10000 !important;
+  z-index: var(--z-tooltip) !important;
 }
 .completed-tag[data-tooltip]:hover::after {
   transform: translateX(0) translateY(0) !important;

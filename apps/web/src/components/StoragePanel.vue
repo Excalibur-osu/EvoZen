@@ -9,6 +9,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { ResourceState } from '@evozen/shared-types'
+import AppIcon from './ui/AppIcon.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -75,12 +77,18 @@ const canBuildContainer = computed(() => {
 
 <template>
   <div class="storage-panel" v-if="showCrates || showContainers">
-    <h3 class="panel-title">📦 仓储管理</h3>
+    <h3 class="panel-title">
+      <AppIcon name="storage" />
+      <span>仓储管理</span>
+    </h3>
 
     <!-- 板条箱区域 -->
     <div class="storage-section" v-if="showCrates">
       <div class="section-header">
-        <span class="section-title">🪵 板条箱</span>
+        <span class="section-title">
+          <AppIcon name="resources" />
+          <span>板条箱</span>
+        </span>
         <span class="section-count font-mono">
           {{ cratesState?.amount ?? 0 }} / {{ cratesState?.max ?? 0 }}
           <span class="free-label" v-if="freeCrates > 0">（可用 {{ freeCrates }}）</span>
@@ -88,7 +96,7 @@ const canBuildContainer = computed(() => {
       </div>
       <div class="build-row">
         <button
-          class="btn btn-sm btn-build"
+          class="btn primary sm storage-build-btn"
           :disabled="!canBuildCrate"
           @click="game.doBuildCrate(1)"
         >
@@ -109,18 +117,22 @@ const canBuildContainer = computed(() => {
             <span class="bonus" v-if="res.crateBonus > 0">(+{{ res.crateBonus }})</span>
           </span>
           <div class="assign-btns">
-            <button
-              class="btn-assign btn-minus"
+            <StepperButton
+              label="−"
+              aria-label="取消分配一个板条筐"
+              tone="danger"
               :disabled="res.crates <= 0"
               @click="game.doUnassignCrate(res.id)"
               data-tooltip="取消分配一个板条筐"
-            >−</button>
-            <button
-              class="btn-assign btn-plus"
+            />
+            <StepperButton
+              label="+"
+              aria-label="分配一个板条筐"
+              tone="success"
               :disabled="freeCrates <= 0"
               @click="game.doAssignCrate(res.id)"
               data-tooltip="分配一个板条筐"
-            >+</button>
+            />
           </div>
         </div>
       </div>
@@ -129,7 +141,10 @@ const canBuildContainer = computed(() => {
     <!-- 集装箱区域 -->
     <div class="storage-section" v-if="showContainers">
       <div class="section-header">
-        <span class="section-title">🏗️ 集装箱</span>
+        <span class="section-title">
+          <AppIcon name="storage" />
+          <span>集装箱</span>
+        </span>
         <span class="section-count font-mono">
           {{ containersState?.amount ?? 0 }} / {{ containersState?.max ?? 0 }}
           <span class="free-label" v-if="freeContainers > 0">（可用 {{ freeContainers }}）</span>
@@ -137,7 +152,7 @@ const canBuildContainer = computed(() => {
       </div>
       <div class="build-row">
         <button
-          class="btn btn-sm btn-build"
+          class="btn primary sm storage-build-btn"
           :disabled="!canBuildContainer"
           @click="game.doBuildContainer(1)"
         >
@@ -158,18 +173,22 @@ const canBuildContainer = computed(() => {
             <span class="bonus" v-if="res.containerBonus > 0">(+{{ res.containerBonus }})</span>
           </span>
           <div class="assign-btns">
-            <button
-              class="btn-assign btn-minus"
+            <StepperButton
+              label="−"
+              aria-label="取消分配一个集装箱"
+              tone="danger"
               :disabled="res.containers <= 0"
               @click="game.doUnassignContainer(res.id)"
-              data-tooltip="取消分配一个集装筱"
-            >−</button>
-            <button
-              class="btn-assign btn-plus"
+              data-tooltip="取消分配一个集装箱"
+            />
+            <StepperButton
+              label="+"
+              aria-label="分配一个集装箱"
+              tone="success"
               :disabled="freeContainers <= 0"
               @click="game.doAssignContainer(res.id)"
-              data-tooltip="分配一个集装筱"
-            >+</button>
+              data-tooltip="分配一个集装箱"
+            />
           </div>
         </div>
       </div>
@@ -183,16 +202,25 @@ const canBuildContainer = computed(() => {
 }
 
 .panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 12px;
 }
+.panel-title svg,
+.section-title svg {
+  width: 15px;
+  height: 15px;
+}
 
 .storage-section {
   margin-bottom: 16px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   padding: 10px;
 }
 
@@ -204,6 +232,9 @@ const canBuildContainer = computed(() => {
 }
 
 .section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
@@ -223,23 +254,8 @@ const canBuildContainer = computed(() => {
   margin-bottom: 10px;
 }
 
-.btn-build {
-  font-size: 11px;
-  padding: 4px 10px;
-  background: var(--surface-light);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 4px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-build:hover:not(:disabled) {
-  background: var(--accent);
-  color: #fff;
-}
-.btn-build:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.storage-build-btn {
+  min-height: 28px;
 }
 
 .assign-list {
@@ -257,7 +273,7 @@ const canBuildContainer = computed(() => {
   font-size: 12px;
 }
 .assign-row:hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--surface-pressed);
 }
 
 .res-name {
@@ -283,33 +299,4 @@ const canBuildContainer = computed(() => {
   gap: 2px;
 }
 
-.btn-assign {
-  width: 22px;
-  height: 20px;
-  font-size: 14px;
-  line-height: 1;
-  background: var(--surface-light);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 3px;
-  color: var(--text-primary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-.btn-assign:hover:not(:disabled) {
-  background: var(--accent);
-  color: #fff;
-}
-.btn-assign:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-.btn-minus:hover:not(:disabled) {
-  background: var(--danger);
-}
-.btn-plus:hover:not(:disabled) {
-  background: var(--success);
-}
 </style>

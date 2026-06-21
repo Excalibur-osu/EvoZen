@@ -7,15 +7,215 @@
 
 import type { GameState } from '@evozen/shared-types';
 import {
+  getChallengeLevel,
   getAchievementLevel,
   getUniverseAffix,
   unlockAchievement,
   unlockFeat,
   type AchievementRecord,
 } from './achievements';
+import { RACES } from './races';
+import { galaxyPiracy } from './syndicate';
 
 type ChallengeTaskId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5';
 type ChallengeTaskStats = Record<ChallengeTaskId, Partial<Record<keyof AchievementRecord, boolean>>>;
+type DeathTourResetType = 'ct' | 'bh' | 'di' | 'ai' | 'vc' | 'md';
+type DeathTourStats = Record<DeathTourResetType, Partial<Record<keyof AchievementRecord, number>>>;
+type WomlingTier = 'friend' | 'lord' | 'god';
+type WomlingStats = Record<WomlingTier, Partial<Record<keyof AchievementRecord, number>>>;
+type SpireStats = Record<string, Record<string, number>>;
+const GENUS_ACHIEVEMENTS = new Set([
+  'humanoid',
+  'carnivore',
+  'herbivore',
+  'small',
+  'giant',
+  'reptilian',
+  'avian',
+  'insectoid',
+  'plant',
+  'fungi',
+  'aquatic',
+  'fey',
+  'heat',
+  'polar',
+  'sand',
+  'demonic',
+  'angelic',
+  'synthetic',
+  'eldritch',
+]);
+const ATMO_ACHIEVEMENTS = new Set([
+  'toxic',
+  'mellow',
+  'rage',
+  'stormy',
+  'ozone',
+  'magnetic',
+  'trashed',
+  'elliptical',
+  'flare',
+  'dense',
+  'unstable',
+  'permafrost',
+  'retrograde',
+  'kamikaze',
+]);
+const GROSS_EXCLUDED_SPECIES = new Set(['custom', 'hybrid', 'sludge', 'ultra_sludge']);
+const DEATH_TOUR_RESET_TYPES: DeathTourResetType[] = ['ct', 'bh', 'di', 'ai', 'vc', 'md'];
+const RESET_DEATH_TOUR_TYPE: Record<string, DeathTourResetType | undefined> = {
+  mad: 'md',
+  cataclysm: 'ct',
+  blackhole: 'bh',
+  vacuum: 'vc',
+  descend: 'di',
+  aiApoc: 'ai',
+};
+const WOMLING_RESET_TYPES = new Set(['matrix', 'retire', 'eden']);
+
+function isGrossEligibleRun(state: GameState): boolean {
+  return Boolean(state.race['ooze']) &&
+    !GROSS_EXCLUDED_SPECIES.has(state.race.species) &&
+    (Boolean(state.race['gross_enabled']) || (state.tech['high_tech'] ?? 0) <= 0);
+}
+
+function getPlanetTraitList(state: GameState): string[] {
+  const ptraits = (state.city as unknown as { ptrait?: string[] | string }).ptrait;
+  return Array.isArray(ptraits) ? ptraits : typeof ptraits === 'string' ? [ptraits] : [];
+}
+
+function unlockPlanetAndGenusAchievements(state: GameState): void {
+  const biome = (state.city as { biome?: string }).biome;
+  if (biome) {
+    unlockAchievement(state, `biome_${biome}`);
+  }
+  for (const trait of getPlanetTraitList(state)) {
+    if (ATMO_ACHIEVEMENTS.has(trait)) {
+      unlockAchievement(state, `atmo_${trait}`);
+    }
+  }
+  const genus = RACES[state.race.species as keyof typeof RACES]?.type;
+  if (genus && GENUS_ACHIEVEMENTS.has(genus)) {
+    unlockAchievement(state, `genus_${genus}`);
+  }
+}
+
+function getSpeciesGenus(state: GameState): string | undefined {
+  return RACES[state.race.species as keyof typeof RACES]?.type;
+}
+
+function isHellscapeNonDemonic(state: GameState): boolean {
+  return state.city.biome === 'hellscape' && getSpeciesGenus(state) !== 'demonic';
+}
+
+function hasBadGeology(state: GameState, minCount: number): boolean {
+  const geo = (state.city as { geology?: Record<string, number> }).geology;
+  if (!geo) return false;
+  return Object.values(geo).filter((value) => value < 0).length >= minCount;
+}
+
+function unlockJunkerResetFeats(state: GameState): void {
+  if (state.race['junker'] && state.race.species === 'junker') {
+    unlockFeat(state, 'the_misery');
+  }
+}
+
+function hasZeroSpaceport(state: GameState): boolean {
+  const spaceport = state.space['spaceport'] as { count?: number } | undefined;
+  return Boolean(spaceport) && (spaceport?.count ?? 0) === 0;
+}
+
+function ensureDeathTourStats(state: GameState): DeathTourStats {
+  const stats = state.stats as Record<string, unknown>;
+  const current = (stats['death_tour'] ??= {}) as Partial<DeathTourStats>;
+  for (const type of DEATH_TOUR_RESET_TYPES) {
+    current[type] ??= { l: 0, h: 0, a: 0, e: 0, m: 0, mg: 0 };
+  }
+  return current as DeathTourStats;
+}
+
+function updateGrandDeathTour(state: GameState, resetType: string): void {
+  if (state.race.species !== 'ultra_sludge') return;
+  const tourType = RESET_DEATH_TOUR_TYPE[resetType];
+  if (!tourType) return;
+
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  const challengeRank = getChallengeLevel(state);
+  const deathTour = ensureDeathTourStats(state);
+  const previous = deathTour[tourType][affix] ?? 0;
+  if (previous < challengeRank) {
+    deathTour[tourType][affix] = challengeRank;
+  }
+
+  let featRank = 5;
+  for (const type of DEATH_TOUR_RESET_TYPES) {
+    let bestUniverseRank = 0;
+    for (const [key, value] of Object.entries(deathTour[type])) {
+      if (key !== 'm' && (value ?? 0) > bestUniverseRank) {
+        bestUniverseRank = value ?? 0;
+      }
+    }
+    if (featRank > bestUniverseRank) {
+      featRank = bestUniverseRank;
+    }
+  }
+  if (featRank > 0) {
+    unlockFeat(state, 'grand_death_tour', false, featRank);
+  }
+}
+
+function ensureWomlingStats(state: GameState): WomlingStats {
+  const stats = state.stats as Record<string, unknown>;
+  const current = (stats['womling'] ??= {}) as Partial<WomlingStats>;
+  current.friend ??= { l: 0, h: 0, a: 0, e: 0, m: 0, mg: 0 };
+  current.lord ??= { l: 0, h: 0, a: 0, e: 0, m: 0, mg: 0 };
+  current.god ??= { l: 0, h: 0, a: 0, e: 0, m: 0, mg: 0 };
+  return current as WomlingStats;
+}
+
+function getWomlingTier(state: GameState): WomlingTier | undefined {
+  if (state.race['womling_friend']) return 'friend';
+  if (state.race['womling_lord']) return 'lord';
+  if (state.race['womling_god']) return 'god';
+  return undefined;
+}
+
+function updateWomlingResetStats(state: GameState, resetType: string): void {
+  if (!WOMLING_RESET_TYPES.has(resetType)) return;
+
+  const tier = getWomlingTier(state);
+  if (!tier) return;
+
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  const womling = ensureWomlingStats(state);
+  if (affix !== 'm') {
+    womling[tier].l = (womling[tier].l ?? 0) + 1;
+  }
+  if (affix !== 'l') {
+    womling[tier][affix] = (womling[tier][affix] ?? 0) + 1;
+  }
+
+  const allStandard = (['friend', 'lord', 'god'] as WomlingTier[]).every((key) => (womling[key].l ?? 0) > 0);
+  const allCurrentUniverse = (['friend', 'lord', 'god'] as WomlingTier[]).every((key) => (womling[key][affix] ?? 0) > 0);
+  if (allStandard || allCurrentUniverse) {
+    unlockAchievement(state, 'overlord', affix === 'm');
+  }
+}
+
+function ensureSpireStats(state: GameState): SpireStats {
+  const stats = state.stats as Record<string, unknown>;
+  return (stats['spire'] ??= {}) as SpireStats;
+}
+
+function updateSpireResetStats(state: GameState, resetType: string): void {
+  if (resetType !== 'descend') return;
+
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  const spire = ensureSpireStats(state);
+  spire[affix] ??= {};
+  spire[affix].lord = (spire[affix].lord ?? 0) + 1;
+  spire[affix].dlstr = state.tech['dl_reset'] ? 0 : (spire[affix].dlstr ?? 0) + 1;
+}
 
 /**
  * 主成就触发器 — 每 tick 调用一次
@@ -238,6 +438,14 @@ function checkBananaChallengeTasks(state: GameState): void {
 function checkEndlessHungerChallengeTasks(state: GameState): void {
   if (!state.race['fasting']) return;
 
+  if ((state.tech['piracy'] ?? 0) > 0 && (state.tech['chthonian'] ?? 0) >= 2) {
+    const chthonianPiracy = galaxyPiracy(state, 'gxy_chthonian');
+    const stargatePiracy = galaxyPiracy(state, 'gxy_stargate');
+    if (chthonianPiracy === stargatePiracy) {
+      markChallengeTask(state, 'endless_hunger', 'b2');
+    }
+  }
+
   if ((state.tech['stock_exchange'] ?? 0) >= 80) {
     markChallengeTask(state, 'endless_hunger', 'b3');
   }
@@ -255,29 +463,116 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
   switch (resetType) {
     case 'mad':
       unlockAchievement(state, 'apocalypse');
+      unlockAchievement(state, 'squished', true);
+      if (isHellscapeNonDemonic(state)) {
+        unlockFeat(state, 'take_no_advice');
+      }
       if (state.race['truepath']) {
         unlockAchievement(state, 'ashanddust');
       }
       break;
     case 'ascend':
       unlockAchievement(state, 'ascended');
+      if (!state.race['modified'] && (state.race.species === 'synth' || state.race.species === 'nano') && state.race['emfield']) {
+        unlockFeat(state, 'digital_ascension');
+      }
+      if (state.race['decay']) {
+        unlockAchievement(state, 'dissipated');
+      }
+      if (state.race['steelen']) {
+        unlockFeat(state, 'steelem');
+      }
       break;
     case 'bioseed':
       unlockAchievement(state, 'seeder');
+      unlockPlanetAndGenusAchievements(state);
       if (state.race['cataclysm']) {
         unlockAchievement(state, 'iron_will', false, 5);
       }
       if (state.race['truepath']) {
         unlockAchievement(state, 'exodus');
       }
+      if (state.race['junker'] && state.race.species === 'junker') {
+        unlockFeat(state, 'organ_harvester');
+      }
+      if (isHellscapeNonDemonic(state)) {
+        unlockFeat(state, 'ill_advised');
+      }
+      if (state.race['gravity_well']) {
+        unlockAchievement(state, 'escape_velocity');
+      }
+      if (getPlanetTraitList(state).includes('dense') && state.race.universe === 'heavy') {
+        unlockAchievement(state, 'double_density');
+      }
       if (state.race['steelen']) {
         unlockAchievement(state, 'steelen');
+      }
+      if (hasBadGeology(state, 3)) {
+        unlockFeat(state, 'rocky_road');
+      }
+      if (state.race.universe === 'micro') {
+        if (state.race['small'] || state.race['compact']) {
+          unlockAchievement(state, 'macro', true);
+        } else {
+          unlockAchievement(state, 'marble', true);
+        }
       }
       break;
     case 'blackhole':
       unlockAchievement(state, 'blackhole');
+      unlockAchievement(state, 'squished', true);
+      switch (state.race.universe) {
+        case 'heavy':
+          unlockAchievement(state, 'heavy');
+          break;
+        case 'antimatter':
+          unlockAchievement(state, 'canceled');
+          break;
+        case 'evil':
+          unlockAchievement(state, 'eviltwin');
+          break;
+        case 'micro':
+          unlockAchievement(state, 'microbang', true);
+          break;
+        case 'standard':
+          unlockAchievement(state, 'whitehole');
+          break;
+      }
+      if (state.race['decay']) {
+        unlockAchievement(state, 'dissipated');
+      }
+      if (state.race['steelen']) {
+        unlockFeat(state, 'steelem');
+      }
+      if (hasZeroSpaceport(state)) {
+        unlockAchievement(state, 'red_dead');
+      }
+      if (state.race.universe === 'evil' && getSpeciesGenus(state) === 'angelic') {
+        unlockFeat(state, 'nephilim');
+      }
+      unlockJunkerResetFeats(state);
+      break;
+    case 'vacuum':
+      unlockAchievement(state, 'pw_apocalypse');
+      if (hasZeroSpaceport(state)) {
+        unlockAchievement(state, 'red_dead');
+      }
+      if (!state.race['modified'] && state.race.species === 'balorg') {
+        unlockAchievement(state, 'pass');
+      }
+      unlockJunkerResetFeats(state);
+      if (state.race['decay']) {
+        unlockAchievement(state, 'dissipated');
+      }
+      if (state.race['steelen']) {
+        unlockFeat(state, 'steelem');
+      }
       break;
     case 'cataclysm':
+      unlockAchievement(state, 'squished', true);
+      if (isHellscapeNonDemonic(state)) {
+        unlockFeat(state, 'take_no_advice');
+      }
       unlockAchievement(state, 'red_dead');
       if (state.race['cataclysm']) {
         unlockAchievement(state, 'failed_history');
@@ -285,24 +580,63 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       break;
     case 'descend':
       unlockAchievement(state, 'pandemonium');
+      unlockAchievement(state, 'squished', true);
+      if (state.race['witch_hunter'] && (state.tech['forbidden'] ?? 0) >= 5 && state.race.universe === 'magic') {
+        unlockAchievement(state, 'nightmare');
+      } else {
+        unlockAchievement(state, 'corrupted');
+      }
+      if (state.race['fasting'] && (state.tech['dish_reset'] ?? 0) > 0 && (state.stats['starved'] ?? 0) === 0) {
+        unlockFeat(state, 'immortal');
+      }
+      if (getSpeciesGenus(state) === 'angelic') {
+        unlockFeat(state, 'twisted');
+      }
+      unlockJunkerResetFeats(state);
+      if (!state.race['modified'] && state.race['junker'] && state.race.species === 'junker') {
+        unlockFeat(state, 'garbage_pie');
+      }
+      if (state.race['cataclysm']) {
+        unlockFeat(state, 'finish_line');
+      }
+      if (state.race['ooze'] && state.race.species === 'sludge') {
+        unlockFeat(state, 'slime_lord');
+      }
       break;
     case 'apotheosis':
       unlockAchievement(state, 'godwin');
       break;
     case 'aiApoc':
+      unlockAchievement(state, 'squished', true);
+      unlockJunkerResetFeats(state);
       unlockAchievement(state, 'obsolete');
       break;
     case 'matrix':
+      unlockPlanetAndGenusAchievements(state);
       unlockAchievement(state, 'bluepill');
       break;
     case 'retire':
+      unlockPlanetAndGenusAchievements(state);
       unlockAchievement(state, 'retired');
       break;
     case 'eden':
+      unlockPlanetAndGenusAchievements(state);
       unlockAchievement(state, 'paradise');
       unlockAchievement(state, 'adam_eve');
       break;
+    case 'terraform': {
+      unlockPlanetAndGenusAchievements(state);
+      unlockAchievement(state, 'lamentis');
+      break;
+    }
   }
+
+  if (isGrossEligibleRun(state)) {
+    unlockAchievement(state, 'gross');
+  }
+  updateGrandDeathTour(state, resetType);
+  updateWomlingResetStats(state, resetType);
+  updateSpireResetStats(state, resetType);
 
   updatePathfinderAchievement(state);
   updateBananaAchievement(state);

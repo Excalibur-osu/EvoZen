@@ -5,6 +5,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
+import PanelHeader from './ui/PanelHeader.vue'
+import MetricCard from './ui/MetricCard.vue'
 
 const game = useGameStore()
 
@@ -19,8 +21,17 @@ const resetStats = computed(() => [
   { label: '总转生', value: Number(stats.value.reset ?? 0) },
   { label: 'MAD', value: Number(stats.value.mad ?? 0) },
   { label: '生物播种', value: Number(stats.value.bioseed ?? 0) },
+  { label: '灾变', value: Number(stats.value.cataclysm ?? 0) },
   { label: '黑洞', value: Number(stats.value.blackhole ?? 0) },
-  { label: '地狱门', value: Number(stats.value.portals ?? 0) },
+  { label: '宇宙重启', value: Number(stats.value.universes ?? 0) },
+  { label: '飞升', value: Number(stats.value.ascend ?? 0) },
+  { label: '堕落', value: Number(stats.value.descend ?? 0) },
+  { label: '神化', value: Number(stats.value.apotheosis ?? 0) },
+  { label: '地球化', value: Number(stats.value.terraform ?? 0) },
+  { label: 'AI 末日', value: Number((stats.value as Record<string, unknown>).aiApoc ?? (stats.value as Record<string, unknown>).aiappoc ?? 0) },
+  { label: '矩阵', value: Number(stats.value.matrix ?? 0) },
+  { label: '退休', value: Number(stats.value.retire ?? 0) },
+  { label: '伊甸园', value: Number(stats.value.eden ?? 0) },
 ])
 
 const achievementCount = computed(() => Object.keys(stats.value.achieve ?? {}).length)
@@ -41,57 +52,45 @@ function formatDuration(days: number): string {
 
 <template>
   <div class="stats-panel">
+    <PanelHeader
+      icon="stats"
+      title="统计"
+      subtitle="当前存档已经记录的运行、转生、战斗和收藏数据。"
+    />
+
     <section class="stats-section">
       <h3 class="section-title">运行</h3>
       <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-label">本轮天数</span>
-          <span class="stat-value">{{ formatDuration(runDays) }}</span>
-          <span class="stat-sub">{{ formatInt(runDays) }} 天</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">累计天数</span>
-          <span class="stat-value">{{ formatDuration(totalDays) }}</span>
-          <span class="stat-sub">{{ formatInt(totalDays) }} 天</span>
-        </div>
+        <MetricCard label="本轮天数" :value="formatDuration(runDays)" :sub="`${formatInt(runDays)} 天`" />
+        <MetricCard label="累计天数" :value="formatDuration(totalDays)" :sub="`${formatInt(totalDays)} 天`" />
       </div>
     </section>
 
     <section class="stats-section">
       <h3 class="section-title">转生</h3>
       <div class="stats-grid compact">
-        <div v-for="item in resetStats" :key="item.label" class="stat-card">
-          <span class="stat-label">{{ item.label }}</span>
-          <span class="stat-value">{{ formatInt(item.value) }}</span>
-        </div>
+        <MetricCard
+          v-for="item in resetStats"
+          :key="item.label"
+          :label="item.label"
+          :value="formatInt(item.value)"
+        />
       </div>
     </section>
 
     <section class="stats-section">
       <h3 class="section-title">战斗</h3>
       <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-label">发起战役</span>
-          <span class="stat-value">{{ formatInt(attacks) }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">阵亡/死亡</span>
-          <span class="stat-value danger">{{ formatInt(deaths) }}</span>
-        </div>
+        <MetricCard label="发起战役" :value="formatInt(attacks)" />
+        <MetricCard label="阵亡/死亡" :value="formatInt(deaths)" tone="danger" />
       </div>
     </section>
 
     <section class="stats-section">
       <h3 class="section-title">收藏</h3>
       <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-label">已记录成就</span>
-          <span class="stat-value">{{ formatInt(achievementCount) }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">已记录 Feats</span>
-          <span class="stat-value">{{ formatInt(featCount) }}</span>
-        </div>
+        <MetricCard label="已记录成就" :value="formatInt(achievementCount)" tone="accent" />
+        <MetricCard label="已记录 Feats" :value="formatInt(featCount)" tone="accent" />
       </div>
     </section>
   </div>
@@ -109,7 +108,7 @@ function formatDuration(days: number): string {
   padding: 12px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.012);
+  background: var(--surface-raised);
 }
 
 .section-title {
@@ -127,38 +126,5 @@ function formatDuration(days: number): string {
 
 .stats-grid.compact {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-}
-
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 72px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-}
-
-.stat-label {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.stat-value {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.stat-value.danger {
-  color: var(--danger);
-}
-
-.stat-sub {
-  margin-top: auto;
-  font-size: 10px;
-  color: var(--text-secondary);
 }
 </style>

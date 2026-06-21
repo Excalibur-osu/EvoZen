@@ -448,3 +448,44 @@ export function isGalaxyRegionUnlocked(state: GameState, region: GalaxyRegion): 
 export function getGalaxyStructuresForRegion(region: string): GalaxyStructureDefinition[] {
   return GALAXY_STRUCTURES.filter((s) => s.region === region);
 }
+
+function getGalaxyCount(state: GameState, id: string): number {
+  const galaxy = (state as unknown as { galaxy?: Record<string, { count?: number }> }).galaxy ?? {};
+  return galaxy[id]?.count ?? 0;
+}
+
+export function getGalaxyBuildCost(state: GameState, id: string): Record<string, number> {
+  const def = GALAXY_STRUCTURES.find((s) => s.id === id);
+  if (!def) return {};
+  const count = getGalaxyCount(state, id);
+  const costs: Record<string, number> = {};
+  for (const [resId, fn] of Object.entries(def.costs)) {
+    costs[resId] = fn(state, count);
+  }
+  return costs;
+}
+
+export function canBuildGalaxyStructure(state: GameState, id: string): boolean {
+  const def = GALAXY_STRUCTURES.find((s) => s.id === id);
+  if (!def) return false;
+
+  for (const [reqKey, reqLvl] of Object.entries(def.reqs)) {
+    if ((state.tech[reqKey] ?? 0) < reqLvl) return false;
+  }
+
+  if (def.notTrait) {
+    for (const trait of def.notTrait) {
+      if ((state.race as Record<string, unknown>)[trait] !== undefined) return false;
+    }
+  }
+
+  if (def.condition && !def.condition(state)) return false;
+
+  const costs = getGalaxyBuildCost(state, id);
+  for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
+    if ((state.resource[resId]?.amount ?? 0) < cost) return false;
+  }
+
+  return true;
+}

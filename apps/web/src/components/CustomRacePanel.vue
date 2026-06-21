@@ -13,6 +13,7 @@ import {
   type CustomRaceConfig,
   type GenusId,
 } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
 
 const game = useGameStore()
 
@@ -23,6 +24,7 @@ const entity = ref('居民')
 const genus = ref<GenusId>('humanoid')
 const selectedTraits = ref<string[]>([])
 const fanaticism = ref('')
+const saveMessage = ref('')
 
 const genusOptions: GenusId[] = ['humanoid', 'carnivore', 'herbivore', 'small', 'giant', 'reptilian', 'avian', 'insectoid', 'plant', 'fungi', 'aquatic', 'fey', 'heat', 'polar', 'sand', 'demonic', 'angelic', 'synthetic', 'eldritch']
 
@@ -68,15 +70,16 @@ function save(hybrid: boolean = false) {
     fanaticism: fanaticism.value,
   }
   saveCustomRace(game.state, config, hybrid)
-  alert(`已保存为 ${hybrid ? 'hybrid' : 'custom'} 种族`)
+  saveMessage.value = `已保存为 ${hybrid ? 'Hybrid' : 'Custom'} 种族。`
+  game.addMessage(saveMessage.value, 'success', 'progress')
 }
 </script>
 
 <template>
   <div class="custom-panel">
-    <h2 class="title">🛠️ 自定义种族编辑器</h2>
-    <p class="subtitle">设计你专属的种族 — 平衡分数应保持在 0 附近。</p>
+    <PanelHeader icon="customRace" title="自定义种族编辑器" subtitle="设计你专属的种族，平衡分数应保持在 0 附近。" />
 
+    <div class="editor-card card">
     <div class="row">
       <label>名字：</label>
       <input v-model="name" class="text-input" />
@@ -99,6 +102,7 @@ function save(hybrid: boolean = false) {
       <select v-model="genus" class="genus-select">
         <option v-for="g in genusOptions" :key="g" :value="g">{{ GENUS_DEFS[g].name }}</option>
       </select>
+    </div>
     </div>
 
     <h3 class="section-title">选择 Trait（{{ selectedTraits.length }}/7）</h3>
@@ -127,41 +131,41 @@ function save(hybrid: boolean = false) {
     </div>
 
     <div class="actions">
-      <button class="save-btn" :disabled="!validation.valid" @click="save(false)">保存为 Custom</button>
-      <button class="save-btn" :disabled="!validation.valid" @click="save(true)">保存为 Hybrid</button>
+      <button class="save-btn btn primary" :disabled="!validation.valid" @click="save(false)">保存为 Custom</button>
+      <button class="save-btn btn primary" :disabled="!validation.valid" @click="save(true)">保存为 Hybrid</button>
     </div>
     <p v-if="!validation.valid" class="error">{{ validation.reason }}</p>
+    <p v-else-if="saveMessage" class="success">{{ saveMessage }}</p>
   </div>
 </template>
 
 <style scoped>
-.custom-panel { padding: 1rem; color: #e0e0e0; }
-.title { font-size: 1.3rem; color: #ffaa55; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; margin-bottom: 1rem; }
+.custom-panel { display: flex; flex-direction: column; gap: 10px; }
+.editor-card { padding: 10px; }
 .row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
-.row label { min-width: 70px; color: #aaa; }
-.text-input { flex: 1; background: #1a1810; color: #ddd; border: 1px solid #443322; padding: 0.3rem 0.5rem; border-radius: 4px; }
-.genus-select { background: #1a1810; color: #ddd; border: 1px solid #443322; padding: 0.3rem 0.5rem; border-radius: 4px; }
+.row:last-child { margin-bottom: 0; }
+.row label { min-width: 70px; color: var(--text-secondary); }
+.text-input { flex: 1; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); }
+.genus-select { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); }
 
-.section-title { font-size: 1rem; color: #ffaa55; margin: 0.8rem 0 0.4rem; }
+.section-title { font-size: 13px; color: var(--text-primary); margin: 0; }
 .balance { font-size: 0.85rem; margin-bottom: 0.5rem; }
-.balance strong.good { color: #66ff99; }
-.balance strong.bad { color: #ff7777; }
-.balance strong.low { color: #ffaa55; }
+.balance strong.good { color: var(--success); }
+.balance strong.bad { color: var(--danger); }
+.balance strong.low { color: var(--warning); }
 
 .traits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.3rem; margin-bottom: 1rem; }
 .trait-chip {
-  background: #1a1810; color: #ddd; border: 1px solid #332e1a;
-  padding: 0.3rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+  background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color);
+  padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8rem;
   text-align: left;
 }
-.trait-chip.active { background: #443322; border-color: #ffaa55; }
-.trait-chip.positive { color: #66ff99; }
-.trait-chip.negative { color: #ff7777; }
+.trait-chip:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.trait-chip.active { background: var(--accent-glow); border-color: var(--accent); }
+.trait-chip.positive { color: var(--success); }
+.trait-chip.negative { color: var(--danger); }
 
 .actions { margin-top: 0.8rem; display: flex; gap: 0.5rem; }
-.save-btn { background: #886633; color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
-.save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.save-btn:hover:not(:disabled) { background: #aa8844; }
-.error { color: #ff7777; margin-top: 0.5rem; font-size: 0.85rem; }
+.error { color: var(--danger); margin-top: 0.5rem; font-size: 0.85rem; }
+.success { color: var(--success); margin-top: 0.5rem; font-size: 0.85rem; }
 </style>

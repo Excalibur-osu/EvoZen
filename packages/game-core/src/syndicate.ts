@@ -12,6 +12,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { armyRating, garrisonSize } from './military';
 import { totalMechRating } from './mech';
+import type { GalaxyRegion } from './galaxy';
 
 // ============================================================
 // Syndicate 海盗骚扰
@@ -114,4 +115,113 @@ export function piracy(state: GameState, region: string): number {
   };
   const base = basePiracy[region] ?? 0;
   return Math.max(0, base - protectors * 50);
+}
+
+type GalaxyStructureState = { count?: number; on?: number };
+type GalaxyDefenseState = Partial<Record<GalaxyRegion, Partial<Record<GalaxyShipId, number>>>>;
+type GalaxyState = Record<string, GalaxyStructureState | GalaxyDefenseState | unknown> & {
+  defense?: GalaxyDefenseState;
+};
+
+type GalaxyShipId =
+  | 'scout_ship'
+  | 'corvette_ship'
+  | 'frigate_ship'
+  | 'cruiser_ship'
+  | 'dreadnought';
+
+const GALAXY_SHIP_RATING: Record<GalaxyShipId, { normal: number; banana: number; wish: number; bananaWish: number }> = {
+  scout_ship: { normal: 10, banana: 7, wish: 5, bananaWish: 1 },
+  corvette_ship: { normal: 30, banana: 21, wish: 10, bananaWish: 4 },
+  frigate_ship: { normal: 80, banana: 56, wish: 20, bananaWish: 14 },
+  cruiser_ship: { normal: 250, banana: 175, wish: 50, bananaWish: 25 },
+  dreadnought: { normal: 1800, banana: 1260, wish: 200, bananaWish: 140 },
+};
+
+const GALAXY_PIRATE_BASE: Record<GalaxyRegion, { base: number; instinct: number; pillage: number }> = {
+  gxy_stargate: { base: 0, instinct: 0, pillage: 0.5 },
+  gxy_gateway: { base: 0, instinct: 0, pillage: 1 },
+  gxy_gorddon: { base: 800, instinct: 720, pillage: 0.75 },
+  gxy_alien1: { base: 1000, instinct: 900, pillage: 0.75 },
+  gxy_alien2: { base: 2500, instinct: 2250, pillage: 1 },
+  gxy_chthonian: { base: 7500, instinct: 7000, pillage: 1 },
+};
+
+function galaxyState(state: GameState): GalaxyState {
+  return ((state as unknown as { galaxy?: GalaxyState }).galaxy ?? {}) as GalaxyState;
+}
+
+function galaxyOn(state: GameState, id: string): number {
+  const struct = galaxyState(state)[id] as GalaxyStructureState | undefined;
+  return struct?.on ?? struct?.count ?? 0;
+}
+
+function shipRating(state: GameState, ship: GalaxyShipId): number {
+  const rating = GALAXY_SHIP_RATING[ship];
+  const isBanana = Boolean(state.race['banana']);
+  let value = isBanana ? rating.banana : rating.normal;
+  if (state.race['wish'] && (state.race as { wishStats?: { ship?: unknown } }).wishStats?.ship) {
+    value += isBanana ? rating.bananaWish : rating.wish;
+  }
+  return value;
+}
+
+function assignedShipCount(state: GameState, region: GalaxyRegion, ship: GalaxyShipId): number {
+  return galaxyState(state).defense?.[region]?.[ship] ?? 0;
+}
+
+function gatewayArmadaRating(state: GameState, region: GalaxyRegion): number {
+  let rating = 0;
+  for (const ship of Object.keys(GALAXY_SHIP_RATING) as GalaxyShipId[]) {
+    rating += assignedShipCount(state, region, ship) * shipRating(state, ship);
+  }
+  return rating;
+}
+
+function baseGalaxyPirate(state: GameState, region: GalaxyRegion): number {
+  if (region === 'gxy_stargate' || region === 'gxy_gateway') {
+    const piracyLevel = state.race['instinct'] ? (state.tech['piracy'] ?? 0) * 0.9 : (state.tech['piracy'] ?? 0);
+    return 0.1 * piracyLevel;
+  }
+  const def = GALAXY_PIRATE_BASE[region];
+  return state.race['instinct'] ? def.instinct : def.base;
+}
+
+function galaxyArmadaRating(state: GameState, region: GalaxyRegion): number {
+  let armada = gatewayArmadaRating(state, region);
+
+  if (region === 'gxy_gateway') {
+    armada += galaxyOn(state, 'starbase') * 25;
+  } else if (region === 'gxy_stargate') {
+    armada += galaxyOn(state, 'defense_platform') * 20;
+  } else if (region === 'gxy_alien2') {
+    armada += galaxyOn(state, 'foothold') * 50;
+    armada += galaxyOn(state, 'armed_miner') * (state.race['banana'] ? 4 : 5);
+  } else if (region === 'gxy_chthonian') {
+    const wishShip = state.race['wish'] && (state.race as { wishStats?: { ship?: unknown } }).wishStats?.ship;
+    armada += galaxyOn(state, 'minelayer') * ((state.race['banana'] ? 35 : 50) + (wishShip ? (state.race['banana'] ? 15 : 25) : 0));
+    armada += galaxyOn(state, 'raider') * ((state.race['banana'] ? 9 : 12) + (wishShip ? (state.race['banana'] ? 3 : 6) : 0));
+  }
+
+  return armada;
+}
+
+/**
+ * Legacy-compatible galaxy piracy multiplier.
+ * Returns 1 when galaxy piracy is inactive; lower values mean stronger piracy penalties.
+ */
+export function galaxyPiracy(state: GameState, region: GalaxyRegion, rating = false, raw = false): number {
+  if (!state.tech['piracy'] || state.race['truepath']) return 1;
+
+  const pirate = baseGalaxyPirate(state, region);
+  const armada = galaxyArmadaRating(state, region);
+  if (raw) return armada;
+  if (pirate <= 0) return 1;
+
+  const patrol = Math.min(armada, pirate);
+  const pillage = GALAXY_PIRATE_BASE[region].pillage;
+  const local = ((1 - (pirate - patrol) / pirate) * pillage) + (1 - pillage);
+  return region === 'gxy_stargate' || rating
+    ? local
+    : local * galaxyPiracy(state, 'gxy_stargate');
 }

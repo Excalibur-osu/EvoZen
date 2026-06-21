@@ -12,6 +12,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { checkResetAchievements, markChallengeTask } from './achievement-triggers';
 import { applyUniverse, UNIVERSES, type UniverseType } from './bigbang';
+import { createNewGame } from './state';
 
 // ============================================================
 // 转生类型枚举
@@ -46,6 +47,15 @@ export interface PrestigeGains {
   pdebt: number;
 }
 
+export interface TriggerResetOptions {
+  targetUniverse?: string;
+}
+
+function getSpireLevel(state: GameState): number {
+  const spire = (state.portal as Record<string, Record<string, number>> | undefined)?.['spire'];
+  return spire?.['level'] ?? spire?.['count'] ?? 0;
+}
+
 // ============================================================
 // resetCommon：重置城市/科技/状态（对标 resets.js L1264-1287）
 // ============================================================
@@ -53,14 +63,20 @@ export interface PrestigeGains {
 interface ResetCommonArgs {
   orbit: number;
   biome: string;
-  ptrait: string[];
+  ptrait: string;
   geology: Record<string, number> | false;
 }
 
 function resetCommon(state: GameState, args: ResetCommonArgs): void {
-  // 保留天文轨道、生物群落、行星特质（地质可选）
-  const freshCity = {
+  const fresh = createNewGame();
+
+  // 使用新档基础结构，避免 reset 后缺失资源、岗位、市场、熔炉等基础节点。
+  state.resource = fresh.resource;
+  state.civic = fresh.civic;
+  state.city = {
+    ...fresh.city,
     calendar: {
+      ...fresh.city.calendar,
       day: 0,
       year: 0,
       weather: 2,
@@ -72,8 +88,8 @@ function resetCommon(state: GameState, args: ResetCommonArgs): void {
     biome: args.biome,
     ptrait: args.ptrait,
     geology: args.geology || {},
-  };
-  state.city = freshCity as unknown as GameState['city'];
+  } as GameState['city'];
+  state.evolution = {};
 
   // 科技全重置，只保留 theology:1（原版起点）
   state.tech = { theology: 1 };
@@ -81,7 +97,13 @@ function resetCommon(state: GameState, args: ResetCommonArgs): void {
   // 清空太空/星际/其他进度
   state.space = {} as GameState['space'];
   state.interstellar = {} as GameState['interstellar'];
-  state.resource = {} as GameState['resource'];
+  state.portal = {} as GameState['portal'];
+  state.eden = {} as GameState['eden'];
+  state.tauceti = {} as GameState['tauceti'];
+  state.queue = fresh.queue;
+  state.r_queue = fresh.r_queue;
+  state.event = fresh.event;
+  state.m_event = fresh.m_event;
 
   state.new = true;
 }
@@ -99,8 +121,15 @@ function getBiome(state: GameState): string {
   return (state.city as unknown as { biome?: string })?.biome ?? 'grassland';
 }
 
-function getPtrait(state: GameState): string[] {
-  return (state.city as unknown as { ptrait?: string[] })?.ptrait ?? [];
+function getPtrait(state: GameState): string {
+  const ptrait = (state.city as unknown as { ptrait?: string | string[] })?.ptrait;
+  if (Array.isArray(ptrait)) return ptrait[0] ?? 'none';
+  return ptrait ?? 'none';
+}
+
+function hasPtrait(state: GameState, trait: string): boolean {
+  const ptrait = (state.city as unknown as { ptrait?: string | string[] })?.ptrait;
+  return Array.isArray(ptrait) ? ptrait.includes(trait) : ptrait === trait;
 }
 
 function getGeology(state: GameState): Record<string, number> {
@@ -302,7 +331,7 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
       gains.harmony = parseFloat(h.toFixed(2));
     } else if (type === 'descend') {
       let artifact = universe === 'micro' ? 1 : pr_gain;
-      const spire = (state.portal as Record<string, Record<string, number>> | undefined)?.['spire']?.['count'] ?? 0;
+      const spire = getSpireLevel(state);
       if (spire > 50)  artifact++;
       if (spire > 100) artifact++;
       gains.artifact = artifact;
@@ -362,7 +391,9 @@ export function resetMAD(state: GameState): GameState | null {
 
   const gains = calcPrestigeGains(newState, 'mad');
   applyPlasmid(newState, gains.plasmid);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'mad');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -402,7 +433,9 @@ export function resetBioseed(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'bioseed');
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'bioseed');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -443,8 +476,7 @@ export function resetBioseed(state: GameState): GameState {
  * 特殊：保留种族 species 不重置，置 start_cataclysm=1
  */
 export function resetCataclysm(state: GameState): GameState | null {
-  const ptrait = getPtrait(state);
-  if (!ptrait.includes('unstable')) return null;
+  if (!hasPtrait(state, 'unstable')) return null;
   if (!state.tech['quaked']) return null;
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
@@ -452,10 +484,13 @@ export function resetCataclysm(state: GameState): GameState | null {
   const gains = calcPrestigeGains(newState, 'cataclysm');
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'cataclysm');
+  updateResetStats(newState.stats);
 
   const orbit = getOrbit(newState);
   const biome = getBiome(newState);
+  const ptrait = getPtrait(newState);
   const geo = getGeology(newState);
   const srace = newState.race['srace'] as string | false ?? false;
   const corruption = getCorruption(newState);
@@ -502,8 +537,10 @@ export function resetBlackhole(state: GameState, targetUniverse?: string): GameS
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
   applyDark(newState, gains.dark);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'blackhole');
   newState.stats = incrementStat(newState.stats, 'universes');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -530,10 +567,53 @@ export function resetBlackhole(state: GameState, targetUniverse?: string): GameS
   if (corruption > 0) newState.race['corruption'] = corruption;
   if (srace) newState.race['srace'] = srace;
 
-  // 应用宇宙类型特殊效果（如 magic 自动启用 Mana）
+  resetCommon(newState, { orbit, biome, ptrait, geology: false });
+  // 应用宇宙类型特殊效果（如 magic 自动启用 Mana）必须在 resetCommon 重建资源后执行。
   if (newUniverse !== 'bigbang' && (UNIVERSES as Record<string, unknown>)[newUniverse]) {
     applyUniverse(newState, newUniverse as UniverseType);
   }
+  return newState;
+}
+
+/**
+ * 真空坍塌转生
+ * 对标 legacy/src/resets.js L432-527
+ * 奖励：Phage + Plasmid + Dark（Dark 按 Mana 产出计算）
+ * 目标宇宙：bigbang
+ */
+export function resetVacuum(state: GameState): GameState {
+  const newState: GameState = JSON.parse(JSON.stringify(state));
+
+  const gains = calcPrestigeGains(newState, 'vacuum');
+  applyPlasmid(newState, gains.plasmid);
+  applyPhage(newState, gains.phage);
+  applyDark(newState, gains.dark);
+  applyPrestigeDebt(newState, gains.pdebt);
+  newState.stats = incrementStat(newState.stats, 'blackhole');
+  newState.stats = incrementStat(newState.stats, 'universes');
+  updateResetStats(newState.stats);
+
+  const god = newState.race.species;
+  const oldGod = newState.race.gods;
+  const orbit = getOrbit(newState);
+  const biome = getBiome(newState);
+  const ptrait = getPtrait(newState);
+  const srace = newState.race['srace'] as string | false ?? false;
+  const corruption = getCorruption(newState);
+
+  newState.race = {
+    species: 'protoplasm',
+    gods: god,
+    old_gods: oldGod,
+    universe: 'bigbang',
+    seeded: true,
+    bigbang: true,
+    probes: 4,
+    seed: Math.floor(Math.random() * 10000),
+    ascended: false,
+  };
+  if (corruption > 0) newState.race['corruption'] = corruption;
+  if (srace) newState.race['srace'] = srace;
 
   resetCommon(newState, { orbit, biome, ptrait, geology: false });
   return newState;
@@ -552,7 +632,9 @@ export function resetAscend(state: GameState): GameState {
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
   applyHarmony(newState, gains.harmony);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'ascend');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -596,6 +678,7 @@ export function resetDescend(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'descend');
   applyArtifact(newState, gains.artifact);
   newState.stats = incrementStat(newState.stats, 'descend');
+  updateResetStats(newState.stats);
   if (newState.race['fasting'] && (newState.tech['dish_reset'] ?? 0) > 0) {
     markChallengeTask(newState, 'endless_hunger', 'b5');
   }
@@ -636,7 +719,9 @@ export function resetApotheosis(state: GameState): GameState {
   applyPlasmid(newState, gains.plasmid);
   applySupercoiled(newState, gains.supercoiled);
   if (newState.race['warlord']) applyArtifact(newState, gains.artifact);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'apotheosis');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -675,8 +760,10 @@ export function resetRetire(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'retire');
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
-  applyAICore(newState, gains.artifact); // AICore gains 用 artifact 字段携带，待 calcPrestigeGains 实现后修正
+  applyAICore(newState, gains.artifact);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'retire');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -717,8 +804,7 @@ export function canReset(state: GameState, type: ResetType): boolean {
     case 'bioseed':
       return Boolean(state.tech['genesis'] && (state.tech['genesis'] as number) >= 7);
     case 'cataclysm': {
-      const ptrait = getPtrait(state);
-      return ptrait.includes('unstable') && Boolean(state.tech['quaked']);
+      return hasPtrait(state, 'unstable') && Boolean(state.tech['quaked']);
     }
     case 'blackhole':
       return Boolean(state.tech['blackhole'] && (state.tech['blackhole'] as number) >= 5);
@@ -729,7 +815,10 @@ export function canReset(state: GameState, type: ResetType): boolean {
     case 'ascend':
       return Boolean(state.tech['ascension'] && (state.tech['ascension'] as number) >= 1);
     case 'descend':
-      return Boolean(state.tech['daemons'] && (state.tech['daemons'] as number) >= 5);
+      return Boolean(
+        ((state.tech['waygate'] ?? 0) as number) >= 4 ||
+        (state.race['witch_hunter'] && state.race.universe === 'magic' && ((state.tech['forbidden'] ?? 0) as number) >= 5)
+      );
     case 'apotheosis':
       return Boolean(state.tech['apotheosis'] && (state.tech['apotheosis'] as number) >= 1);
     case 'terraform':
@@ -753,7 +842,7 @@ export function canReset(state: GameState, type: ResetType): boolean {
 // 通用入口（统一调度）
 // ============================================================
 
-export function triggerReset(state: GameState, type: ResetType): GameState | null {
+export function triggerReset(state: GameState, type: ResetType, options: TriggerResetOptions = {}): GameState | null {
   if (!canReset(state, type)) return null;
   // 先触发成就（在 state 重置前读取当前种族 / tech）
   checkResetAchievements(state, type);
@@ -762,8 +851,8 @@ export function triggerReset(state: GameState, type: ResetType): GameState | nul
     case 'mad':       return resetMAD(state);
     case 'bioseed':   return resetBioseed(state);
     case 'cataclysm': return resetCataclysm(state);
-    case 'blackhole': return resetBlackhole(state);
-    case 'vacuum':    return resetBlackhole(state);
+    case 'blackhole': return resetBlackhole(state, options.targetUniverse);
+    case 'vacuum':    return resetVacuum(state);
     case 'ascend':    return resetAscend(state);
     case 'descend':   return resetDescend(state);
     case 'apotheosis':return resetApotheosis(state);
@@ -793,7 +882,9 @@ export function resetTerraform(state: GameState): GameState {
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
   applyHarmony(newState, gains.harmony);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'terraform');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -839,7 +930,9 @@ export function resetAiApocalypse(state: GameState): GameState {
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
   applyAICore(newState, gains.artifact);
-  newState.stats = incrementStat(newState.stats, 'aiApoc');
+  applyPrestigeDebt(newState, gains.pdebt);
+  newState.stats = incrementStat(newState.stats, 'aiappoc');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -875,7 +968,9 @@ export function resetMatrix(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'matrix');
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'matrix');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -915,7 +1010,9 @@ export function resetGardenOfEden(state: GameState): GameState {
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
   applyHarmony(newState, gains.harmony);
+  applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'eden');
+  updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
@@ -963,6 +1060,14 @@ function incrementStat(stats: GameState['stats'], key: string): GameState['stats
   return stats;
 }
 
+function updateResetStats(stats: GameState['stats']): void {
+  const s = stats as Record<string, unknown>;
+  const days = (s['days'] as number | undefined) ?? 0;
+  s['reset'] = ((s['reset'] as number | undefined) ?? 0) + 1;
+  s['tdays'] = ((s['tdays'] as number | undefined) ?? 0) + days;
+  s['days'] = 0;
+}
+
 function applyPlasmid(state: GameState, amount: number): void {
   if (amount <= 0) return;
   if (state.race.universe === 'antimatter') {
@@ -1008,6 +1113,10 @@ function applySupercoiled(state: GameState, amount: number): void {
   if (amount <= 0) return;
   addPrestige(state, 'Supercoiled', amount);
   incrementStatBy(state.stats, 'supercoiled', amount);
+}
+
+function applyPrestigeDebt(state: GameState, amount: number): void {
+  (state.stats as Record<string, unknown>)['pdebt'] = amount;
 }
 
 /** AICore（AI 核心）声望，retirement 奖励 */

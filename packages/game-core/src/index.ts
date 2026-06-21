@@ -12,6 +12,7 @@ export {
   manualGather,
   buildSpaceStructure,
   buildInterstellarStructure,
+  buildGalaxyStructure,
   enqueueStructure,
   dequeueStructure,
   isTechAvailable,
@@ -71,6 +72,8 @@ export {
   GALAXY_REGIONS,
   isGalaxyRegionUnlocked,
   getGalaxyStructuresForRegion,
+  canBuildGalaxyStructure,
+  getGalaxyBuildCost,
   type GalaxyStructureDefinition,
   type GalaxySupportPool,
   type GalaxyRegion,
@@ -415,6 +418,7 @@ export {
   syndicateTick,
   siegeTick,
   piracy,
+  galaxyPiracy,
 } from './syndicate';
 export {
   getSpireFloorRating,

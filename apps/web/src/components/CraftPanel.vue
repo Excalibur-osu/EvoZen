@@ -12,6 +12,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { CRAFT_COSTS, CRAFTABLE_IDS, type CraftableId, type FoundryState } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
+import AppIcon from './ui/AppIcon.vue'
+import AllocationControl from './ui/AllocationControl.vue'
 
 const game = useGameStore()
 
@@ -78,7 +80,8 @@ function getCraftAmount(craftId: string): number {
 <template>
   <div v-if="isUnlocked" class="craft-panel">
     <h3 class="section-title">
-      <span class="icon">⚒</span> 铸造厂
+      <AppIcon name="industry" class="section-icon" />
+      <span>铸造厂</span>
       <span class="subtitle">工匠: {{ totalAssigned }}/{{ craftsmanWorkers }}</span>
     </h3>
 
@@ -112,7 +115,7 @@ function getCraftAmount(craftId: string): number {
         <div class="craft-actions">
           <!-- 手动合成按钮 -->
           <button
-            class="btn btn-craft"
+            class="btn primary sm craft-action-btn"
             :disabled="!canCraft(craftId)"
             @click="game.doCraft(craftId as CraftableId)"
           >
@@ -120,27 +123,21 @@ function getCraftAmount(craftId: string): number {
           </button>
 
           <!-- 工匠分配 -->
-          <div class="assign-controls">
-            <button
-              class="btn btn-sm"
-              :disabled="getAssigned(craftId) <= 0"
-              @click="game.removeCraftLine(craftId as CraftableId)"
-              data-tooltip="减少此产线工匠"
-            >−</button>
-            <span class="assign-count">{{ getAssigned(craftId) }}</span>
-            <button
-              class="btn btn-sm"
-              :disabled="unassigned <= 0"
-              @click="game.assignCraftLine(craftId as CraftableId)"
-              data-tooltip="增加此产线工匠"
-            >+</button>
-          </div>
+          <AllocationControl
+            :value="getAssigned(craftId)"
+            :decrement-disabled="getAssigned(craftId) <= 0"
+            :increment-disabled="unassigned <= 0"
+            decrement-label="减少此产线工匠"
+            increment-label="增加此产线工匠"
+            @decrement="game.removeCraftLine(craftId as CraftableId)"
+            @increment="game.assignCraftLine(craftId as CraftableId)"
+          />
         </div>
       </div>
     </div>
 
     <div v-if="craftsmanWorkers === 0" class="craft-hint">
-      💡 建造铸造厂并分配工匠，即可自动生产合成材料。
+      建造铸造厂并分配工匠，即可自动生产合成材料。
     </div>
   </div>
 </template>
@@ -159,8 +156,10 @@ function getCraftAmount(craftId: string): number {
   align-items: center;
   gap: 8px;
 }
-.section-title .icon {
-  font-size: 18px;
+.section-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 .section-title .subtitle {
   font-size: 12px;
@@ -218,13 +217,13 @@ function getCraftAmount(craftId: string): number {
 .recipe-item {
   font-size: 12px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
 .recipe-item.insufficient {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  background: var(--danger-glow);
 }
 
 .craft-actions {
@@ -234,60 +233,8 @@ function getCraftAmount(craftId: string): number {
   gap: 10px;
 }
 
-.btn-craft {
-  padding: 4px 14px;
-  font-size: 12px;
-  border-radius: 4px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.btn-craft:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.btn-craft:not(:disabled):hover {
-  opacity: 0.85;
-}
-
-.assign-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.assign-count {
-  font-size: 13px;
-  font-weight: 600;
-  min-width: 18px;
-  text-align: center;
-  color: var(--text-primary);
-}
-
-.btn-sm {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-sm:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-.btn-sm:not(:disabled):hover {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+.craft-action-btn {
+  flex: 0 0 auto;
 }
 
 .craft-hint {
@@ -296,6 +243,7 @@ function getCraftAmount(craftId: string): number {
   margin-top: 8px;
   padding: 8px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
 }
 </style>

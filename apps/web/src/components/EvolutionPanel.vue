@@ -12,7 +12,9 @@
 import { useGameStore } from '../stores/game'
 import { BASIC_CHALLENGE_UNLOCK_LEVEL, SCENARIO_CHALLENGE_UNLOCK_LEVEL, type ChallengeStartOptions } from '../stores/game'
 import { computed, ref, onMounted } from 'vue'
-import { applyCustomRace, getSpeciesTraitDescriptors, type EvoUpgrade } from '@evozen/game-core'
+import { applyCustomRace, getAchievementLevel, getSpeciesTraitDescriptors, type EvoUpgrade } from '@evozen/game-core'
+import AppIcon from './ui/AppIcon.vue'
+import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
 
@@ -81,6 +83,16 @@ const noCraftChallenge = ref(false)
 const noCrisprChallenge = ref(false)
 const nerfedChallenge = ref(false)
 const badGenesChallenge = ref(false)
+const joylessChallenge = ref(false)
+const steelenChallenge = ref(false)
+const decayChallenge = ref(false)
+const emfieldChallenge = ref(false)
+const inflationChallenge = ref(false)
+const orbitDecayChallenge = ref(false)
+const gravityWellChallenge = ref(false)
+const witchHunterChallenge = ref(false)
+const sludgeChallenge = ref(false)
+const ultraSludgeChallenge = ref(false)
 const hasCustomRace = computed(() => {
   const cust = (game.state as Record<string, unknown>)['custom'] as { race0?: unknown } | undefined
   return !!cust?.race0
@@ -90,11 +102,26 @@ const isChallengeUnlocked = computed(() => challengeLevel.value >= 1)
 
 const challengeModes = [
   { id: 'standard', name: '标准', desc: '正常文明开局。', minChallenge: 0 },
-  { id: 'cataclysm', name: '灾变', desc: '自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.cataclysm },
-  { id: 'banana', name: '香蕉共和国', desc: '自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.banana },
-  { id: 'truepath', name: '真相之路', desc: '启用 Truepath，并自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.truepath },
-  { id: 'lone_survivor', name: '孤独幸存者', desc: '自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.lone_survivor },
-  { id: 'warlord', name: '战争之主', desc: '启用 evil/warlord，并自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.warlord },
+  { id: 'junker', name: '废物种', desc: '负面特质场景挑战。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.junker },
+  { id: 'cataclysm', name: '灾变', desc: '需要 Shaken 成就；自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.cataclysm },
+  { id: 'banana', name: '香蕉共和国', desc: '需要白洞或飞升；自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.banana },
+  { id: 'truepath', name: '真相之路', desc: '需要飞升或腐化；自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.truepath },
+  { id: 'fasting', name: '无尽饥饿', desc: '需要腐化；启用禁食挑战科技线。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.fasting },
+  { id: 'lone_survivor', name: '孤独幸存者', desc: '需要退休；自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.lone_survivor },
+  { id: 'warlord', name: '战争之主', desc: '需要 evil 宇宙神杀者；启用 evil/warlord，并自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.warlord },
+] as const
+
+const specialChallenges = [
+  { flag: 'joyless', name: '无欢', desc: '禁用快乐相关收益。', model: joylessChallenge },
+  { flag: 'steelen', name: '钢铁', desc: '限制材料路线。', model: steelenChallenge },
+  { flag: 'decay', name: '基因衰退', desc: '需要白洞。', model: decayChallenge },
+  { flag: 'emfield', name: '电磁场', desc: '需要飞升。', model: emfieldChallenge },
+  { flag: 'inflation', name: '通货膨胀', desc: '需要守财奴。', model: inflationChallenge },
+  { flag: 'orbitDecay', name: '轨道衰退', desc: '需要白洞或飞升。', model: orbitDecayChallenge },
+  { flag: 'gravityWell', name: '重力井', desc: '需要 heavy 宇宙播种者。', model: gravityWellChallenge },
+  { flag: 'witchHunter', name: '猎巫', desc: '需要 magic 宇宙飞升。', model: witchHunterChallenge },
+  { flag: 'sludge', name: '污泥族', desc: '需要飞升/腐化与废物种灭绝。', model: sludgeChallenge },
+  { flag: 'ultraSludge', name: '超级污泥族', desc: '需要神杀者与污泥族灭绝。', model: ultraSludgeChallenge },
 ] as const
 
 const challengeOptions = computed<ChallengeStartOptions>(() => {
@@ -110,6 +137,16 @@ const challengeOptions = computed<ChallengeStartOptions>(() => {
     noCrispr: noCrisprChallenge.value,
     nerfed: nerfedChallenge.value,
     badGenes: badGenesChallenge.value,
+    joyless: joylessChallenge.value,
+    steelen: steelenChallenge.value,
+    decay: decayChallenge.value,
+    emfield: emfieldChallenge.value,
+    inflation: inflationChallenge.value,
+    orbitDecay: orbitDecayChallenge.value,
+    gravityWell: gravityWellChallenge.value,
+    witchHunter: witchHunterChallenge.value,
+    sludge: sludgeChallenge.value,
+    ultraSludge: ultraSludgeChallenge.value,
   }
 })
 
@@ -123,12 +160,73 @@ const selectedChallengePreset = computed(() => {
   return []
 })
 
-function canSelectChallengeMode(mode: { minChallenge: number }) {
-  return challengeLevel.value >= mode.minChallenge
+const finalSpeciesName = computed(() => {
+  if (selectedChallengeMode.value === 'junker') return '废物种'
+  if (selectedChallengeMode.value === 'standard' && ultraSludgeChallenge.value && canSelectSpecialChallenge('ultraSludge')) return '超级污泥族'
+  if (selectedChallengeMode.value === 'standard' && sludgeChallenge.value && canSelectSpecialChallenge('sludge')) return '污泥族'
+  return availableRaces.value.find(r => r.id === selectedSpecies.value)?.name ?? selectedSpecies.value
+})
+
+function hasAchievement(id: string, affix?: 'h' | 'mg' | 'e') {
+  return getAchievementLevel(game.state, id, affix) > 0
+}
+
+function canSelectChallengeMode(mode: typeof challengeModes[number]) {
+  if (challengeLevel.value < mode.minChallenge) return false
+  switch (mode.id) {
+    case 'standard':
+      return true
+    case 'cataclysm':
+      return hasAchievement('shaken')
+    case 'banana':
+      return hasAchievement('whitehole') || hasAchievement('ascended')
+    case 'truepath':
+      return hasAchievement('ascended') || hasAchievement('corrupted')
+    case 'lone_survivor':
+      return hasAchievement('retired')
+    case 'warlord':
+      return game.state.race.universe === 'evil' && hasAchievement('godslayer', 'e')
+    case 'fasting':
+      return hasAchievement('corrupted')
+    case 'junker':
+      return true
+  }
 }
 
 function isChallengeFlagUnlocked(flag: keyof Omit<ChallengeStartOptions, 'mode'>) {
   return challengeLevel.value >= BASIC_CHALLENGE_UNLOCK_LEVEL[flag]
+}
+
+function canSelectSpecialChallenge(flag: keyof Omit<ChallengeStartOptions, 'mode'>) {
+  if (!isChallengeFlagUnlocked(flag)) return false
+  switch (flag) {
+    case 'joyless':
+    case 'steelen':
+      return true
+    case 'decay':
+      return hasAchievement('whitehole')
+    case 'emfield':
+      return hasAchievement('ascended')
+    case 'inflation':
+      return hasAchievement('scrooge')
+    case 'orbitDecay':
+      return hasAchievement('whitehole') || hasAchievement('ascended')
+    case 'gravityWell':
+      return game.state.race.universe === 'heavy' && hasAchievement('seeder', 'h')
+    case 'witchHunter':
+      return game.state.race.universe === 'magic' && hasAchievement('ascended', 'mg')
+    case 'sludge':
+      return (hasAchievement('ascended') || hasAchievement('corrupted')) && hasAchievement('extinct_junker')
+    case 'ultraSludge':
+      return hasAchievement('godslayer') && hasAchievement('extinct_sludge')
+    default:
+      return true
+  }
+}
+
+function toggleSpecialChallenge(flag: keyof Omit<ChallengeStartOptions, 'mode'>, checked: boolean) {
+  if (flag === 'sludge' && checked) ultraSludgeChallenge.value = false
+  if (flag === 'ultraSludge' && checked) sludgeChallenge.value = false
 }
 
 function selectChallengeMode(mode: typeof challengeModes[number]) {
@@ -211,14 +309,15 @@ const stageDesc = computed(() => {
     <template v-if="hasEvolvedOnce">
       <div class="quick-start-card">
         <div class="quick-start-header">
-          <span class="quick-start-icon">⚡</span>
+          <span class="quick-start-icon"><AppIcon name="zap" /></span>
           <div>
             <h3 class="quick-start-title">快速开始</h3>
             <p class="quick-start-desc">跳过进化阶段，直接以人类身份开始文明。</p>
           </div>
         </div>
         <button class="btn primary quick-start-btn" @click="quickStart()">
-          🚀 直接跳过进化
+          <AppIcon name="play" />
+          <span>直接跳过进化</span>
         </button>
       </div>
 
@@ -233,23 +332,16 @@ const stageDesc = computed(() => {
       <div class="evo-res-item">
         <div class="evo-res-header">
           <span class="evo-res-label" data-tooltip="核糖核酸：进化的基础货币，用于购买细胞升级并合成 DNA">🔮 RNA</span>
-          <div style="flex:1"></div>
-          <span class="evo-res-rate font-mono" :class="rateClass(rnaDiff)" style="margin-right: 8px" v-if="rnaDiff !== 0">
+          <div class="evo-res-spacer"></div>
+          <span class="evo-res-rate font-mono" :class="rateClass(rnaDiff)" v-if="rnaDiff !== 0">
             {{ formatRate(rnaDiff) }}/s
           </span>
           <span class="evo-res-value font-mono">{{ rnaAmount }} / {{ rnaMax }}</span>
         </div>
-        <div class="progress-bar">
-          <div
-            class="fill"
-            :style="{ width: (rnaAmount / rnaMax * 100) + '%' }"
-            style="background: linear-gradient(90deg, #7c3aed, #a78bfa)"
-          />
-        </div>
+        <ProgressBar :value="rnaAmount / rnaMax * 100" tone="rna" />
         <button 
-          class="btn" 
+          class="btn evo-res-btn" 
           :class="{ primary: rnaAmount < rnaMax }"
-          style="margin-top: 8px; width: 100%" 
           :disabled="rnaAmount >= rnaMax"
           @click="game.gatherRNA()"
         >
@@ -261,23 +353,16 @@ const stageDesc = computed(() => {
       <div v-if="dnaNVisible" class="evo-res-item">
         <div class="evo-res-header">
           <span class="evo-res-label" data-tooltip="脱氧核糖核酸：由 2 RNA 合成，用于进化突破">🧬 DNA</span>
-          <div style="flex:1"></div>
-          <span class="evo-res-rate font-mono" :class="rateClass(dnaDiff)" style="margin-right: 8px" v-if="dnaDiff !== 0">
+          <div class="evo-res-spacer"></div>
+          <span class="evo-res-rate font-mono" :class="rateClass(dnaDiff)" v-if="dnaDiff !== 0">
             {{ formatRate(dnaDiff) }}/s
           </span>
           <span class="evo-res-value font-mono">{{ dnaAmount }} / {{ dnaMax }}</span>
         </div>
-        <div class="progress-bar">
-          <div
-            class="fill"
-            :style="{ width: (dnaAmount / dnaMax * 100) + '%' }"
-            style="background: linear-gradient(90deg, #db2777, #f472b6)"
-          />
-        </div>
+        <ProgressBar :value="dnaAmount / dnaMax * 100" tone="dna" />
         <button
-          class="btn"
+          class="btn evo-res-btn"
           :class="{ primary: rnaAmount >= 2 && dnaAmount < dnaMax }"
-          style="margin-top: 8px; width: 100%"
           :disabled="rnaAmount < 2 || dnaAmount >= dnaMax"
           @click="game.formDNA()"
         >
@@ -288,7 +373,10 @@ const stageDesc = computed(() => {
 
     <!-- 细胞升级区 -->
     <div v-if="availableUpgrades.length > 0" class="upgrades-section">
-      <h3 class="section-title">🔬 细胞升级</h3>
+      <h3 class="section-title">
+        <AppIcon name="crispr" />
+        <span>细胞升级</span>
+      </h3>
       <div class="upgrades-grid">
         <div
           v-for="upg in availableUpgrades"
@@ -332,7 +420,10 @@ const stageDesc = computed(() => {
 
     <!-- 进化步骤区 -->
     <div v-if="availableSteps.length > 0" class="steps-section">
-      <h3 class="section-title">🧬 进化突破</h3>
+      <h3 class="section-title">
+        <AppIcon name="evolution" />
+        <span>进化突破</span>
+      </h3>
       <div class="steps-grid">
         <div
           v-for="step in availableSteps"
@@ -340,7 +431,10 @@ const stageDesc = computed(() => {
           class="step-card"
           :class="{ affordable: canAffordStep(step.dnaCost) }"
         >
-          <div class="step-name">⚡ {{ step.name }}</div>
+          <div class="step-name">
+            <AppIcon name="zap" />
+            <span>{{ step.name }}</span>
+          </div>
           <div class="step-desc">{{ step.desc }}</div>
           <div class="step-effect">{{ step.effectText }}</div>
           <div class="step-cost">
@@ -401,13 +495,19 @@ const stageDesc = computed(() => {
 
       <!-- 自定义种族（已配置时显示） -->
       <div v-if="hasCustomRace" class="custom-race-option">
-        <h4>🛠️ 自定义种族</h4>
+        <h4>
+          <AppIcon name="customRace" />
+          <span>自定义种族</span>
+        </h4>
         <button
           class="species-card"
           :class="{ active: useCustom }"
           @click="useCustom = !useCustom"
         >
-          {{ useCustom ? '✓' : '⚙️' }} 使用自定义种族
+          <span class="custom-race-label">
+            <AppIcon :name="useCustom ? 'achievement' : 'customRace'" />
+            <span>使用自定义种族</span>
+          </span>
         </button>
       </div>
 
@@ -466,6 +566,26 @@ const stageDesc = computed(() => {
             <span>坏基因</span>
           </label>
         </div>
+        <div v-if="isChallengeUnlocked && selectedChallengeMode === 'standard'" class="special-challenges">
+          <div class="challenge-subtitle">特殊挑战</div>
+          <div class="challenge-flags">
+            <label
+              v-for="challenge in specialChallenges"
+              :key="challenge.flag"
+              class="challenge-toggle"
+              :class="{ locked: !canSelectSpecialChallenge(challenge.flag) }"
+            >
+              <input
+                v-model="challenge.model.value"
+                type="checkbox"
+                :disabled="!canSelectSpecialChallenge(challenge.flag)"
+                @change="toggleSpecialChallenge(challenge.flag, challenge.model.value)"
+              >
+              <span>{{ challenge.name }}</span>
+              <span class="challenge-note">{{ challenge.desc }}</span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <!-- 费用展示 + 进化按钮 -->
@@ -482,7 +602,8 @@ const stageDesc = computed(() => {
         :disabled="rnaAmount < 320 || dnaAmount < 320"
         @click="chooseRaceFinal()"
       >
-        🌟 进化为 {{ availableRaces.find(r => r.id === selectedSpecies)?.name ?? selectedSpecies }} 踏上文明！
+        <AppIcon name="edenic" />
+        <span>进化为 {{ finalSpeciesName }} 踏上文明</span>
       </button>
     </div>
   </div>
@@ -507,10 +628,7 @@ const stageDesc = computed(() => {
 .evo-title {
   font-size: 20px;
   font-weight: 700;
-  background: linear-gradient(135deg, #a78bfa, #f472b6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent);
   margin: 0;
 }
 .evo-subtitle {
@@ -523,8 +641,8 @@ const stageDesc = computed(() => {
 /* 快速开始 */
 .quick-start-card {
   padding: 12px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(59, 130, 246, 0.05));
-  border: 1px solid rgba(34, 197, 94, 0.15);
+  background: linear-gradient(135deg, var(--accent-glow), color-mix(in srgb, var(--info) 10%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -532,7 +650,13 @@ const stageDesc = computed(() => {
   gap: 12px;
 }
 .quick-start-header { display: flex; align-items: center; gap: 12px; }
-.quick-start-icon { font-size: 24px; flex-shrink: 0; text-shadow: 0 0 10px rgba(34, 197, 94, 0.3); }
+.quick-start-icon {
+  display: inline-flex;
+  color: var(--accent);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+.quick-start-icon svg { width: 22px; height: 22px; }
 .quick-start-title { font-size: 13px; font-weight: 700; color: var(--text-accent); margin: 0; }
 .quick-start-desc { font-size: 11px; color: var(--text-secondary); margin: 2px 0 0; }
 .quick-start-btn { padding: 6px 16px; font-size: 12px; font-weight: 700; white-space: nowrap; }
@@ -550,7 +674,7 @@ const stageDesc = computed(() => {
 }
 .evo-res-item {
   padding: 10px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--surface-raised);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   display: flex;
@@ -563,8 +687,13 @@ const stageDesc = computed(() => {
   margin-bottom: 6px;
 }
 .evo-res-label { font-weight: 600; font-size: 12px; }
+.evo-res-spacer { flex: 1; }
+.evo-res-rate { margin-right: 8px; }
 .evo-res-value { font-size: 11px; color: var(--text-primary); font-family: var(--font-mono); }
-
+.evo-res-btn {
+  width: 100%;
+  margin-top: 8px;
+}
 /* 升级区 & 进化步骤 */
 .section-title {
   font-size: 13px;
@@ -575,9 +704,14 @@ const stageDesc = computed(() => {
   align-items: center;
   gap: 6px;
 }
+.section-title svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
 .upgrades-section, .steps-section {
   padding: 12px;
-  background: rgba(255, 255, 255, 0.01);
+  background: var(--surface-raised);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
 }
@@ -596,7 +730,7 @@ const stageDesc = computed(() => {
   border-radius: var(--radius-md);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.upgrade-card.affordable { border-color: rgba(34, 197, 94, 0.5); }
+.upgrade-card.affordable { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .upgrade-header { display: flex; justify-content: space-between; align-items: center; }
 .upgrade-name { font-weight: 700; font-size: 11px; color: var(--text-primary); }
 .upgrade-count { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
@@ -633,7 +767,20 @@ const stageDesc = computed(() => {
   border-color: var(--accent);
   box-shadow: 0 0 8px var(--accent-glow);
 }
-.step-name { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.step-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.step-name svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
 .step-desc { font-size: 10px; color: var(--text-secondary); line-height: 1.3; min-height: 39px; }
 .step-effect { font-size: 10px; color: var(--accent); }
 .step-cost { font-size: 10px; font-weight: 600; color: var(--text-secondary); font-family: var(--font-mono); margin-top: auto; }
@@ -645,7 +792,7 @@ const stageDesc = computed(() => {
 /* 种族选择 */
 .evo-species {
   padding: 16px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--surface-raised);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   animation: fadeIn 0.4s ease;
@@ -676,11 +823,27 @@ const stageDesc = computed(() => {
   text-align: left;
 }
 .species-card:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
-.species-card.active { border-color: var(--accent); background: rgba(34, 197, 94, 0.05); box-shadow: inset 0 0 0 1px var(--accent); }
+.species-card.active { border-color: var(--accent); background: var(--accent-glow); box-shadow: inset 0 0 0 1px var(--accent); }
 .species-emoji { font-size: 20px; }
 .species-name { font-size: 12px; font-weight: 700; }
 .species-traits { font-size: 10px; color: var(--secondary); }
 .species-effect { font-size: 10px; line-height: 1.3; color: var(--text-secondary); }
+.custom-race-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+.custom-race-option h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.custom-race-option h4 svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
 
 /* 行星特性 */
 .ptrait-section { margin-top: 16px; }
@@ -704,7 +867,7 @@ const stageDesc = computed(() => {
   color: var(--text-primary);
 }
 .ptrait-card:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
-.ptrait-card.active { border-color: var(--accent); background: rgba(34, 197, 94, 0.05); }
+.ptrait-card.active { border-color: var(--accent); background: var(--accent-glow); }
 .ptrait-emoji { font-size: 16px; }
 .ptrait-name { font-size: 10px; font-weight: 700; }
 .ptrait-desc { font-size: 9px; line-height: 1.2; color: var(--text-secondary); text-align: center; }
@@ -726,8 +889,8 @@ const stageDesc = computed(() => {
 .challenge-lock {
   margin-bottom: 8px;
   padding: 6px 8px;
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--warning-glow);
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 10px;
@@ -754,7 +917,7 @@ const stageDesc = computed(() => {
   transition: all 0.2s;
 }
 .challenge-card:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
-.challenge-card.active { border-color: var(--accent); background: rgba(34, 197, 94, 0.05); }
+.challenge-card.active { border-color: var(--accent); background: var(--accent-glow); }
 .challenge-card:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -787,6 +950,13 @@ const stageDesc = computed(() => {
   gap: 8px;
   margin-top: 8px;
 }
+.special-challenges { margin-top: 10px; }
+.challenge-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: left;
+}
 .challenge-toggle {
   display: inline-flex;
   align-items: center;
@@ -800,7 +970,15 @@ const stageDesc = computed(() => {
   font-size: 11px;
   cursor: pointer;
 }
+.challenge-toggle.locked {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
 .challenge-toggle input { margin: 0; }
+.challenge-note {
+  color: var(--text-muted);
+  font-size: 10px;
+}
 
 /* 最终进化按钮 */
 .sentience-cost {
@@ -826,9 +1004,9 @@ const stageDesc = computed(() => {
 .stage-quote-container {
   margin-bottom: 24px;
   padding: 16px 20px;
-  background: linear-gradient(180deg, rgba(167, 139, 250, 0.05) 0%, rgba(167, 139, 250, 0.01) 100%);
+  background: linear-gradient(180deg, var(--surface-pressed) 0%, var(--surface-raised) 100%);
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(167, 139, 250, 0.2);
+  border: 1px solid var(--border-color);
   position: relative;
   overflow: hidden;
 }
@@ -841,7 +1019,7 @@ const stageDesc = computed(() => {
   text-align: center;
   position: relative;
   z-index: 1;
-  text-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
+  text-shadow: 0 0 10px var(--accent-glow);
 }
 
 .quote-mark {
@@ -853,7 +1031,7 @@ const stageDesc = computed(() => {
 }
 
 .border-glow {
-  box-shadow: inset 0 0 20px rgba(167, 139, 250, 0.05),
-              0 0 15px rgba(167, 139, 250, 0.05);
+  box-shadow: inset 0 0 20px var(--surface-pressed),
+              0 0 15px var(--accent-glow);
 }
 </style>

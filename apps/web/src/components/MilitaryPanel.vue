@@ -6,6 +6,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGameStore } from '../stores/game'
+import AppIcon from './ui/AppIcon.vue'
+import IconButton from './ui/IconButton.vue'
+import ProgressBar from './ui/ProgressBar.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -91,7 +95,10 @@ function adjustRaid(delta: number) {
 
 <template>
   <div v-if="isVisible" class="military-panel">
-    <h3 class="section-title">⚔️ 驻军</h3>
+    <h3 class="section-title">
+      <AppIcon name="military" />
+      <span>驻军</span>
+    </h3>
 
     <!-- 士兵状态 -->
     <div class="stat-grid">
@@ -103,15 +110,24 @@ function adjustRaid(delta: number) {
         </span>
       </div>
       <div class="stat-card" v-if="garrison!.wounded > 0">
-        <span class="stat-label">🤕 负伤</span>
+        <span class="stat-label icon-label">
+          <AppIcon name="heartPulse" />
+          <span>负伤</span>
+        </span>
         <span class="stat-value wounded-val">{{ garrison!.wounded }}</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">🛡 防御</span>
+        <span class="stat-label icon-label">
+          <AppIcon name="shieldCheck" />
+          <span>防御</span>
+        </span>
         <span class="stat-value">{{ defenseRating }}</span>
       </div>
       <div class="stat-card">
-        <span class="stat-label">⚔️ 进攻</span>
+        <span class="stat-label icon-label">
+          <AppIcon name="military" />
+          <span>进攻</span>
+        </span>
         <span class="stat-value">{{ attackRating }}</span>
       </div>
     </div>
@@ -119,16 +135,18 @@ function adjustRaid(delta: number) {
     <!-- 训练进度 -->
     <div class="training-section" v-if="garrison!.workers < garrison!.max">
       <div class="training-header">
-        <span class="training-label">🎯 训练进度</span>
+        <span class="training-label icon-label">
+          <AppIcon name="crosshair" />
+          <span>训练进度</span>
+        </span>
         <span class="training-rate font-mono">{{ trainingRate }}/tick</span>
       </div>
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: trainingPct + '%' }"></div>
-      </div>
+      <ProgressBar :value="trainingPct" tone="info" size="md" />
       <span class="progress-text font-mono text-xs">{{ trainingPct }}%</span>
     </div>
     <div v-else class="training-full">
-      ✅ 兵营满员
+      <AppIcon name="shieldCheck" />
+      <span>兵营满员</span>
     </div>
 
     <!-- 战术选择 -->
@@ -151,19 +169,22 @@ function adjustRaid(delta: number) {
     <div class="raid-section">
       <span class="raid-label">出征:</span>
       <div class="raid-controls">
-        <button class="ctrl-btn" @click="adjustRaid(-5)" :disabled="garrison!.raid <= 0">-5</button>
-        <button class="ctrl-btn" @click="adjustRaid(-1)" :disabled="garrison!.raid <= 0">−</button>
+        <StepperButton label="-5" aria-label="减少 5 名出征士兵" :disabled="garrison!.raid <= 0" @click="adjustRaid(-5)" />
+        <StepperButton label="−" aria-label="减少 1 名出征士兵" :disabled="garrison!.raid <= 0" @click="adjustRaid(-1)" />
         <span class="raid-count font-mono">{{ garrison!.raid }}</span>
         <span class="raid-max font-mono text-xs">/ {{ maxRaid }}</span>
-        <button class="ctrl-btn" @click="adjustRaid(1)" :disabled="garrison!.raid >= maxRaid">+</button>
-        <button class="ctrl-btn" @click="adjustRaid(5)" :disabled="garrison!.raid >= maxRaid">+5</button>
-        <button class="ctrl-btn all-btn" @click="game.setRaid(maxRaid)">全部</button>
+        <StepperButton label="+" aria-label="增加 1 名出征士兵" :disabled="garrison!.raid >= maxRaid" @click="adjustRaid(1)" />
+        <StepperButton label="+5" aria-label="增加 5 名出征士兵" :disabled="garrison!.raid >= maxRaid" @click="adjustRaid(5)" />
+        <StepperButton label="全部" aria-label="全部出征" @click="game.setRaid(maxRaid)" />
       </div>
     </div>
 
     <!-- 战役目标 -->
     <div class="campaign-section">
-      <h4 class="sub-title">🌍 外交</h4>
+      <h4 class="sub-title">
+        <AppIcon name="handshake" />
+        <span>外交</span>
+      </h4>
       <div class="gov-list">
         <template v-for="gov in foreignGovs" :key="gov.index">
         <div class="gov-row">
@@ -172,9 +193,18 @@ function adjustRaid(delta: number) {
             <span class="gov-status" :class="{ 'occ': gov.occ, 'anx': gov.anx }">{{ gov.status }}</span>
           </div>
           <div class="gov-stats text-xs font-mono">
-            <span title="敌意">😤 {{ gov.hstl }}</span>
-            <span title="军力">⚔️ {{ gov.mil }}</span>
-            <span title="动荡" v-if="isSpyUnlocked">🔥 {{ gov.unrest }}</span>
+            <span class="gov-stat" title="敌意">
+              <AppIcon name="dangerAlert" />
+              <span>{{ gov.hstl }}</span>
+            </span>
+            <span class="gov-stat" title="军力">
+              <AppIcon name="military" />
+              <span>{{ gov.mil }}</span>
+            </span>
+            <span class="gov-stat" title="动荡" v-if="isSpyUnlocked">
+              <AppIcon name="flame" />
+              <span>{{ gov.unrest }}</span>
+            </span>
           </div>
           <div class="campaign-actions">
             <button
@@ -191,7 +221,8 @@ function adjustRaid(delta: number) {
               @click="game.trainSpy(gov.index)"
               :disabled="gov.trn > 0"
             >
-              🕵️ <span v-if="gov.trn > 0">{{ gov.trn }}...</span>
+              <AppIcon name="crosshair" />
+              <span v-if="gov.trn > 0">{{ gov.trn }}...</span>
               <span v-else>{{ gov.spy }}</span>
             </button>
             <button
@@ -210,31 +241,42 @@ function adjustRaid(delta: number) {
         <div class="espionage-modal" v-if="showEspionageModal === gov.index">
           <div class="esp-header">
             <span>针对 {{ gov.name }} 的间谍密谋</span>
-            <button class="close-btn" @click="showEspionageModal = null">✖</button>
+            <IconButton
+              icon="close"
+              label="关闭间谍行动面板"
+              tone="danger"
+              size="sm"
+              @click="showEspionageModal = null"
+            />
           </div>
           <div class="esp-actions">
-            <button class="esp-action-btn" @click="game.startEspionage(gov.index, 'influence')">
-              🗣️ 影响力 (降敌意)
+            <button class="btn sm esp-action-btn" @click="game.startEspionage(gov.index, 'influence')">
+              <AppIcon name="messages" />
+              <span>影响力 (降敌意)</span>
             </button>
-            <button class="esp-action-btn" @click="game.startEspionage(gov.index, 'sabotage')">
-              💥 搞破坏 (削军力)
+            <button class="btn sm esp-action-btn" @click="game.startEspionage(gov.index, 'sabotage')">
+              <AppIcon name="dangerAlert" />
+              <span>搞破坏 (削军力)</span>
             </button>
-            <button class="esp-action-btn inc" @click="game.startEspionage(gov.index, 'incite')">
-              🔥 煽动叛乱 (增动荡)
+            <button class="btn sm esp-action-btn inc" @click="game.startEspionage(gov.index, 'incite')">
+              <AppIcon name="flame" />
+              <span>煽动叛乱 (增动荡)</span>
             </button>
             <button 
-              class="esp-action-btn anx" 
+              class="btn sm esp-action-btn anx"
               v-if="gov.unrest >= 50 && gov.hstl <= 50" 
               @click="game.startEspionage(gov.index, 'annex')"
             >
-              👑 颠覆兼并
+              <AppIcon name="landmark" />
+              <span>颠覆兼并</span>
             </button>
             <button 
-              class="esp-action-btn buy" 
+              class="btn sm esp-action-btn buy"
               v-if="gov.spy >= 3" 
               @click="game.startEspionage(gov.index, 'purchase')"
             >
-              💰 金元收购
+              <AppIcon name="handCoins" />
+              <span>金元收购</span>
             </button>
           </div>
         </div>
@@ -244,8 +286,9 @@ function adjustRaid(delta: number) {
 
     <!-- 佣兵 -->
     <div class="merc-section" v-if="mercsUnlocked">
-      <button class="merc-btn" @click="game.doHireMerc()" :disabled="garrison!.workers >= garrison!.max">
-        💰 雇佣佣兵 ({{ mercPrice }} 金币)
+      <button class="btn sm merc-btn" @click="game.doHireMerc()" :disabled="garrison!.workers >= garrison!.max">
+        <AppIcon name="handCoins" />
+        <span>雇佣佣兵 ({{ mercPrice }} 金币)</span>
       </button>
     </div>
 
@@ -269,6 +312,9 @@ function adjustRaid(delta: number) {
 }
 
 .section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-accent);
@@ -276,10 +322,18 @@ function adjustRaid(delta: number) {
 }
 
 .sub-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 6px;
+}
+.section-title svg,
+.sub-title svg {
+  width: 15px;
+  height: 15px;
 }
 
 /* 统计网格 */
@@ -298,10 +352,21 @@ function adjustRaid(delta: number) {
   gap: 2px;
 }
 .stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+.icon-label svg,
+.gov-stat svg,
+.merc-btn svg,
+.spy-btn svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 .stat-value {
   font-size: 16px;
@@ -315,7 +380,7 @@ function adjustRaid(delta: number) {
   color: var(--text-muted);
 }
 .wounded-val {
-  color: #f87171;
+  color: var(--danger);
 }
 
 /* 训练进度 */
@@ -332,6 +397,9 @@ function adjustRaid(delta: number) {
   margin-bottom: 6px;
 }
 .training-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
@@ -340,30 +408,26 @@ function adjustRaid(delta: number) {
   font-size: 11px;
   color: var(--text-muted);
 }
-.progress-bar {
-  height: 6px;
-  background: var(--bg-input);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
 .progress-text {
+  display: inline-block;
+  margin-top: 4px;
   color: var(--text-muted);
 }
 .training-full {
-  color: #22c55e;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success);
   font-size: 13px;
   font-weight: 500;
   padding: 8px 12px;
-  background: rgba(34, 197, 94, 0.08);
+  background: var(--success-glow);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+}
+.training-full svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* 战术 */
@@ -397,9 +461,9 @@ function adjustRaid(delta: number) {
   border-color: var(--border-hover);
 }
 .tactic-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #fff;
+  background: var(--info);
+  border-color: var(--info);
+  color: var(--text-primary);
 }
 
 /* 出征 */
@@ -429,36 +493,6 @@ function adjustRaid(delta: number) {
 .raid-max {
   color: var(--text-muted);
 }
-.ctrl-btn {
-  width: 28px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s;
-  padding: 0;
-}
-.ctrl-btn:hover:not(:disabled) {
-  background: var(--bg-card-hover);
-  border-color: var(--border-hover);
-}
-.ctrl-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-.all-btn {
-  width: auto;
-  padding: 0 8px;
-  font-size: 11px;
-}
-
 /* 战役 */
 .campaign-section {
   margin-top: 4px;
@@ -494,21 +528,30 @@ function adjustRaid(delta: number) {
   color: var(--text-muted);
 }
 .gov-status.occ {
-  color: #22c55e;
+  color: var(--success);
 }
 .gov-status.anx {
-  color: #3b82f6;
+  color: var(--info);
 }
 .gov-stats {
   display: flex;
   gap: 8px;
   color: var(--text-muted);
 }
+.gov-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .campaign-actions {
   display: flex;
   gap: 4px;
 }
 .campaign-btn, .spy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
@@ -518,12 +561,12 @@ function adjustRaid(delta: number) {
   transition: all 0.15s;
 }
 .campaign-btn {
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
+  background: var(--danger-glow);
+  color: var(--danger);
 }
 .campaign-btn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #f87171;
+  background: color-mix(in srgb, var(--danger) 25%, transparent);
+  border-color: var(--danger);
 }
 .campaign-btn:disabled {
   opacity: 0.3;
@@ -539,13 +582,13 @@ function adjustRaid(delta: number) {
   border-color: var(--border-hover);
 }
 .spy-btn.action-btn {
-  color: #a855f7;
-  border-color: rgba(168, 85, 247, 0.3);
-  background: rgba(168, 85, 247, 0.1);
+  color: var(--res-rna);
+  border-color: color-mix(in srgb, var(--res-rna) 35%, transparent);
+  background: color-mix(in srgb, var(--res-rna) 14%, transparent);
 }
 .spy-btn.action-btn:hover:not(:disabled) {
-  background: rgba(168, 85, 247, 0.2);
-  border-color: #a855f7;
+  background: color-mix(in srgb, var(--res-rna) 25%, transparent);
+  border-color: var(--res-rna);
 }
 
 /* Espionage Modal */
@@ -559,37 +602,30 @@ function adjustRaid(delta: number) {
 }
 .esp-header {
   font-size: 12px;
-  color: #a855f7;
+  color: var(--res-rna);
   margin-bottom: 6px;
   font-weight: 600;
   display: flex;
+  align-items: center;
   justify-content: space-between;
 }
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.close-btn:hover { color: #f87171; }
 .esp-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
 .esp-action-btn {
-  padding: 4px 6px;
-  font-size: 11px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  border-radius: 4px;
-  cursor: pointer;
   text-align: left;
+  justify-content: flex-start;
 }
-.esp-action-btn.inc { color: #f97316; }
-.esp-action-btn.anx { color: #3b82f6; border-color: rgba(59,130,246,0.3); }
-.esp-action-btn.buy { color: #eab308; border-color: rgba(234,179,8,0.3); }
+.esp-action-btn svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+.esp-action-btn.inc { color: var(--res-copper); }
+.esp-action-btn.anx { color: var(--info); border-color: color-mix(in srgb, var(--info) 35%, transparent); }
+.esp-action-btn.buy { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
 .esp-action-btn:hover { background: var(--bg-card-hover); }
 
 /* 佣兵 */
@@ -598,23 +634,14 @@ function adjustRaid(delta: number) {
 }
 .merc-btn {
   width: 100%;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid rgba(250, 204, 21, 0.3);
-  border-radius: var(--radius-sm);
-  background: rgba(250, 204, 21, 0.08);
-  color: #facc15;
-  cursor: pointer;
-  transition: all 0.15s;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  background: var(--warning-glow);
+  color: var(--warning);
 }
 .merc-btn:hover:not(:disabled) {
-  background: rgba(250, 204, 21, 0.15);
-  border-color: #facc15;
-}
-.merc-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
+  background: color-mix(in srgb, var(--warning) 25%, transparent);
+  border-color: var(--warning);
 }
 
 /* 厌战 */
@@ -622,10 +649,10 @@ function adjustRaid(delta: number) {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #fb923c;
+  color: var(--res-copper);
   padding: 6px 12px;
-  background: rgba(251, 146, 60, 0.06);
+  background: color-mix(in srgb, var(--res-copper) 12%, transparent);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(251, 146, 60, 0.15);
+  border: 1px solid color-mix(in srgb, var(--res-copper) 22%, transparent);
 }
 </style>

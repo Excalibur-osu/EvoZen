@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import MiningDroidPanel from './MiningDroidPanel.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const game = useGameStore()
 
@@ -318,9 +319,7 @@ function resourceName(id: string): string {
     </section>
 
     <section v-if="regionGroups.length === 0" class="registry-card">
-      <div class="empty-state">
-        完成发射与月球任务后，这里会开始出现真实的太空结构槽位。
-      </div>
+      <EmptyState text="完成发射与月球任务后，这里会开始出现真实的太空结构槽位。" icon="space" />
     </section>
 
     <section
@@ -391,8 +390,8 @@ function resourceName(id: string): string {
 .hero-card {
   padding: 18px;
   background:
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 36%),
-    linear-gradient(165deg, rgba(11, 18, 32, 0.96), rgba(16, 24, 39, 0.92));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--info) 18%, transparent), transparent 36%),
+    linear-gradient(165deg, var(--bg-secondary), var(--bg-card));
 }
 
 .eyebrow {
@@ -428,9 +427,9 @@ function resourceName(id: string): string {
 .stat {
   min-width: 96px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-pressed);
 }
 
 .stat-label {
@@ -493,7 +492,6 @@ function resourceName(id: string): string {
 .action-desc,
 .action-effect,
 .action-req,
-.empty-state,
 .structure-meta {
   font-size: 12px;
   line-height: 1.5;
@@ -501,7 +499,6 @@ function resourceName(id: string): string {
 
 .action-desc,
 .action-req,
-.empty-state,
 .structure-meta {
   color: var(--text-secondary);
 }
@@ -519,9 +516,9 @@ function resourceName(id: string): string {
 .cost-chip {
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(14, 165, 233, 0.08);
-  border: 1px solid rgba(14, 165, 233, 0.18);
-  color: #7dd3fc;
+  background: color-mix(in srgb, var(--info) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--info) 28%, transparent);
+  color: var(--info);
   font-size: 11px;
   font-family: var(--font-mono);
 }
@@ -579,9 +576,9 @@ function resourceName(id: string): string {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
 }
 
 .build-card.locked {

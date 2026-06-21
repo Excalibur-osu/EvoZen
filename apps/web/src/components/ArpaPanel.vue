@@ -10,6 +10,11 @@
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { MonumentType } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
+import EmptyState from './ui/EmptyState.vue'
+import AppIcon from './ui/AppIcon.vue'
+import type { IconName } from './ui/app-icons'
+import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
 
@@ -51,31 +56,24 @@ const MONUMENT_RES_LABEL: Record<MonumentType, string> = {
   Pillar:   '木材 ×1,000,000',
   Megalith: '水晶 ×55,000',
 }
-const MONUMENT_ICON: Record<MonumentType, string> = {
-  Obelisk:  '🗿',
-  Statue:   '🗽',
-  Sculpture:'🪨',
-  Monolith: '🧱',
-  Pillar:   '🏛️',
-  Megalith: '🪐',
+const MONUMENT_ICON: Record<MonumentType, IconName> = {
+  Obelisk:  'monumentStone',
+  Statue:   'landmark',
+  Sculpture:'monumentStone',
+  Monolith: 'monumentBrick',
+  Pillar:   'monumentColumns',
+  Megalith: 'monumentGem',
 }
 const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith','Pillar','Megalith']
 </script>
 
 <template>
   <div class="arpa-panel">
-    <div class="arpa-title-section">
-      <h2 class="arpa-title">🔬 ARPA 长线研究</h2>
-      <p class="arpa-subtitle">
-        大型基础设施项目，资源分 100 次自动扣取，进度满即完成。
-      </p>
-    </div>
+    <PanelHeader icon="arpa" title="ARPA 长线研究" subtitle="大型基础设施项目，资源分 100 次自动扣取，进度满即完成。" />
 
-    <div v-if="!hasAnyArpa" class="arpa-locked">
-      <span>🔒 尚无可用项目。研究更高级的科技以解锁 ARPA。</span>
-    </div>
+    <EmptyState v-if="!hasAnyArpa" text="尚无可用项目。研究更高级的科技以解锁 ARPA。" icon="lock" />
 
-    <div v-for="proj in projects" :key="proj.id" class="arpa-project-card">
+    <div v-for="proj in projects" :key="proj.id" class="arpa-project-card card">
       <div class="proj-header">
         <div class="proj-info">
           <span class="proj-name">{{ proj.name }}</span>
@@ -89,7 +87,7 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
       </div>
 
       <p class="proj-desc">{{ proj.desc }}</p>
-      <p class="proj-effect">✨ {{ proj.effectText }}</p>
+      <p class="proj-effect">{{ proj.effectText }}</p>
 
       <!-- 纪念碑类型选择器 -->
       <div v-if="proj.id === 'monument'" class="monument-type-selector">
@@ -103,7 +101,7 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
             :disabled="projectState(proj.id).active"
             @click="selectMonumentType(mt)"
           >
-            <span class="mt-icon">{{ MONUMENT_ICON[mt] }}</span>
+            <span class="mt-icon"><AppIcon :name="MONUMENT_ICON[mt]" /></span>
             <span class="mt-name">{{ game.MONUMENT_NAMES[mt] }}</span>
             <span class="mt-res">{{ MONUMENT_RES_LABEL[mt] }}</span>
           </button>
@@ -116,15 +114,7 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
           <span>进度</span>
           <span class="font-mono">{{ projectState(proj.id).progress }}%</span>
         </div>
-        <div class="progress-bar">
-          <div
-            class="fill"
-            :style="{
-              width: projectState(proj.id).progress + '%',
-              background: 'linear-gradient(90deg, var(--accent), #a78bfa)',
-            }"
-          />
-        </div>
+        <ProgressBar :value="projectState(proj.id).progress" />
       </div>
 
       <!-- 费用展示 -->
@@ -144,14 +134,16 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
           :disabled="!canAfford(proj.id)"
           @click="game.startArpa(proj.id)"
         >
-          {{ canAfford(proj.id) ? '▶ 开始建造' : '⚠ 资源不足' }}
+          <AppIcon :name="canAfford(proj.id) ? 'play' : 'dangerAlert'" />
+          <span>{{ canAfford(proj.id) ? '开始建造' : '资源不足' }}</span>
         </button>
         <button
           v-else
           class="btn danger"
           @click="game.stopArpa(proj.id)"
         >
-          ⏸ 暂停
+          <AppIcon name="pause" />
+          <span>暂停</span>
         </button>
       </div>
     </div>
@@ -165,37 +157,12 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
   gap: 16px;
 }
 
-.arpa-title-section { text-align: center; margin-bottom: 4px; }
-.arpa-title {
-  font-size: 22px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #3b82f6, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.arpa-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
-
-.arpa-locked {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--text-muted);
-  background: var(--bg-card);
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
-}
-
 .arpa-project-card {
   padding: 18px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: border-color 0.2s;
 }
-.arpa-project-card:hover { border-color: var(--border-hover); }
 
 .proj-header {
   display: flex;
@@ -209,16 +176,16 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
   background: var(--accent-glow);
   color: var(--accent);
   padding: 2px 8px;
-  border-radius: 99px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
 }
 .proj-status-badge {
   font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
-  border-radius: 99px;
+  border-radius: var(--radius-sm);
 }
-.proj-status-badge.active { background: rgba(16,185,129,0.15); color: #10b981; }
+.proj-status-badge.active { background: var(--success-glow); color: var(--success); }
 .proj-status-badge.idle   { background: var(--bg-input); color: var(--text-muted); }
 
 .proj-desc { font-size: 13px; color: var(--text-secondary); }
@@ -249,7 +216,8 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
 .monument-btn:hover:not(:disabled) { border-color: var(--border-hover); background: var(--bg-card-hover); }
 .monument-btn.active { border-color: var(--accent); background: var(--accent-glow); box-shadow: 0 0 8px var(--accent-glow); }
 .monument-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.mt-icon { font-size: 20px; }
+.mt-icon { color: var(--accent); }
+.mt-icon svg { width: 18px; height: 18px; }
 .mt-name { font-size: 11px; font-weight: 700; }
 .mt-res { font-size: 9px; color: var(--text-muted); text-align: center; }
 
@@ -275,7 +243,7 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
 .cost-item {
   background: var(--bg-input);
   padding: 2px 8px;
-  border-radius: 99px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-family: var(--font-mono);
 }
@@ -284,9 +252,9 @@ const MONUMENT_TYPES: MonumentType[] = ['Obelisk','Statue','Sculpture','Monolith
 /* 按钮 */
 .proj-actions { display: flex; gap: 8px; }
 .btn.danger {
-  background: rgba(239,68,68,0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239,68,68,0.3);
+  background: var(--danger-glow);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 }
-.btn.danger:hover { background: rgba(239,68,68,0.2); }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 25%, transparent); }
 </style>

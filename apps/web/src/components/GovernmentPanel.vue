@@ -20,6 +20,8 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import type { GovernmentDef, GovernmentType } from '@evozen/game-core'
+import AppIcon from './ui/AppIcon.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -92,7 +94,7 @@ function isGovAvailable(def: GovernmentDef): boolean {
   <div class="gov-panel">
     <!-- 未解锁时的占位 -->
     <div v-if="!isGovUnlocked" class="locked-hint">
-      <div class="locked-icon">🏛️</div>
+      <div class="locked-icon"><AppIcon name="landmark" /></div>
       <div class="locked-text">研究「政府」科技（需要货币 Lv.1）以解锁政体系统</div>
     </div>
 
@@ -102,7 +104,8 @@ function isGovAvailable(def: GovernmentDef): boolean {
         <div class="section-header">
           <span class="header-label">当前政体</span>
           <span v-if="isInCooldown" class="cooldown-badge">
-            ⏳ 切换冷却中：{{ govCooldown }} tick
+            <AppIcon name="clock" />
+            <span>切换冷却中：{{ govCooldown }} tick</span>
           </span>
         </div>
 
@@ -149,7 +152,7 @@ function isGovAvailable(def: GovernmentDef): boolean {
         </div>
 
         <div class="tax-row">
-          <button class="tax-adj-btn" @click="adjustTax(-1)" :disabled="taxRate <= 0">–</button>
+          <StepperButton label="−" aria-label="降低税率" size="md" shape="circle" :disabled="taxRate <= 0" @click="adjustTax(-1)" />
           <input
             type="range"
             class="tax-slider"
@@ -158,7 +161,7 @@ function isGovAvailable(def: GovernmentDef): boolean {
             :value="taxRate"
             @input="onTaxInput"
           />
-          <button class="tax-adj-btn" @click="adjustTax(1)" :disabled="taxRate >= maxTaxRate">+</button>
+          <StepperButton label="+" aria-label="提高税率" size="md" shape="circle" :disabled="taxRate >= maxTaxRate" @click="adjustTax(1)" />
         </div>
 
         <div class="tax-hint">
@@ -168,7 +171,10 @@ function isGovAvailable(def: GovernmentDef): boolean {
 
         <div class="tax-effects">
           <div class="tax-effect-row">
-            <span class="effect-lbl">💰 预计金币/s</span>
+            <span class="effect-lbl icon-label">
+              <AppIcon name="coins" />
+              <span>预计金币/s</span>
+            </span>
             <span class="effect-val">
               <!--
                 对标 main.js L7587-7626:
@@ -183,17 +189,26 @@ function isGovAvailable(def: GovernmentDef): boolean {
               ).toFixed(2) }}
             </span>
           </div>
-          <div v-if="currentGovType === 'oligarchy'" class="tax-effect-row" style="margin-top:4px">
-            <span class="effect-lbl" style="color:var(--accent)">⚠️ 寡头税收效率</span>
-            <span class="effect-val" style="color:var(--accent)">×0.95</span>
+          <div v-if="currentGovType === 'oligarchy'" class="tax-effect-row gov-multiplier-row">
+            <span class="effect-lbl gov-multiplier-label icon-label">
+              <AppIcon name="dangerAlert" />
+              <span>寡头税收效率</span>
+            </span>
+            <span class="effect-val gov-multiplier-value">×0.95</span>
           </div>
-          <div v-if="currentGovType === 'socialist'" class="tax-effect-row" style="margin-top:4px">
-            <span class="effect-lbl" style="color:var(--accent)">⚠️ 社会主义税收效率</span>
-            <span class="effect-val" style="color:var(--accent)">×0.80</span>
+          <div v-if="currentGovType === 'socialist'" class="tax-effect-row gov-multiplier-row">
+            <span class="effect-lbl gov-multiplier-label icon-label">
+              <AppIcon name="dangerAlert" />
+              <span>社会主义税收效率</span>
+            </span>
+            <span class="effect-val gov-multiplier-value">×0.80</span>
           </div>
-          <div v-if="currentGovType === 'corpocracy'" class="tax-effect-row" style="margin-top:4px">
-            <span class="effect-lbl" style="color:var(--accent)">⚠️ 企业政体税收效率</span>
-            <span class="effect-val" style="color:var(--accent)">×0.50</span>
+          <div v-if="currentGovType === 'corpocracy'" class="tax-effect-row gov-multiplier-row">
+            <span class="effect-lbl gov-multiplier-label icon-label">
+              <AppIcon name="dangerAlert" />
+              <span>企业政体税收效率</span>
+            </span>
+            <span class="effect-val gov-multiplier-value">×0.50</span>
           </div>
         </div>
       </section>
@@ -220,8 +235,16 @@ function isGovAvailable(def: GovernmentDef): boolean {
   text-align: center;
 }
 .locked-icon {
-  font-size: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
   opacity: 0.4;
+}
+.locked-icon svg {
+  width: 44px;
+  height: 44px;
 }
 .locked-text {
   font-size: 14px;
@@ -251,12 +274,21 @@ function isGovAvailable(def: GovernmentDef): boolean {
 
 /* 冷却 badge */
 .cooldown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 999px;
   padding: 2px 10px;
+}
+.cooldown-badge svg,
+.icon-label svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 
 /* 当前政体 */
@@ -355,28 +387,6 @@ function isGovAvailable(def: GovernmentDef): boolean {
   gap: 8px;
   margin-bottom: 8px;
 }
-.tax-adj-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--text-primary);
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-.tax-adj-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-.tax-adj-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
 .tax-slider {
   flex: 1;
   accent-color: var(--accent);
@@ -399,9 +409,22 @@ function isGovAvailable(def: GovernmentDef): boolean {
 }
 .tax-effect-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   font-size: 12px;
   color: var(--text-secondary);
+}
+.icon-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gov-multiplier-row {
+  margin-top: 4px;
+}
+.gov-multiplier-label,
+.gov-multiplier-value {
+  color: var(--accent);
 }
 .effect-val {
   color: var(--text-primary);

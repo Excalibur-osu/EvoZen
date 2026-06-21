@@ -8,6 +8,8 @@
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { GovernorCandidate, GovernorTaskId } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const game = useGameStore()
 
@@ -72,19 +74,16 @@ function taskName(t: GovernorTaskId): string {
 
 <template>
   <div class="governor-panel">
-    <div class="title-section">
-      <h2 class="title">👔 总督</h2>
-      <p class="subtitle">任命一位总督，让他自动管理城市事务。</p>
-    </div>
+    <PanelHeader icon="governor" title="总督" subtitle="任命一位总督，让他自动管理城市事务。" />
 
     <!-- 已任命：显示当前总督 + 任务槽 -->
-    <div v-if="currentGovernor" class="active-governor">
+    <div v-if="currentGovernor" class="active-governor card">
       <div class="gov-card">
         <div class="gov-info">
           <span class="gov-title">{{ currentGovernor.t }} {{ currentGovernor.n }}</span>
           <span class="gov-bg">[{{ backgroundName(currentGovernor.bg) }}]</span>
         </div>
-        <button class="fire-btn" @click="fire">解雇</button>
+        <button class="fire-btn btn danger" @click="fire">解雇</button>
       </div>
       <div class="gov-traits">
         <span class="trait-label">特长：</span>
@@ -112,16 +111,14 @@ function taskName(t: GovernorTaskId): string {
     <div v-else class="candidates-section">
       <div class="header-row">
         <h3 class="section-title">候选人</h3>
-        <button class="refresh-btn" @click="refreshCandidates">
+        <button class="refresh-btn btn primary" @click="refreshCandidates">
           {{ candidates.length === 0 ? '生成候选人' : '重新生成' }}
         </button>
       </div>
 
-      <div v-if="candidates.length === 0" class="empty-hint">
-        <span>点击"生成候选人"开始招募。</span>
-      </div>
+      <EmptyState v-if="candidates.length === 0" text="点击“生成候选人”开始招募。" icon="governor" />
 
-      <div v-for="(c, i) in candidates" :key="i" class="candidate-card">
+      <div v-for="(c, i) in candidates" :key="i" class="candidate-card card">
         <div class="candidate-info">
           <span class="cand-title">{{ c.t }} {{ c.n }}</span>
           <span class="cand-bg">[{{ backgroundName(c.bg) }}]</span>
@@ -129,23 +126,17 @@ function taskName(t: GovernorTaskId): string {
         <div class="candidate-traits">
           <span v-for="t in traitsList(c.bg)" :key="t" class="trait-chip">{{ t }}</span>
         </div>
-        <button class="appoint-btn" @click="appoint(c)">任命</button>
+        <button class="appoint-btn btn primary" @click="appoint(c)">任命</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.governor-panel { padding: 1rem; color: #e0e0e0; }
-.title-section { margin-bottom: 1rem; }
-.title { font-size: 1.3rem; color: #ffd24c; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; }
+.governor-panel { display: flex; flex-direction: column; gap: 10px; }
 
 .active-governor {
-  background: rgba(255, 210, 76, 0.05);
-  border: 1px solid #665533;
-  border-radius: 6px;
-  padding: 1rem;
+  padding: 10px;
 }
 .gov-card {
   display: flex;
@@ -154,83 +145,52 @@ function taskName(t: GovernorTaskId): string {
   margin-bottom: 0.5rem;
 }
 .gov-info { font-size: 1rem; }
-.gov-title { font-weight: bold; color: #ffd24c; }
-.gov-bg { color: #aaa; margin-left: 0.5rem; }
-.fire-btn {
-  background: #883333;
-  color: #fff;
-  border: none;
-  padding: 0.4rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
+.gov-title { font-weight: 700; color: var(--text-primary); }
+.gov-bg { color: var(--text-secondary); margin-left: 0.5rem; }
 .gov-traits { margin: 0.5rem 0; }
-.trait-label { color: #aaa; font-size: 0.85rem; }
+.trait-label { color: var(--text-secondary); font-size: 0.85rem; }
 .trait-chip {
   display: inline-block;
-  background: #443322;
-  color: #ffd24c;
+  background: var(--surface-pressed);
+  color: var(--warning);
   padding: 0.15rem 0.6rem;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   margin-right: 0.3rem;
 }
 
 .task-slots {
   margin-top: 1rem;
-  border-top: 1px solid #443322;
+  border-top: 1px solid var(--border-color);
   padding-top: 0.8rem;
 }
-.section-title { font-size: 1rem; color: #ffd24c; margin: 0 0 0.5rem; }
+.section-title { font-size: 13px; color: var(--text-primary); margin: 0 0 0.5rem; }
 .task-slot { display: flex; align-items: center; margin-bottom: 0.4rem; }
-.slot-label { width: 60px; color: #aaa; font-size: 0.85rem; }
+.slot-label { width: 60px; color: var(--text-secondary); font-size: 0.85rem; }
 .slot-select {
   flex: 1;
-  background: #2a2010;
-  color: #ddd;
-  border: 1px solid #443322;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   padding: 0.3rem 0.6rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
-.candidates-section { }
+.candidates-section { display: flex; flex-direction: column; gap: 8px; }
 .header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
 }
-.refresh-btn {
-  background: #885511;
-  color: #fff;
-  border: none;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.empty-hint { color: #888; padding: 1rem; text-align: center; }
 
 .candidate-card {
-  background: #1f1810;
-  border: 1px solid #443322;
-  border-radius: 6px;
   padding: 0.6rem 0.8rem;
-  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .candidate-info { flex: 1; }
-.cand-title { font-weight: bold; color: #ffd24c; }
-.cand-bg { color: #aaa; margin-left: 0.5rem; font-size: 0.85rem; }
+.cand-title { font-weight: 700; color: var(--text-primary); }
+.cand-bg { color: var(--text-secondary); margin-left: 0.5rem; font-size: 0.85rem; }
 .candidate-traits { flex: 1; }
-.appoint-btn {
-  background: #557733;
-  color: #fff;
-  border: none;
-  padding: 0.4rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.appoint-btn:hover { background: #669944; }
 </style>

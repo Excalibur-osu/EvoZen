@@ -23,7 +23,13 @@ import {
   canBuildInterstellarStructure,
   getInterstellarBuildCost,
 } from './interstellar';
+import {
+  GALAXY_STRUCTURES,
+  canBuildGalaxyStructure,
+  getGalaxyBuildCost,
+} from './galaxy';
 import { markChallengeTask } from './achievement-triggers';
+import { unlockAchievement } from './achievements';
 
 const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
 export type FactoryLineId = 'Lux' | 'Furs' | 'Alloy' | 'Polymer' | 'Nano' | 'Stanene';
@@ -42,6 +48,19 @@ function ensureSpaceStructure(state: GameState, id: string): void {
 function ensureInterstellarStructure(state: GameState, id: string): void {
   if (!state.interstellar[id]) {
     state.interstellar[id] = { count: 0 };
+  }
+}
+
+function ensureGalaxyState(state: GameState): Record<string, { count: number; on?: number }> {
+  const holder = state as unknown as { galaxy?: Record<string, { count: number; on?: number }> };
+  holder.galaxy ??= {};
+  return holder.galaxy;
+}
+
+function ensureGalaxyStructure(state: GameState, id: string): void {
+  const galaxy = ensureGalaxyState(state);
+  if (!galaxy[id]) {
+    galaxy[id] = { count: 0 };
   }
 }
 
@@ -244,6 +263,10 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       next.tech['asteroid'] = 3;
     }
   }
+  if (structureId === 'biodome' && !next.race['cataclysm'] && next.race['joyless']) {
+    unlockAchievement(next, 'joyless');
+    delete next.race['joyless'];
+  }
   if (structureId === 'world_collider') {
     const collider = next.space['world_collider'] as { count: number } | undefined;
     if (collider && collider.count >= 1859) {
@@ -258,6 +281,9 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       }
       if (next.race['banana']) {
         markChallengeTask(next, 'banana', 'b2');
+      }
+      if (next.race['emfield']) {
+        unlockAchievement(next, 'technophobe');
       }
     }
   }
@@ -317,6 +343,47 @@ export function buildInterstellarStructure(state: GameState, structureId: string
     building.coal = building.coal ?? 0;
     building.alum = building.alum ?? 0;
     next.tech['droids'] = Math.max(next.tech['droids'] ?? 0, 1);
+  }
+
+  applyDerivedStateInPlace(next);
+  return next;
+}
+
+export function buildGalaxyStructure(state: GameState, structureId: string): GameState | null {
+  if (!canBuildGalaxyStructure(state, structureId)) return null;
+
+  const def = GALAXY_STRUCTURES.find((structure) => structure.id === structureId);
+  if (!def) return null;
+
+  const next = cloneState(state);
+  const costs = getGalaxyBuildCost(next, structureId);
+  for (const [resId, cost] of Object.entries(costs)) {
+    if (cost <= 0) continue;
+    if (!next.resource[resId]) return null;
+    next.resource[resId].amount -= cost;
+  }
+
+  ensureGalaxyStructure(next, structureId);
+  const galaxy = ensureGalaxyState(next);
+  const building = galaxy[structureId];
+  building.count++;
+
+  const needsOnTracking =
+    (def.powerCost ?? 0) > 0 ||
+    def.support !== undefined ||
+    def.supportFuel !== undefined;
+  if (needsOnTracking) {
+    building.on = (building.on ?? 0) + 1;
+  } else if (building.on !== undefined) {
+    building.on++;
+  }
+
+  if (structureId === 'embassy') {
+    next.tech['xeno'] = Math.max(next.tech['xeno'] ?? 0, 5);
+    ensureGalaxyStructure(next, 'freighter');
+    if (next.race['fasting']) {
+      markChallengeTask(next, 'endless_hunger', 'b1');
+    }
   }
 
   applyDerivedStateInPlace(next);

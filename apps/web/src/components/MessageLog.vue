@@ -7,6 +7,8 @@
 import { computed, ref, nextTick, watch } from 'vue'
 import { useGameStore } from '../stores/game'
 import type { GameMessage } from '@evozen/shared-types'
+import AppIcon from './ui/AppIcon.vue'
+import IconButton from './ui/IconButton.vue'
 
 const game = useGameStore()
 const logContainer = ref<HTMLElement | null>(null)
@@ -36,8 +38,11 @@ function msgClass(type: GameMessage['type']): string {
 <template>
   <div class="message-log-section">
     <div class="log-header">
-      <span class="log-title">📜 消息日志</span>
-      <button class="clear-btn" @click="game.clearMessages()" title="清空日志">🗑️</button>
+      <span class="log-title">
+        <AppIcon name="messages" />
+        <span>消息日志</span>
+      </span>
+      <IconButton icon="trash" label="清空日志" tone="danger" size="sm" @click="game.clearMessages()" />
     </div>
     <div class="log-list" ref="logContainer">
       <TransitionGroup name="list" tag="div">
@@ -67,30 +72,21 @@ function msgClass(type: GameMessage['type']): string {
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  background: rgba(255,255,255,0.02);
-}
-.clear-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  opacity: 0.5;
-  transition: all 0.2s;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.clear-btn:hover {
-  opacity: 1;
-  transform: scale(1.1);
+  background: var(--surface-raised);
 }
 .log-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.log-title svg {
+  width: 13px;
+  height: 13px;
 }
 .log-list {
   flex: 1;
@@ -106,7 +102,7 @@ function msgClass(type: GameMessage['type']): string {
 .msg-success { color: var(--success); }
 .msg-danger { color: var(--danger); }
 .msg-warning { color: var(--warning); }
-.msg-special { color: #a78bfa; font-weight: 600; }
+.msg-special { color: var(--accent); font-weight: 600; }
 .msg-info { color: var(--text-secondary); }
 .log-time {
   color: var(--text-muted);

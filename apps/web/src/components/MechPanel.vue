@@ -6,6 +6,10 @@
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { MechSize, MechChassis, MechWeapon, MechEquipment } from '@evozen/game-core'
+import PanelHeader from './ui/PanelHeader.vue'
+import EmptyState from './ui/EmptyState.vue'
+import MetricCard from './ui/MetricCard.vue'
+import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
 
@@ -66,36 +70,24 @@ function fmtNum(n: number): string {
 
 <template>
   <div class="mech-panel">
-    <h2 class="title">🤖 机甲</h2>
-    <p class="subtitle">建造战斗机甲，征服尖塔与地狱深坑。</p>
+    <PanelHeader icon="mech" title="机甲" subtitle="建造战斗机甲，征服尖塔与地狱深坑。" />
 
     <div class="stats-row">
-      <div class="stat-card">
-        <span>容量</span>
-        <strong>{{ capacity.used }} / {{ capacity.max }}</strong>
-      </div>
-      <div class="stat-card">
-        <span>总战力</span>
-        <strong>{{ fmtNum(total) }}</strong>
-      </div>
-      <div class="stat-card">
-        <span>机甲数</span>
-        <strong>{{ (mechState.mechs ?? []).length }}</strong>
-      </div>
+      <MetricCard label="容量" :value="`${capacity.used} / ${capacity.max}`" />
+      <MetricCard label="总战力" :value="fmtNum(total)" tone="accent" />
+      <MetricCard label="机甲数" :value="(mechState.mechs ?? []).length" />
     </div>
 
     <!-- 建造中 -->
-    <div v-if="mechState.building" class="building-card">
-      <h3>建造中：{{ sizeLabels[mechState.building.def.size] }}</h3>
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: `${(mechState.building.progress / mechState.building.total * 100).toFixed(0)}%` }"></div>
-      </div>
+    <div v-if="mechState.building" class="building-card card">
+      <h3 class="section-title">建造中：{{ sizeLabels[mechState.building.def.size] }}</h3>
+      <ProgressBar :value="mechState.building.progress / mechState.building.total * 100" size="lg" />
       <span>{{ Math.floor(mechState.building.progress) }} / {{ mechState.building.total }}</span>
     </div>
 
     <!-- 设计器 -->
-    <div class="designer">
-      <h3>设计新机甲</h3>
+    <div class="designer card">
+      <h3 class="section-title">设计新机甲</h3>
 
       <div class="row">
         <label>尺寸：</label>
@@ -103,6 +95,7 @@ function fmtNum(n: number): string {
           v-for="s in sizes"
           :key="s"
           :class="['chip', { active: selSize === s }]"
+          type="button"
           @click="selSize = s"
         >{{ sizeLabels[s] }}</button>
       </div>
@@ -113,6 +106,7 @@ function fmtNum(n: number): string {
           v-for="c in chassisOptions"
           :key="c"
           :class="['chip', { active: selChassis === c }]"
+          type="button"
           @click="selChassis = c"
         >{{ chassisLabels[c] }}</button>
       </div>
@@ -123,6 +117,7 @@ function fmtNum(n: number): string {
           v-for="w in weaponOptions"
           :key="w"
           :class="['chip', { active: selWeapon === w }]"
+          type="button"
           @click="selWeapon = w"
         >{{ weaponLabels[w] }}</button>
       </div>
@@ -133,6 +128,7 @@ function fmtNum(n: number): string {
           v-for="e in equipOptions"
           :key="e"
           :class="['chip', { active: selEquip.includes(e) }]"
+          type="button"
           @click="toggleEquip(e)"
         >{{ equipLabels[e] }}</button>
       </div>
@@ -145,17 +141,17 @@ function fmtNum(n: number): string {
             {{ res }} ×{{ fmtNum(amt as number) }}
           </span>
         </div>
-        <button class="build-btn" @click="build" :disabled="!!mechState.building">建造</button>
+        <button class="build-btn btn primary" @click="build" :disabled="!!mechState.building">建造</button>
       </div>
     </div>
 
     <!-- 库存 -->
     <h3 class="section-title">机甲库存</h3>
-    <div v-if="(mechState.mechs ?? []).length === 0" class="empty">尚无机甲。</div>
+    <EmptyState v-if="(mechState.mechs ?? []).length === 0" text="尚无机甲。" icon="mech" />
     <div v-else class="mech-list">
-      <div v-for="(m, i) in (mechState.mechs ?? [])" :key="i" class="mech-card">
+      <div v-for="(m, i) in (mechState.mechs ?? [])" :key="i" class="mech-card card">
         <span class="mech-name">{{ sizeLabels[m.size] }} {{ chassisLabels[m.chassis] }}/{{ weaponLabels[m.weapon] }}</span>
-        <span class="mech-rating">⚔️ {{ fmtNum(game.mechRating(m)) }}</span>
+        <span class="mech-rating">{{ fmtNum(game.mechRating(m)) }}</span>
         <span class="mech-equip" v-if="m.equip.length">[{{ m.equip.map(e => equipLabels[e]).join(', ') }}]</span>
       </div>
     </div>
@@ -163,35 +159,25 @@ function fmtNum(n: number): string {
 </template>
 
 <style scoped>
-.mech-panel { padding: 1rem; color: #e0e0e0; }
-.title { font-size: 1.3rem; color: #66ccff; margin: 0 0 0.3rem; }
-.subtitle { font-size: 0.85rem; color: #aaa; margin-bottom: 1rem; }
-.stats-row { display: flex; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.stat-card { background: rgba(102,204,255,0.08); border: 1px solid #335577; padding: 0.5rem 0.8rem; border-radius: 4px; flex: 1; min-width: 120px; display: flex; flex-direction: column; }
-.stat-card span { font-size: 0.75rem; color: #aaa; }
-.stat-card strong { font-size: 1.1rem; color: #66ccff; }
+.mech-panel { display: flex; flex-direction: column; gap: 10px; }
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 
-.building-card { background: #18222e; border: 1px solid #335577; border-radius: 6px; padding: 0.7rem; margin-bottom: 1rem; }
-.progress-bar { background: #0f1620; height: 14px; border-radius: 4px; overflow: hidden; margin: 0.3rem 0; }
-.progress-fill { background: #66ccff; height: 100%; transition: width 0.2s; }
-
-.designer { background: #18222e; border: 1px solid #2a3a4f; border-radius: 6px; padding: 0.8rem; margin-bottom: 1rem; }
+.building-card { padding: 10px; }
+.designer { padding: 10px; }
 .row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-.row label { min-width: 80px; color: #aaa; }
-.chip { background: #2a3548; color: #ddd; border: 1px solid #3a4558; padding: 0.3rem 0.6rem; border-radius: 12px; cursor: pointer; font-size: 0.8rem; }
-.chip.active { background: #335577; color: #fff; border-color: #66ccff; }
-.preview { margin-top: 0.8rem; padding-top: 0.5rem; border-top: 1px solid #2a3548; }
+.row label { min-width: 80px; color: var(--text-secondary); }
+.chip { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8rem; }
+.chip:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.chip.active { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
+.preview { margin-top: 0.8rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color); }
 .costs { font-size: 0.85rem; margin: 0.3rem 0; }
-.cost-item { color: #ccc; margin-right: 0.5rem; }
-.build-btn { background: #335577; color: #fff; border: none; padding: 0.5rem 1.2rem; border-radius: 4px; cursor: pointer; margin-top: 0.5rem; }
-.build-btn:hover:not(:disabled) { background: #4477aa; }
-.build-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cost-item { color: var(--text-primary); margin-right: 0.5rem; }
+.build-btn { margin-top: 0.5rem; }
 
-.section-title { font-size: 1rem; color: #66ccff; margin: 0.8rem 0 0.5rem; }
-.empty { color: #888; padding: 1rem; text-align: center; }
+.section-title { font-size: 13px; color: var(--text-primary); margin: 0 0 6px; }
 .mech-list { display: grid; gap: 0.3rem; }
-.mech-card { background: #18222e; border: 1px solid #2a3548; border-radius: 4px; padding: 0.4rem 0.6rem; display: flex; gap: 0.6rem; align-items: center; }
+.mech-card { padding: 0.4rem 0.6rem; display: flex; gap: 0.6rem; align-items: center; }
 .mech-name { flex: 1; }
-.mech-rating { color: #ffd700; }
-.mech-equip { font-size: 0.75rem; color: #888; }
+.mech-rating { color: var(--warning); font-family: var(--font-mono); }
+.mech-equip { font-size: 0.75rem; color: var(--text-muted); }
 </style>

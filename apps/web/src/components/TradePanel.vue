@@ -11,6 +11,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { TRADABLE_RESOURCES, type TradeRoute } from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
+import AppIcon from './ui/AppIcon.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -61,15 +63,19 @@ function actionClass(action: string): string {
   <div v-if="isUnlocked" class="trade-panel">
     <!-- 手动市场 -->
     <h3 class="section-title">
-      <span class="icon">🏪</span> 市场
-      <span class="money-badge">💰 {{ money }}</span>
+      <AppIcon name="market" class="section-icon" />
+      <span>市场</span>
+      <span class="money-badge">
+        <AppIcon name="coins" />
+        <span>{{ money }}</span>
+      </span>
     </h3>
 
     <div class="market-tools">
       <span class="tool-label">单次交易数量</span>
-      <button class="qty-btn" @click="game.adjustMarketTradeQty(-1)" :disabled="marketQty <= 1">−</button>
+      <StepperButton label="−" aria-label="减少单次交易数量" :disabled="marketQty <= 1" @click="game.adjustMarketTradeQty(-1)" />
       <span class="qty-value">{{ marketQty }}</span>
-      <button class="qty-btn" @click="game.adjustMarketTradeQty(1)" :disabled="marketQty >= marketQtyLimit">+</button>
+      <StepperButton label="+" aria-label="增加单次交易数量" :disabled="marketQty >= marketQtyLimit" @click="game.adjustMarketTradeQty(1)" />
       <span class="tool-hint">上限 {{ marketQtyLimit }}</span>
     </div>
 
@@ -84,7 +90,7 @@ function actionClass(action: string): string {
 
         <div class="trade-btns">
           <button
-            class="btn btn-buy"
+            class="btn primary sm"
             :disabled="money < game.getBuyPrice(resId) * marketQty"
             @click="game.tradeBuy(resId, marketQty)"
             :title="`买入 ${marketQty}: ${game.getBuyPrice(resId) * marketQty} 金`"
@@ -92,7 +98,7 @@ function actionClass(action: string): string {
             买 {{ marketQty }} / ${{ game.getBuyPrice(resId) * marketQty }}
           </button>
           <button
-            class="btn btn-sell"
+            class="btn danger sm"
             :disabled="(game.state.resource[resId]?.amount ?? 0) < marketQty"
             @click="game.tradeSell(resId, marketQty)"
             :title="`卖出 ${marketQty}: ${game.getSellPrice(resId) * marketQty} 金`"
@@ -105,8 +111,9 @@ function actionClass(action: string): string {
 
     <!-- 贸易路线 -->
     <div v-if="tradeRoutes.length > 0" class="routes-section">
-      <h3 class="section-title" style="margin-top: 20px">
-        <span class="icon">🛤</span> 贸易路线
+      <h3 class="section-title routes-title">
+        <AppIcon name="route" class="section-icon" />
+        <span>贸易路线</span>
         <span class="subtitle">{{ tradeRoutes.length }} 条路线</span>
       </h3>
 
@@ -131,7 +138,7 @@ function actionClass(action: string): string {
           </select>
 
           <button
-            class="btn btn-action"
+            class="btn sm trade-action-btn"
             :class="actionClass(route.action)"
             @click="cycleAction(idx)"
           >
@@ -139,9 +146,9 @@ function actionClass(action: string): string {
           </button>
 
           <div class="route-qty">
-            <button class="qty-btn" @click="adjustRouteQty(idx, -1)" :disabled="(route.qty ?? 1) <= 1">−</button>
+            <StepperButton label="−" aria-label="减少路线交易数量" :disabled="(route.qty ?? 1) <= 1" @click="adjustRouteQty(idx, -1)" />
             <span class="qty-value">{{ route.qty ?? 1 }}</span>
-            <button class="qty-btn" @click="adjustRouteQty(idx, 1)" :disabled="(route.qty ?? 1) >= routeQtyLimit">+</button>
+            <StepperButton label="+" aria-label="增加路线交易数量" :disabled="(route.qty ?? 1) >= routeQtyLimit" @click="adjustRouteQty(idx, 1)" />
           </div>
         </div>
       </div>
@@ -163,8 +170,13 @@ function actionClass(action: string): string {
   align-items: center;
   gap: 8px;
 }
-.section-title .icon {
-  font-size: 18px;
+.routes-title {
+  margin-top: 20px;
+}
+.section-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 .section-title .subtitle {
   font-size: 12px;
@@ -174,10 +186,17 @@ function actionClass(action: string): string {
 }
 
 .money-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-left: auto;
   font-size: 13px;
   font-weight: 600;
-  color: var(--success, #22c55e);
+  color: var(--success);
+}
+.money-badge svg {
+  width: 14px;
+  height: 14px;
 }
 
 .market-tools {
@@ -188,7 +207,7 @@ function actionClass(action: string): string {
   padding: 6px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .tool-label,
@@ -214,7 +233,7 @@ function actionClass(action: string): string {
   gap: 10px;
   padding: 6px 10px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
 }
 
@@ -238,36 +257,6 @@ function actionClass(action: string): string {
   margin-left: auto;
 }
 
-.btn-buy,
-.btn-sell {
-  padding: 3px 10px;
-  font-size: 11px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  transition: opacity 0.15s;
-}
-
-.btn-buy {
-  background: var(--accent, #6366f1);
-  color: #fff;
-}
-.btn-sell {
-  background: #ef4444;
-  color: #fff;
-}
-
-.btn-buy:disabled,
-.btn-sell:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-.btn-buy:not(:disabled):hover,
-.btn-sell:not(:disabled):hover {
-  opacity: 0.85;
-}
-
 /* 贸易路线 */
 .route-grid {
   display: flex;
@@ -281,7 +270,7 @@ function actionClass(action: string): string {
   gap: 10px;
   padding: 6px 10px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
 }
 
@@ -296,7 +285,7 @@ function actionClass(action: string): string {
   flex: 1;
   padding: 3px 6px;
   font-size: 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -309,24 +298,6 @@ function actionClass(action: string): string {
   gap: 4px;
 }
 
-.qty-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  padding: 0;
-}
-
-.qty-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .qty-value {
   min-width: 28px;
   text-align: center;
@@ -335,17 +306,9 @@ function actionClass(action: string): string {
   color: var(--text-primary);
 }
 
-.btn-action {
-  padding: 3px 12px;
-  font-size: 11px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-weight: 600;
+.trade-action-btn {
   min-width: 50px;
   text-align: center;
-  transition: all 0.15s;
 }
 
 .action-none {
@@ -353,16 +316,13 @@ function actionClass(action: string): string {
   color: var(--text-secondary);
 }
 .action-buy {
-  background: var(--accent, #6366f1);
-  color: #fff;
-  border-color: var(--accent, #6366f1);
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
 }
 .action-sell {
-  background: #ef4444;
-  color: #fff;
-  border-color: #ef4444;
-}
-.btn-action:hover {
-  opacity: 0.85;
+  background: var(--danger);
+  color: var(--text-primary);
+  border-color: var(--danger);
 }
 </style>

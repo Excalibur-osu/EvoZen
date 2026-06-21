@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { MiningDroidTargetId } from '@evozen/game-core'
+import AppIcon from './ui/AppIcon.vue'
+import AllocationControl from './ui/AllocationControl.vue'
 
 const game = useGameStore()
 
@@ -45,7 +47,8 @@ function assigned(targetId: MiningDroidTargetId): number {
 <template>
   <div v-if="isUnlocked" class="droid-panel">
     <h3 class="section-title">
-      <span class="icon">🛸</span> 采矿无人机分配
+      <AppIcon name="mining" class="section-icon" />
+      <span>采矿无人机分配</span>
       <span class="subtitle">分配: {{ totalAssigned }}/{{ totalDroids }}</span>
     </h3>
 
@@ -60,23 +63,15 @@ function assigned(targetId: MiningDroidTargetId): number {
           <span class="droid-meta">{{ assigned(target.id) }}</span>
         </div>
         <p class="droid-desc">{{ target.desc }}</p>
-        <div class="controls">
-          <button
-            class="btn-minus"
-            :disabled="assigned(target.id) <= 0"
-            @click="game.removeMiningDroid(target.id)"
-          >
-            -
-          </button>
-          <span class="val">{{ assigned(target.id) }}</span>
-          <button
-            class="btn-plus"
-            :disabled="totalAssigned >= totalDroids"
-            @click="game.assignMiningDroid(target.id)"
-          >
-            +
-          </button>
-        </div>
+        <AllocationControl
+          :value="assigned(target.id)"
+          :decrement-disabled="assigned(target.id) <= 0"
+          :increment-disabled="totalAssigned >= totalDroids"
+          decrement-label="减少采矿分配"
+          increment-label="增加采矿分配"
+          @decrement="game.removeMiningDroid(target.id)"
+          @increment="game.assignMiningDroid(target.id)"
+        />
       </article>
     </div>
   </div>
@@ -97,6 +92,11 @@ function assigned(targetId: MiningDroidTargetId): number {
   align-items: center;
   gap: 8px;
 }
+.section-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
 
 .subtitle {
   margin-left: auto;
@@ -113,9 +113,9 @@ function assigned(targetId: MiningDroidTargetId): number {
 
 .droid-card {
   padding: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
 }
 
 .droid-head {
@@ -144,37 +144,4 @@ function assigned(targetId: MiningDroidTargetId): number {
   color: var(--text-secondary);
 }
 
-.controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-minus,
-.btn-plus {
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--border-color);
-  background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.btn-minus:disabled,
-.btn-plus:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.val {
-  min-width: 20px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
 </style>

@@ -22,6 +22,7 @@ import PowerPanel from './components/PowerPanel.vue'
 import MilitaryPanel from './components/MilitaryPanel.vue'
 import ArpaPanel from './components/ArpaPanel.vue'
 import SpacePanel from './components/SpacePanel.vue'
+import GalaxyPanel from './components/GalaxyPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 import MobileNotSupported from './components/MobileNotSupported.vue'
@@ -40,12 +41,15 @@ import MechPanel from './components/MechPanel.vue'
 import WomlingPanel from './components/WomlingPanel.vue'
 import CrisprPanel from './components/CrisprPanel.vue'
 import CustomRacePanel from './components/CustomRacePanel.vue'
+import AppIcon from './components/ui/AppIcon.vue'
+import { type IconName } from './components/ui/app-icons'
+import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 
 
 const game = useGameStore()
 type TabId = 'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'
   | 'portal' | 'governor' | 'magic' | 'achievements' | 'races' | 'truepath' | 'edenic' | 'prestige'
-  | 'mech' | 'womling' | 'crispr' | 'custom_race' | 'stats'
+  | 'galaxy' | 'mech' | 'womling' | 'crispr' | 'custom_race' | 'stats'
 
 const activeTab = ref<TabId>('evolution')
 /** 市政 Tab 下的子 Tab */
@@ -89,32 +93,35 @@ watch(() => game.isEvolving, (isEvolving) => {
   }
 }, { immediate: true })
 
+type AppTab = { id: TabId; label: string; visible: boolean; icon?: IconName }
+
 const tabs = computed(() => {
-  const list: Array<{ id: TabId; label: string; visible: boolean }> = []
+  const list: AppTab[] = []
   if (game.isEvolving) {
-    list.push({ id: 'evolution', label: '🧬 进化', visible: true })
+    list.push({ id: 'evolution', label: '进化', icon: 'evolution', visible: true })
   } else {
     list.push(
-      { id: 'city', label: cityTabLabel.value, visible: true },
-      { id: 'civic', label: '市政', visible: game.state.settings.showCivic },
-      { id: 'arpa', label: 'ARPA', visible: (game.state.tech['monument'] ?? 0) >= 1 },
-      { id: 'space', label: '太空', visible: (game.state.tech['high_tech'] ?? 0) >= 7 || (game.state.tech['space_explore'] ?? 0) >= 1 || (game.state.tech['mars'] ?? 0) >= 1 },
-      { id: 'truepath', label: '🛸 真相', visible: !!game.state.race['truepath'] && (game.state.tech['outer'] ?? 0) >= 1 },
-      { id: 'portal', label: '🔥 地狱门', visible: (game.state.tech['portal'] ?? 0) >= 2 },
-      { id: 'mech', label: '🤖 机甲', visible: (game.state.tech['hell_spire'] ?? 0) >= 4 || (game.state.tech['edenic'] ?? 0) >= 5 },
-      { id: 'edenic', label: '🌟 伊甸园', visible: (game.state.tech['edenic'] ?? 0) >= 1 },
-      { id: 'womling', label: '🧟 Womling', visible: game.canUseWomling() },
-      { id: 'industry', label: '工坊', visible: (game.state.tech['foundry'] ?? 0) >= 1 },
-      { id: 'market', label: '贸易', visible: game.state.settings.showMarket },
-      { id: 'storage', label: '仓储', visible: game.state.settings.showStorage },
-      { id: 'magic', label: '✨ 魔法', visible: game.state.race.universe === 'magic' && (game.state.tech['magic'] ?? 0) >= 1 },
-      { id: 'governor', label: '👔 总督', visible: !!(game.state.genes as Record<string, number>)['governor'] && !!game.state.tech['governor'] },
-      { id: 'prestige', label: '♻️ 转生', visible: (game.state.tech['mad'] ?? 0) >= 1 || (game.state.tech['genesis'] ?? 0) >= 7 || (game.state.tech['blackhole'] ?? 0) >= 5 || (game.state.tech['ascension'] ?? 0) >= 1 },
-      { id: 'crispr', label: '🧬 CRISPR', visible: (game.state.tech['genetics'] ?? 0) >= 1 && (((game.state.prestige as Record<string, { count?: number }>)?.['Plasmid']?.count ?? 0) > 0) },
-      { id: 'achievements', label: '🏆 成就', visible: true },
-      { id: 'stats', label: '📊 统计', visible: true },
-      { id: 'races', label: '🧬 种族', visible: true },
-      { id: 'custom_race', label: '🛠️ 编辑种族', visible: (game.state.tech['genetics'] ?? 0) >= 4 },
+      { id: 'city', label: cityTabLabel.value, icon: 'city', visible: true },
+      { id: 'civic', label: '市政', icon: 'civic', visible: game.state.settings.showCivic },
+      { id: 'arpa', label: 'ARPA', icon: 'arpa', visible: (game.state.tech['monument'] ?? 0) >= 1 },
+      { id: 'space', label: '太空', icon: 'space', visible: (game.state.tech['high_tech'] ?? 0) >= 7 || (game.state.tech['space_explore'] ?? 0) >= 1 || (game.state.tech['mars'] ?? 0) >= 1 },
+      { id: 'galaxy', label: '银河', icon: 'galaxy', visible: (game.state.tech['stargate'] ?? 0) >= 1 || (game.state.tech['gateway'] ?? 0) >= 3 || (game.state.tech['xeno'] ?? 0) >= 4 },
+      { id: 'truepath', label: '真相', icon: 'truepath', visible: !!game.state.race['truepath'] && (game.state.tech['outer'] ?? 0) >= 1 },
+      { id: 'portal', label: '地狱门', icon: 'portal', visible: (game.state.tech['portal'] ?? 0) >= 2 },
+      { id: 'mech', label: '机甲', icon: 'mech', visible: (game.state.tech['hell_spire'] ?? 0) >= 4 || (game.state.tech['edenic'] ?? 0) >= 5 },
+      { id: 'edenic', label: '伊甸园', icon: 'edenic', visible: (game.state.tech['edenic'] ?? 0) >= 1 },
+      { id: 'womling', label: 'Womling', icon: 'womling', visible: game.canUseWomling() },
+      { id: 'industry', label: '工坊', icon: 'industry', visible: (game.state.tech['foundry'] ?? 0) >= 1 },
+      { id: 'market', label: '贸易', icon: 'market', visible: game.state.settings.showMarket },
+      { id: 'storage', label: '仓储', icon: 'storage', visible: game.state.settings.showStorage },
+      { id: 'magic', label: '魔法', icon: 'magic', visible: game.state.race.universe === 'magic' && (game.state.tech['magic'] ?? 0) >= 1 },
+      { id: 'governor', label: '总督', icon: 'governor', visible: !!(game.state.genes as Record<string, number>)['governor'] && !!game.state.tech['governor'] },
+      { id: 'prestige', label: '转生', icon: 'prestige', visible: (game.state.tech['mad'] ?? 0) >= 1 || (game.state.tech['genesis'] ?? 0) >= 7 || (game.state.tech['blackhole'] ?? 0) >= 5 || (game.state.tech['ascension'] ?? 0) >= 1 },
+      { id: 'crispr', label: 'CRISPR', icon: 'crispr', visible: (game.state.tech['genetics'] ?? 0) >= 1 && (((game.state.prestige as Record<string, { count?: number }>)?.['Plasmid']?.count ?? 0) > 0) },
+      { id: 'achievements', label: '成就', icon: 'achievement', visible: true },
+      { id: 'stats', label: '统计', icon: 'stats', visible: true },
+      { id: 'races', label: '种族', icon: 'races', visible: true },
+      { id: 'custom_race', label: '编辑种族', icon: 'customRace', visible: (game.state.tech['genetics'] ?? 0) >= 4 },
     )
   }
   return list.filter(t => t.visible)
@@ -143,10 +150,13 @@ const cityTabLabel = computed(() => {
       <!-- 左侧栏：种族信息 + 资源列表 -->
       <aside class="left-column" v-if="!game.isEvolving">
         <div class="race-header card">
-          <div class="card-body" style="padding: 8px 10px">
+          <div class="card-body race-card-body">
             <div class="race-name">{{ SPECIES_LABELS[game.state.race.species] ?? game.state.race.species }}</div>
             <div class="race-pop-row" v-if="popMax > 0">
-              <span class="pop-label">👥 人口</span>
+              <span class="pop-label">
+                <AppIcon name="users" />
+                <span>人口</span>
+              </span>
               <span class="pop-value font-mono">{{ Math.floor(game.population) }} / {{ popMax }}</span>
             </div>
           </div>
@@ -164,7 +174,8 @@ const cityTabLabel = computed(() => {
             :class="{ active: activeTab === tab.id }"
             @click="activeTab = tab.id"
           >
-            {{ tab.label }}
+            <AppIcon v-if="tab.icon" :name="tab.icon" class="tab-icon" />
+            <span>{{ tab.label }}</span>
           </button>
         </div>
         <div class="tab-content" id="scrollable-content">
@@ -201,6 +212,7 @@ const cityTabLabel = computed(() => {
             </template>
             <ArpaPanel v-if="activeTab === 'arpa'" />
             <SpacePanel v-if="activeTab === 'space'" />
+            <GalaxyPanel v-if="activeTab === 'galaxy'" />
             <template v-if="activeTab === 'industry'">
               <FactoryPanel />
               <SmelterPanel />
@@ -234,11 +246,15 @@ const cityTabLabel = computed(() => {
 
     <!-- 弹窗组件挂载区 -->
     <SettingsPanel />
+    <ConfirmDialog />
 
     <!-- 暂停全屏遮罩 -->
     <div v-if="game.isPaused" class="pause-overlay" @click="game.togglePause()">
       <div class="pause-content">
-        <h2>⏸ 游戏已暂停</h2>
+        <h2 class="pause-heading">
+          <AppIcon name="pause" />
+          <span>游戏已暂停</span>
+        </h2>
         <p>点击任意处恢复运行</p>
       </div>
     </div>
@@ -289,6 +305,9 @@ const cityTabLabel = computed(() => {
   border-bottom: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.015);
 }
+.race-card-body {
+  padding: 8px 10px;
+}
 .race-name {
   font-size: 13px;
   font-weight: 700;
@@ -304,8 +323,15 @@ const cityTabLabel = computed(() => {
   margin-bottom: 4px;
 }
 .pop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-secondary);
+}
+.pop-label svg {
+  width: 12px;
+  height: 12px;
 }
 .pop-value {
   font-size: 11px;
@@ -335,6 +361,10 @@ const cityTabLabel = computed(() => {
   z-index: 10;
 }
 .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
@@ -347,6 +377,11 @@ const cityTabLabel = computed(() => {
   font-family: var(--font-sans);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.tab-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 .tab-btn:hover {
   color: var(--text-primary);
@@ -400,7 +435,7 @@ const cityTabLabel = computed(() => {
 .pause-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-overlay);
   background: rgba(2, 6, 23, 0.6);
   backdrop-filter: blur(4px) grayscale(50%);
   display: flex;
@@ -414,20 +449,25 @@ const cityTabLabel = computed(() => {
   color: var(--text-primary);
   background: rgba(255,255,255,0.02);
   padding: 40px 80px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(255,255,255,0.05);
   box-shadow: 0 20px 40px rgba(0,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.02);
 }
-.pause-content h2 {
+.pause-heading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   font-size: 36px;
   font-weight: 700;
   margin-bottom: 16px;
   letter-spacing: 4px;
-  background: -webkit-linear-gradient(45deg, #a78bfa, #f472b6);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
+  color: var(--accent);
+  text-shadow: 0 0 18px var(--accent-glow);
+}
+.pause-heading svg {
+  width: 34px;
+  height: 34px;
 }
 .pause-content p {
   font-size: 15px;

@@ -1,7 +1,7 @@
 {
   "name": "@evozen/web",
   "private": true,
-  "version": "0.9.3",
+  "version": "0.9.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
   "dependencies": {
     "@evozen/game-core": "*",
     "@evozen/shared-types": "*",
+    "@lucide/vue": "^1.21.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.38"
   },

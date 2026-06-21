@@ -50,7 +50,7 @@ import {
   getHighMetabolismFoodMultiplier,
   getSlaverBonus,
 } from './traits';
-import { getRitualMultiplier } from './magic';
+import { cancelRituals, getRitualMultiplier } from './magic';
 import { calculateMorale, randomizeWeather } from './morale';
 import { powerTick } from './power';
 import { tickTraining, tickHealing, armyRating, garrisonSize } from './military';
@@ -83,6 +83,7 @@ import {
   getSatelliteScientistImpactMultiplier,
   getObservatoryKnowledgeCapBonus,
   SPACE_BARRACKS_OIL_PER_TICK,
+  SPACE_STRUCTURES,
 } from './space';
 import { resolveInterstellarSupport } from './interstellar';
 import { resolveSpaceSupport } from './space-support';
@@ -98,6 +99,107 @@ import {
  * 所有 modRes() 调用都乘以此值。
  */
 const TIME_MULTIPLIER = 0.25;
+const MOON_STRUCTURE_IDS = new Set(
+  SPACE_STRUCTURES.filter((structure) => structure.region === 'spc_moon').map((structure) => structure.id),
+);
+const ORBIT_DECAY_HIDDEN_JOBS = new Set(['forager', 'farmer', 'lumberjack', 'quarry_worker']);
+const ORBIT_DECAY_SHIPS = [
+  'bolognium_ship',
+  'scout_ship',
+  'corvette_ship',
+  'frigate_ship',
+  'cruiser_ship',
+  'dreadnought',
+  'freighter',
+  'super_freighter',
+  'armed_miner',
+  'scavenger',
+];
+
+function clearStructureState(value: unknown): void {
+  if (!value || typeof value !== 'object') return;
+  const structure = value as { count?: number; on?: number };
+  if (typeof structure.count === 'number') {
+    structure.count = 0;
+  }
+  if (typeof structure.on === 'number') {
+    structure.on = 0;
+  }
+}
+
+function applyOrbitDecayedSideEffects(state: GameState): void {
+  if (state.race.universe === 'magic') {
+    if (state.city['pylon']) {
+      const cityPylon = state.city['pylon'] as { count?: number };
+      state.space['pylon'] = {
+        ...(state.space['pylon'] ?? { count: 0 }),
+        count: Math.ceil((cityPylon.count ?? 0) / 2),
+      };
+    }
+    cancelRituals(state);
+  }
+
+  for (const [id, value] of Object.entries(state.city)) {
+    if (id === 'calendar' || id === 'market' || id === 'trade_routes' || id === 'morale' || id === 'power') continue;
+    clearStructureState(value);
+  }
+
+  const zen = state.resource['Zen'];
+  if (zen?.display) {
+    zen.display = false;
+  }
+  const slave = state.resource['Slave'];
+  if (slave?.display) {
+    slave.display = false;
+    slave.amount = 0;
+  }
+
+  if (state.race['deconstructor'] && state.city['nanite_factory']) {
+    const naniteFactory = state.city['nanite_factory'] as Record<string, unknown>;
+    for (const [key, value] of Object.entries(naniteFactory)) {
+      if (key === 'count' || key === 'on') continue;
+      if (typeof value === 'number') {
+        naniteFactory[key] = 0;
+      }
+    }
+  }
+
+  state.space['red_university'] = state.space['red_university'] ?? { count: 0 };
+  for (const id of MOON_STRUCTURE_IDS) {
+    clearStructureState(state.space[id]);
+  }
+
+  for (const value of Object.values(state.resource)) {
+    if (typeof value.trade === 'number') {
+      value.trade = 0;
+    }
+  }
+
+  for (const [jobId, value] of Object.entries(state.civic)) {
+    if (!value || typeof value !== 'object') continue;
+    const job = value as { workers?: number; assigned?: number; display?: boolean };
+    if (jobId !== 'colonist') {
+      if (typeof job.workers === 'number') job.workers = 0;
+      if (typeof job.assigned === 'number') job.assigned = 0;
+    }
+    if (ORBIT_DECAY_HIDDEN_JOBS.has(jobId)) {
+      job.display = false;
+    }
+  }
+  state.civic.d_job = (state.civic['hunter'] as { display?: boolean } | undefined)?.display ? 'hunter' : 'unemployed';
+
+  const galaxy = state['galaxy'] as Record<string, { on?: number }> | undefined;
+  if (galaxy) {
+    for (const ship of ORBIT_DECAY_SHIPS) {
+      if (galaxy[ship] && typeof galaxy[ship].on === 'number') {
+        galaxy[ship].on = 0;
+      }
+    }
+  }
+  if (state.portal['transport'] && typeof state.portal['transport'].on === 'number') {
+    state.portal['transport'].on = 0;
+  }
+}
 
 function getFarmBiomeMultiplier(state: GameState): number {
   switch (state.city.biome) {
@@ -1326,6 +1428,17 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       newState.city.calendar.dayTick = 0;
       newState.city.calendar.day++;
       newState.stats.days = (newState.stats.days ?? 0) + 1;
+
+      const orbitDecayDay = Number(newState.race['orbit_decay'] ?? 0);
+      if (orbitDecayDay > 0 && !newState.race['orbit_decayed'] && (newState.stats.days ?? 0) >= orbitDecayDay) {
+        newState.race['orbit_decayed'] = true;
+        applyOrbitDecayedSideEffects(newState);
+        messages.push({
+          text: '轨道衰退已经抵达临界点，母星生态崩溃，文明被迫转入太空生存。',
+          type: 'info',
+          category: 'progress',
+        });
+      }
 
       // 每天随机化天气 — 对标 legacy main.js L1222-1265
       randomizeWeather(newState);
