@@ -74,9 +74,11 @@ import {
   purchaseEvoUpgrade as corePurchaseEvoUpgrade,
   advanceEvoStep as coreAdvanceEvoStep,
   evolveSentience as coreEvolveSentience,
+  evolveRandomSentience as coreEvolveRandomSentience,
   getAvailableUpgrades,
   getAvailableSteps,
   getAvailableRaces,
+  getSynthImitationTargets,
   getUpgradeCount,
   getUpgradeCost,
   PLANET_TRAITS,
@@ -170,8 +172,18 @@ import {
   GENUS_DEFS,
   getAvailableBasicRaces as coreGetAvailableBasicRaces,
   applyRaceTraits,
+  applyChallengeGeneTraits,
   getRaceFullTraits,
-  // TRAITS,
+  getRaceTraitDetails,
+  getRaceDisplayDefinition,
+  getAltRaceView,
+  applyAltRaceLock,
+  applyAltRaceTraits,
+  loadCustomRace,
+  applyCustomRace,
+  applyImitationTraits,
+  TRAITS,
+  type RaceTraitDetail,
   // 转生
   triggerReset as coreTriggerReset,
   canReset as coreCanReset,
@@ -213,6 +225,8 @@ import {
   getWomlingPopCap,
   assignWomling as coreAssignWomling,
   canUseWomling,
+  getServantsState,
+  canUseServants,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
 
@@ -306,6 +320,26 @@ const BASIC_CHALLENGE_FLAGS = [
   'nerfed',
   'badGenes',
 ] as const
+
+const RESET_TYPE_LABELS: Partial<Record<ResetType, string>> = {
+  mad: 'MAD 核灭',
+  bioseed: '生物播种',
+  cataclysm: '灾变',
+  blackhole: '黑洞',
+  vacuum: '真空坍塌',
+  ascend: '飞升',
+  descend: '下潜',
+  apotheosis: '神化',
+  terraform: '地球化',
+  aiApoc: 'AI 末日',
+  matrix: '矩阵',
+  retire: '退休',
+  eden: '伊甸园',
+}
+
+function resetTypeLabel(type: ResetType): string {
+  return RESET_TYPE_LABELS[type] ?? '转生'
+}
 
 export const useGameStore = defineStore('game', () => {
   // ---- 间谍外交操作 ----
@@ -494,8 +528,15 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  function syncRaceTraits() {
-    assignSpeciesTraits(state.value.race, state.value.race.species)
+  function syncRaceTraits(mainType?: string) {
+    const speciesId = state.value.race.species
+    if (speciesId === 'custom' || speciesId === 'hybrid') {
+      applyCustomRace(state.value, speciesId === 'hybrid', mainType as keyof typeof GENUS_DEFS | undefined)
+    } else if (speciesId in RACES) {
+      applyRaceTraits(state.value, speciesId as keyof typeof RACES, mainType as keyof typeof GENUS_DEFS | undefined)
+    } else {
+      assignSpeciesTraits(state.value.race, speciesId)
+    }
     applySpecialRaceTraits(state.value, state.value.race.species)
   }
 
@@ -709,24 +750,59 @@ export const useGameStore = defineStore('game', () => {
    * 最终进化：选择种族 → sentience → 进入文明
    * 对标 legacy L5195-5212 action() + sentience()
    */
-  function chooseRace(speciesId: string, ptrait: string = 'none', challenges?: ChallengeStartOptions) {
-    const sentienceResult = coreEvolveSentience(state.value, speciesId)
+  function chooseRace(
+    speciesId: string,
+    ptrait: string = 'none',
+    challenges?: ChallengeStartOptions,
+    options: { imitationTarget?: string } = {},
+  ) {
+    const normalizedChallenges = normalizeChallengeStartOptions(challenges)
+    if (normalizedChallenges?.mode === 'warlord' && !canUseWarlordOriginSpecies(speciesId)) {
+      addMessage('战争之主不能以自定义种族、混血自定义或纳米群作为起源种族。', 'warning', 'progress')
+      return
+    }
+    const sentienceResult = coreEvolveSentience(state.value, speciesId, options)
     if (!sentienceResult) {
       addMessage('进化条件不满足或资源不足，请确认 RNA/DNA 充足且已完成人形化进化。', 'warning', 'progress')
       return
     }
-    state.value = sentienceResult
-    _applyStartCivilization(speciesId, ptrait, challenges)
+    state.value = sentienceResult.state
+    _applyStartCivilization(
+      sentienceResult.speciesId,
+      ptrait,
+      normalizedChallenges,
+      sentienceResult.mainType,
+      sentienceResult.imitationTarget,
+    )
+  }
+
+  function randomSentience(ptrait: string = 'none', challenges?: ChallengeStartOptions) {
+    const normalizedChallenges = normalizeChallengeStartOptions(challenges)
+    if (normalizedChallenges?.mode === 'warlord') {
+      addMessage('战争之主需要指定一个合法起源种族，不能使用随机觉醒。', 'warning', 'progress')
+      return
+    }
+    const sentienceResult = coreEvolveRandomSentience(state.value)
+    if (!sentienceResult) {
+      addMessage('随机觉醒条件不满足或资源不足，请确认 RNA/DNA 充足且已完成一个属类进化。', 'warning', 'progress')
+      return
+    }
+    state.value = sentienceResult.state
+    _applyStartCivilization(sentienceResult.speciesId, ptrait, normalizedChallenges, sentienceResult.mainType)
   }
 
   /** 内部：初始化文明阶段状态 */
-  function _applyStartCivilization(speciesId: string, ptrait: string = 'none', challenges?: ChallengeStartOptions) {
-    const speciesLabels: Record<string, string> = {
-      human: '人类', elven: '精灵', orc: '兽人', dwarf: '矮人', goblin: '地精',
-      junker: '废物种', sludge: '污泥族', ultra_sludge: '超级污泥族',
-    }
+  function _applyStartCivilization(
+    speciesId: string,
+    ptrait: string = 'none',
+    challenges?: ChallengeStartOptions,
+    mainType?: string,
+    imitationTarget?: string,
+  ) {
     const normalizedChallenges = normalizeChallengeStartOptions(challenges)
     const startSpeciesId = resolveStartSpecies(speciesId, normalizedChallenges)
+    const resolvedMainType = mainType ?? getSpeciesMainType(speciesId)
+    const replacedBySpecialSpecies = startSpeciesId !== speciesId
 
     try {
       localStorage.setItem('evozen_has_evolved_once', 'true')
@@ -736,12 +812,27 @@ export const useGameStore = defineStore('game', () => {
 
     state.value.race.species = startSpeciesId
     state.value.city.ptrait = ptrait
-    syncRaceTraits()
+    syncRaceTraits(replacedBySpecialSpecies ? undefined : resolvedMainType)
+    if (state.value.race['imitation']) {
+      if (imitationTarget) state.value.race['srace'] = imitationTarget
+      else delete state.value.race['srace']
+      applyImitationTraits(state.value)
+    }
+    if (replacedBySpecialSpecies && isJunkLikeSpecies(startSpeciesId) && resolvedMainType) {
+      state.value.race['jtype'] = resolvedMainType
+      state.value.race['maintype'] = resolvedMainType
+    }
+    if (normalizedChallenges?.mode === 'warlord') {
+      applyWarlordOrigin(speciesId)
+    }
     applyChallengeStartOptions(normalizedChallenges)
+    const altRace = applyAltRaceLock(state.value, startSpeciesId)
+    if (altRace) applyAltRaceTraits(state.value, startSpeciesId)
+    applyChallengeGeneTraits(state.value)
 
     // 初始化种族人口资源（0个初始人口，上限0，需靠盖房）
     state.value.resource[startSpeciesId] = {
-      name: speciesLabels[startSpeciesId] ?? startSpeciesId,
+      name: getRaceDisplayName(startSpeciesId),
       display: true,
       value: 0,
       amount: 0,
@@ -777,11 +868,12 @@ export const useGameStore = defineStore('game', () => {
     state.value.settings.showEvolution = false
     state.value.settings.showCity = true
 
-    const label = speciesLabels[startSpeciesId] ?? startSpeciesId
-    const traitSummary = getSpeciesTraitDescriptors(startSpeciesId)
-      .map(trait => `${trait.label}${trait.activeNow ? '' : '（后续生效）'}`)
-      .join(' / ')
+    const label = getRaceDisplayName(startSpeciesId)
+    const traitSummary = getCurrentRaceTraitLabels().join(' / ')
     addMessage(`🎉 进化完成！你的 ${label} 部落踏上了文明之路。`, 'special', 'progress')
+    if (altRace) {
+      addMessage(`🎭 节日外观已锁定：${altRace.name}`, 'info', 'progress')
+    }
     if (traitSummary) {
       addMessage(`🧬 当前种族特质：${traitSummary}`, 'info', 'progress')
     }
@@ -810,6 +902,11 @@ export const useGameStore = defineStore('game', () => {
       if (challenges[flag] && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL[flag]) {
         normalized[flag] = true
       }
+    }
+    if (state.value.race.universe === 'antimatter') {
+      delete normalized.noPlasmid
+    } else {
+      delete normalized.weakMastery
     }
     for (const flag of SPECIAL_CHALLENGE_FLAGS) {
       if (!challenges[flag]) continue
@@ -934,12 +1031,129 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function resolveStartSpecies(speciesId: string, challenges?: ChallengeStartOptions): string {
+    if (challenges?.mode === 'warlord') return 'hellspawn'
     if (challenges?.mode === 'junker') return 'junker'
     if (challenges?.mode === 'standard' || !challenges?.mode) {
       if (challenges?.ultraSludge && canUseSpecialChallenge('ultraSludge')) return 'ultra_sludge'
       if (challenges?.sludge && canUseSpecialChallenge('sludge')) return 'sludge'
     }
     return speciesId
+  }
+
+  function getSpeciesMainType(speciesId: string): string | undefined {
+    if (speciesId === 'custom' || speciesId === 'hybrid') {
+      const config = loadCustomRace(state.value, speciesId === 'hybrid')
+      if (!config) return undefined
+      return config.genus === 'hybrid' ? config.hybrid?.[0] : config.genus
+    }
+    const race = RACES[speciesId as keyof typeof RACES]
+    if (!race) return undefined
+    return race.type === 'hybrid' ? race.hybrid?.[0] : race.type
+  }
+
+  function isJunkLikeSpecies(speciesId: string): boolean {
+    return speciesId === 'junker' || speciesId === 'sludge' || speciesId === 'ultra_sludge'
+  }
+
+  function applyWarlordOrigin(originSpeciesId: string) {
+    state.value.race['absorbed'] = [originSpeciesId]
+    state.value.race['origin'] = originSpeciesId
+    const originRace = RACES[originSpeciesId as keyof typeof RACES]
+    const fanaticism = originRace?.fanaticism
+    if (!fanaticism || fanaticism === 'none') return
+    const traitId = fanaticism === 'kindling_kindred' ? 'iron_wood' : fanaticism
+    state.value.race[traitId] = 0.5
+  }
+
+  function canUseWarlordOriginSpecies(speciesId: string): boolean {
+    return !['custom', 'hybrid', 'nano'].includes(speciesId)
+  }
+
+  function getRaceDisplayName(speciesId: string): string {
+    if (speciesId === 'custom' || speciesId === 'hybrid') {
+      const config = loadCustomRace(state.value, speciesId === 'hybrid')
+      if (config?.name) return config.name
+    }
+    return getRaceDisplayDefinition(speciesId, state.value)?.name ?? speciesId
+  }
+
+  function getRaceDisplayDesc(speciesId: string): string {
+    if (speciesId === 'custom' || speciesId === 'hybrid') {
+      const config = loadCustomRace(state.value, speciesId === 'hybrid')
+      if (config?.desc) return config.desc
+    }
+    return getRaceDisplayDefinition(speciesId, state.value)?.desc ?? ''
+  }
+
+  function getRaceDisplayHome(speciesId: string): string {
+    if (speciesId === 'custom' || speciesId === 'hybrid') {
+      const config = loadCustomRace(state.value, speciesId === 'hybrid')
+      if (config?.home) return config.home
+    }
+    return getRaceDisplayDefinition(speciesId, state.value)?.home ?? ''
+  }
+
+  function getRaceAltLabel(speciesId: string): string | null {
+    const alt = getAltRaceView(speciesId, state.value)
+    return alt ? `节日外观：${alt.name}` : null
+  }
+
+  function getRaceTraitLabels(speciesId: string): string[] {
+    return getRaceTraitDetailsForDisplay(speciesId).map(formatRaceTraitDetail)
+  }
+
+  function getCurrentRaceTraitLabels(): string[] {
+    return getCurrentRaceTraitDetails().map(formatRaceTraitDetail)
+  }
+
+  function getCurrentRaceTraitDetails(): RaceTraitDetail[] {
+    const raceState = state.value.race as Record<string, unknown>
+    const fanaticism = typeof raceState.fanaticism === 'string' ? raceState.fanaticism : undefined
+    return Object.keys(TRAITS).flatMap((traitId) => {
+      const rank = raceState[traitId]
+      return typeof rank === 'number' && rank !== 0
+        ? [makeRaceTraitDetail(traitId, rank, fanaticism)]
+        : []
+    })
+  }
+
+  function getRaceTraitDetailsForDisplay(speciesId: string): RaceTraitDetail[] {
+    if (speciesId === 'custom' || speciesId === 'hybrid') {
+      const config = loadCustomRace(state.value, speciesId === 'hybrid')
+      if (config) {
+        const traitRanks: Record<string, number> = {
+          ...(GENUS_DEFS[config.genus]?.traits ?? {}),
+        }
+        for (const genusId of config.hybrid ?? []) {
+          Object.assign(traitRanks, GENUS_DEFS[genusId]?.traits ?? {})
+        }
+        for (const traitId of config.traits) {
+          traitRanks[traitId] = config.ranks?.[traitId] ?? 1
+        }
+        return Object.entries(traitRanks).map(([id, rank]) => makeRaceTraitDetail(id, rank, config.fanaticism))
+      }
+    }
+    if (speciesId in RACES) return getRaceTraitDetails(speciesId as keyof typeof RACES)
+    return getSpeciesTraitDescriptors(speciesId).map(trait => makeRaceTraitDetail(trait.id, 1, undefined, trait.label))
+  }
+
+  function makeRaceTraitDetail(id: string, rank: number, fanaticism?: string, label?: string): RaceTraitDetail {
+    const def = TRAITS[id]
+    return {
+      id,
+      name: label ?? def?.name ?? id,
+      desc: def?.desc ?? '',
+      rank,
+      val: def?.val ?? 0,
+      type: def?.type ?? '',
+      isFanaticism: fanaticism === id,
+    }
+  }
+
+  function formatRaceTraitDetail(trait: RaceTraitDetail): string {
+    const rank = trait.rank !== 1 ? ` ×${trait.rank}` : ''
+    const fan = trait.isFanaticism ? '（狂热）' : ''
+    return `${trait.name}${rank}${fan}`
   }
 
   function describeChallengeFlags(challenges: ChallengeStartOptions): string[] {
@@ -1266,7 +1480,7 @@ export const useGameStore = defineStore('game', () => {
     if (result) {
       state.value = result
       const def = ARPA_PROJECTS.find(p => p.id === projectId)
-      addMessage(`🏗️ 开始建造：${def?.name ?? projectId}，资源将毥次收取。`, 'info', 'progress')
+      addMessage(`🏗️ 开始建造：${def?.name ?? '未知项目'}，资源将分批收取。`, 'info', 'progress')
     }
   }
 
@@ -1312,7 +1526,8 @@ export const useGameStore = defineStore('game', () => {
       return
     }
 
-    addMessage(`🚀 太空任务 ${actionId} 已完成。`, 'special', 'progress')
+    const actionName = SPACE_ACTIONS.find((action) => action.id === actionId)?.name ?? '未知任务'
+    addMessage(`🚀 太空任务 ${actionName} 已完成。`, 'special', 'progress')
   }
 
   function getSpaceBuildCost(structureId: string): Record<string, number> {
@@ -1331,7 +1546,7 @@ export const useGameStore = defineStore('game', () => {
     }
     state.value = result
     const def = SPACE_STRUCTURES.find((d) => d.id === structureId)
-    addMessage(`🛰️ 建造完成：${def?.name ?? structureId}`, 'success', 'progress')
+    addMessage(`🛰️ 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
   }
 
   function getInterstellarBuildCost(structureId: string): Record<string, number> {
@@ -1350,7 +1565,7 @@ export const useGameStore = defineStore('game', () => {
     }
     state.value = result
     const def = INTERSTELLAR_STRUCTURES.find((d) => d.id === structureId)
-    addMessage(`🌌 建造完成：${def?.name ?? structureId}`, 'success', 'progress')
+    addMessage(`🌌 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
   }
 
   function getGalaxyBuildCost(structureId: string): Record<string, number> {
@@ -1369,7 +1584,7 @@ export const useGameStore = defineStore('game', () => {
     }
     state.value = result
     const def = GALAXY_STRUCTURES.find((d) => d.id === structureId)
-    addMessage(`🌠 建造完成：${def?.name ?? structureId}`, 'success', 'progress')
+    addMessage(`🌠 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
   }
 
   return {
@@ -1413,12 +1628,22 @@ export const useGameStore = defineStore('game', () => {
     purchaseUpgrade,
     advanceStep,
     chooseRace,
+    randomSentience,
     startCivilization,
     gather,
     // 进化查询（供 EvolutionPanel 使用）
     getAvailableUpgrades: () => getAvailableUpgrades(state.value),
     getAvailableSteps: () => getAvailableSteps(state.value),
     getAvailableRaces: () => getAvailableRaces(state.value),
+    getSynthImitationTargets: () => getSynthImitationTargets(state.value),
+    getRaceTraitLabels,
+    getCurrentRaceTraitLabels,
+    getCurrentRaceTraitDetails,
+    getRaceTraitDetailsForDisplay,
+    getRaceDisplayName,
+    getRaceDisplayDesc,
+    getRaceDisplayHome,
+    getRaceAltLabel,
     getUpgradeCount: (id: string) => getUpgradeCount(state.value, id),
     getUpgradeCost: (id: string) => getUpgradeCost(state.value, id),
     PLANET_TRAITS,
@@ -1523,7 +1748,7 @@ export const useGameStore = defineStore('game', () => {
     buildPortalStructure: (id: string) => {
       const built = coreBuildPortalStructure(state.value, id)
       if (built) {
-        addMessage(`建造完成：${PORTAL_BUILDINGS.find((b: PortalBuildingDef) => b.id === id)?.name ?? id}`, 'info', 'building')
+        addMessage(`建造完成：${PORTAL_BUILDINGS.find((b: PortalBuildingDef) => b.id === id)?.name ?? '未知建筑'}`, 'info', 'building')
       } else {
         addMessage('资源不足或条件不满足', 'warning', 'building')
       }
@@ -1569,14 +1794,14 @@ export const useGameStore = defineStore('game', () => {
     setupRituals: () => setupRituals(state.value),
     setRitualPower: (ritual: RitualType, power: number) => {
       const ok = coreSetRitualPower(state.value, ritual, power)
-      if (!ok) addMessage('Mana 不足以维持此仪式', 'warning', 'magic')
+      if (!ok) addMessage('魔力不足以维持此仪式', 'warning', 'magic')
       return ok
     },
     cancelRituals: () => coreCancelRituals(state.value),
     setupAlchemy: () => setupAlchemy(state.value),
     setAlchemyTarget: (resource: string, amount: number) => {
       const ok = coreSetAlchemyTarget(state.value, resource as Parameters<typeof coreSetAlchemyTarget>[1], amount)
-      if (!ok) addMessage('Mana 或 Crystal 不足', 'warning', 'magic')
+      if (!ok) addMessage('魔力或水晶不足', 'warning', 'magic')
       return ok
     },
     currentZodiac: computed<ZodiacSign>(() => getAstrologySign()),
@@ -1584,13 +1809,13 @@ export const useGameStore = defineStore('game', () => {
     conjureFood: () => {
       const ok = coreConjureFood(state.value)
       if (ok) addMessage('召唤食物成功！', 'success', 'magic')
-      else addMessage('Mana 或 Crystal 不足', 'warning', 'magic')
+      else addMessage('魔力或水晶不足', 'warning', 'magic')
       return ok
     },
     buildShrine: () => {
       const ok = coreBuildShrine(state.value)
       if (ok) addMessage('神龛已建造！', 'success', 'magic')
-      else addMessage('需要满月，且 Stone+Cement 充足', 'warning', 'magic')
+      else addMessage('需要满月，且石头和水泥充足', 'warning', 'magic')
       return ok
     },
 
@@ -1621,7 +1846,7 @@ export const useGameStore = defineStore('game', () => {
         return false
       }
       state.value = newState
-      addMessage(`转生完成（${type}），新世代开始！`, 'special', 'prestige')
+      addMessage(`转生完成（${resetTypeLabel(type)}），新世代开始！`, 'special', 'prestige')
       return true
     },
     canReset: (type: ResetType) => coreCanReset(state.value, type),
@@ -1681,10 +1906,11 @@ export const useGameStore = defineStore('game', () => {
     },
 
     // Womling
-    canUseWomling: () => canUseWomling(state.value),
+    canUseWomling: () => canUseWomling(state.value) || canUseServants(state.value),
     discoverWomling: () => coreDiscoverWomling(state.value),
     getWomling: () => initWomling(state.value),
     getWomlingPopCap: () => getWomlingPopCap(state.value),
+    getServants: () => getServantsState(state.value),
     assignWomling: (job: 'farmer' | 'miner' | 'lab' | 'soldier', delta: number) => {
       const ok = coreAssignWomling(state.value, job, delta)
       if (!ok) addMessage('无法分配（人口不足或岗位为零）', 'warning', 'womling')

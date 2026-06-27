@@ -13,7 +13,7 @@ import AppIcon from './ui/AppIcon.vue'
 
 const game = useGameStore()
 
-type GatherActionIcon = 'food' | 'lumber' | 'stone'
+type GatherActionIcon = 'apple' | 'industry' | 'mining'
 
 interface GatherAction {
   resId: string
@@ -75,7 +75,7 @@ const gatherActions = computed(() => {
     actions.push({ 
       resId: 'Food', 
       label: '搜集食物', 
-      icon: 'food',
+      icon: 'apple',
       visible: true,
     })
   }
@@ -83,7 +83,7 @@ const gatherActions = computed(() => {
   actions.push({ 
     resId: 'Lumber', 
     label: '捡拾木材', 
-    icon: 'lumber',
+      icon: 'industry',
     visible: true,
   })
 
@@ -92,7 +92,7 @@ const gatherActions = computed(() => {
     actions.push({ 
       resId: 'Stone', 
       label: '采集石头', 
-      icon: 'stone',
+      icon: 'mining',
       visible: true,
     })
   }
@@ -149,41 +149,7 @@ function buildingTooltip(def: StructureDefinition): string {
           @click="game.gather(action.resId)"
         >
           <span class="gather-icon-wrapper">
-            <svg
-              v-if="action.icon === 'food'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z" />
-              <path d="M10 2c1 .5 2 2 2 5" />
-            </svg>
-            <svg
-              v-else-if="action.icon === 'lumber'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" />
-              <path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" />
-            </svg>
-            <svg
-              v-else
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
-            </svg>
+            <AppIcon :name="action.icon" />
           </span>
           <span class="gather-label">{{ action.label }}</span>
         </button>
@@ -223,7 +189,8 @@ function buildingTooltip(def: StructureDefinition): string {
                   class="q-btn" 
                   :disabled="!game.canEnqueueBuilding"
                   @click.stop="game.enqueueBuilding(def.id)"
-                  title="加入建造队列"
+                  data-tooltip="加入建造队列"
+                  data-tooltip-pos="bottom"
                 >
                   <AppIcon name="queue" />
                   队列
@@ -311,13 +278,13 @@ function buildingTooltip(def: StructureDefinition): string {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.gather-btn.gather-food {
+.gather-btn.gather-apple {
   color: var(--res-food);
 }
-.gather-btn.gather-lumber {
+.gather-btn.gather-industry {
   color: var(--res-lumber);
 }
-.gather-btn.gather-stone {
+.gather-btn.gather-mining {
   color: var(--res-stone);
 }
 

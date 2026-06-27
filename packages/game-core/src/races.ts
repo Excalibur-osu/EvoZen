@@ -13,6 +13,8 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel } from './achievements';
+import { TRAITS } from './trait-data';
 
 // ============================================================
 // Genus（属类）定义
@@ -122,13 +124,32 @@ export interface RaceDefinition {
   fanaticism: string;
   /** 在基础种族选择列表中可见的条件函数 */
   basic: (state: GameState) => boolean;
+  /** basic 是否依赖当前 biome；用于最终进化列表避免绕过生态限制 */
+  biomeLocked?: boolean;
+}
+
+export interface RaceTraitDetail {
+  id: string;
+  name: string;
+  desc: string;
+  rank: number;
+  val: number;
+  type: string;
+  isFanaticism: boolean;
 }
 
 const TRUE = () => true;
 const FALSE = () => false;
-const biomeRequires = (...biomes: string[]) => (state: GameState) => {
-  const biome = (state.city as { biome?: string }).biome;
-  return biome ? biomes.includes(biome) : false;
+type BasicRaceCondition = ((state: GameState) => boolean) & { biomeLocked?: boolean };
+const JUNK_LIKE_RACES = new Set<string>(['junker', 'sludge', 'ultra_sludge']);
+
+const biomeRequires = (...biomes: string[]): BasicRaceCondition => {
+  const check: BasicRaceCondition = (state: GameState) => {
+    const biome = (state.city as { biome?: string }).biome;
+    return biome ? biomes.includes(biome) : false;
+  };
+  check.biomeLocked = true;
+  return check;
 };
 
 /** 完整种族表，对标 legacy races.js L4997-6417 */
@@ -257,6 +278,33 @@ export function getAvailableBasicRaces(state: GameState): RaceDefinition[] {
   return Object.values(RACES).filter((r) => r.basic(state));
 }
 
+export function isGenusId(value: unknown): value is GenusId {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(GENUS_DEFS, value);
+}
+
+function getStaticMainType(race: RaceDefinition): GenusId {
+  if (race.type === 'hybrid') {
+    return race.hybrid?.[0] ?? 'hybrid';
+  }
+  return race.type;
+}
+
+/** 返回当前运行时实际主属；Junker/Sludge/混血/自定义会优先使用 maintype/jtype。 */
+export function getRaceMainType(state: GameState, speciesId: string = state.race.species): GenusId | undefined {
+  const isCurrentSpecies = speciesId === state.race.species;
+  if (isCurrentSpecies) {
+    const mainType = state.race['maintype'];
+    if (isGenusId(mainType)) return mainType;
+
+    const junkType = state.race['jtype'];
+    if (JUNK_LIKE_RACES.has(speciesId) && isGenusId(junkType)) return junkType;
+  }
+
+  const race = RACES[speciesId as RaceId];
+  if (!race) return undefined;
+  return getStaticMainType(race);
+}
+
 /** 给定种族 ID 返回其完整特质列表（包括 genus 默认特质 + 种族特质） */
 export function getRaceFullTraits(raceId: RaceId): Record<string, number> {
   const race = RACES[raceId];
@@ -278,24 +326,151 @@ export function getRaceFullTraits(raceId: RaceId): Record<string, number> {
   return traits;
 }
 
+/** 给定种族 ID 返回用于 UI/日志展示的完整 trait 明细 */
+export function getRaceTraitDetails(raceId: RaceId): RaceTraitDetail[] {
+  const race = RACES[raceId];
+  if (!race) return [];
+  return Object.entries(getRaceFullTraits(raceId)).map(([id, rank]) => {
+    const def = TRAITS[id];
+    return {
+      id,
+      name: def?.name ?? id,
+      desc: def?.desc ?? '',
+      rank,
+      val: def?.val ?? 0,
+      type: def?.type ?? '',
+      isFanaticism: race.fanaticism === id,
+    };
+  });
+}
+
 /** 将种族特质应用到 state.race */
-export function applyRaceTraits(state: GameState, raceId: RaceId): void {
+export function applyRaceTraits(state: GameState, raceId: RaceId, mainType?: GenusId): void {
+  for (const traitId of Object.keys(TRAITS)) {
+    delete state.race[traitId];
+  }
+  delete state.race['fanaticism'];
+  delete state.race['maintype'];
+
   const traits = getRaceFullTraits(raceId);
   for (const [trait, level] of Object.entries(traits)) {
     state.race[trait] = level;
   }
   state.race.species = raceId;
+  state.race['fanaticism'] = RACES[raceId]?.fanaticism ?? 'none';
+  state.race['maintype'] = mainType ?? RACES[raceId]?.type ?? 'humanoid';
+  applyPathfinderGenusTraitRanks(state, state.race['maintype'] as GenusId | undefined);
+}
+
+export function applyPathfinderGenusTraitRanks(state: GameState, mainType?: GenusId): void {
+  if (!mainType || !GENUS_DEFS[mainType]) return;
+  if (getAchievementLevel(state, 'pathfinder') < 4) return;
+
+  for (const trait of Object.keys(GENUS_DEFS[mainType].traits)) {
+    const current = state.race[trait];
+    if (typeof current === 'number') {
+      state.race[trait] = upgradeTraitRank(current);
+    }
+  }
 }
 
 /** 判断某 trait 是否为负面特质 */
-export const NEGATIVE_TRAITS = new Set<string>([
+export const NEGATIVE_ROLL_TRAITS = [
   'angry', 'arrogant', 'atrophy', 'diverse', 'dumb', 'fragrant', 'frail', 'freespirit',
   'gluttony', 'gnawer', 'greedy', 'hard_of_hearing', 'heavy', 'hooved', 'invertebrate',
   'lazy', 'mistrustful', 'nearsighted', 'nyctophilia', 'paranoid', 'pathetic', 'pessimistic',
   'puny', 'pyrophobia', 'skittish', 'slow', 'slow_regen', 'snowy', 'solitary',
   'unorganized', 'unfavored',
-]);
+] as const;
+
+export const NEGATIVE_TRAITS = new Set<string>(NEGATIVE_ROLL_TRAITS);
 
 export function isNegativeTrait(traitId: string): boolean {
   return NEGATIVE_TRAITS.has(traitId);
+}
+
+export function applyChallengeGeneTraits(
+  state: GameState,
+  random: () => number = Math.random
+): string[] {
+  const hasNoCrispr = Boolean(state.race['no_crispr']);
+  const hasBadGenes = Boolean(state.race['badgenes']);
+  if (!hasNoCrispr && !hasBadGenes) return [];
+
+  const changed: string[] = [];
+  const repeat = hasBadGenes ? 3 : 1;
+  for (let j = 0; j < repeat; j++) {
+    for (let i = 0; i < 10; i++) {
+      const trait = NEGATIVE_ROLL_TRAITS[Math.floor(random() * NEGATIVE_ROLL_TRAITS.length)];
+      const current = state.race[trait];
+      if (typeof current === 'number' && current !== 0) {
+        if (current === 0.25) continue;
+        const nextRank = downgradeTraitRank(current);
+        if (nextRank !== current) {
+          state.race[trait] = nextRank;
+          changed.push(trait);
+        }
+        if (j === 0 && hasBadGenes) {
+          const rank = state.race[trait];
+          if (typeof rank === 'number') {
+            const secondRank = downgradeTraitRank(rank);
+            if (secondRank !== rank) {
+              state.race[trait] = secondRank;
+              changed.push(trait);
+            }
+          }
+        }
+        break;
+      }
+      if (state.race['smart'] && trait === 'dumb') continue;
+      if (!state.race[trait]) {
+        state.race[trait] = hasBadGenes ? (j === 0 ? 0.5 : 2) : 1;
+        changed.push(trait);
+        break;
+      }
+    }
+  }
+  return changed;
+}
+
+function downgradeTraitRank(rank: number): number {
+  switch (rank) {
+    case 0.1:
+      return 0.1;
+    case 0.25:
+      return 0.1;
+    case 0.5:
+      return 0.25;
+    case 1:
+      return 0.5;
+    case 2:
+      return 1;
+    case 3:
+      return 2;
+    case 4:
+      return 3;
+    default:
+      return rank > 1 ? 1 : rank;
+  }
+}
+
+function upgradeTraitRank(rank: number): number {
+  switch (rank) {
+    case 0.1:
+      return 0.25;
+    case 0.25:
+      return 0.5;
+    case 0.5:
+      return 1;
+    case 1:
+      return 2;
+    case 2:
+      return 3;
+    case 3:
+      return 4;
+    case 4:
+      return 4;
+    default:
+      return rank < 1 ? 1 : rank;
+  }
 }

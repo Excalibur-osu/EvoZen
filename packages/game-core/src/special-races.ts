@@ -20,8 +20,7 @@ export function applySludgeTraits(state: GameState): void {
   // 但需要随机选 5-10 个最坏的 trait 真正激活，其余清零
   const candidateTraits = Object.keys(sludgeDef.traits);
   const numActive = 5 + Math.floor(Math.random() * 6);  // 随机激活 5-10 个
-  const shuffled = [...candidateTraits].sort(() => Math.random() - 0.5);
-  const active = new Set(shuffled.slice(0, numActive));
+  const active = new Set(sampleTraits(candidateTraits, numActive));
 
   for (const trait of candidateTraits) {
     if (active.has(trait)) {
@@ -69,8 +68,7 @@ export function applyUltraSludgeTraits(state: GameState): void {
   if (!sludgeDef) return;
   const allTraits = Object.keys(sludgeDef.traits);
   const numActive = 10 + Math.floor(Math.random() * 11);  // 10-20
-  const shuffled = [...allTraits].sort(() => Math.random() - 0.5);
-  const active = new Set(shuffled.slice(0, numActive));
+  const active = new Set(sampleTraits(allTraits, numActive));
 
   for (const trait of allTraits) {
     if (active.has(trait)) {
@@ -84,6 +82,7 @@ export function applyUltraSludgeTraits(state: GameState): void {
 
 /** 统一入口：在选择种族 / 转生后调用 */
 export function applySpecialRaceTraits(state: GameState, speciesId: string): void {
+  syncSpecialRaceFlags(state, speciesId);
   switch (speciesId) {
     case 'sludge':
       applySludgeTraits(state);
@@ -101,4 +100,23 @@ export function applySpecialRaceTraits(state: GameState, speciesId: string): voi
       applyUltraSludgeTraits(state);
       break;
   }
+}
+
+function syncSpecialRaceFlags(state: GameState, speciesId: string): void {
+  for (const id of ['junker', 'sludge', 'ultra_sludge']) {
+    if (speciesId === id) {
+      state.race[id] = 1;
+    } else {
+      delete state.race[id];
+    }
+  }
+}
+
+function sampleTraits(traits: string[], count: number): string[] {
+  const shuffled = [...traits];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, count);
 }

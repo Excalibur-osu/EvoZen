@@ -525,19 +525,19 @@ textarea:focus-visible {
    用法: <span data-tooltip="提示文字">...</span>
    可选方向: data-tooltip-pos="bottom" / "right" (默认 top)
    ============================================================ */
-[data-tooltip] {
+[data-tooltip]:not([data-tooltip=""]) {
   position: relative;
 }
 /* 仅对非交互元素（span/div/label）显示问号光标 */
-span[data-tooltip],
-div[data-tooltip],
-abbr[data-tooltip],
-label[data-tooltip] {
+span[data-tooltip]:not([data-tooltip=""]),
+div[data-tooltip]:not([data-tooltip=""]),
+abbr[data-tooltip]:not([data-tooltip=""]),
+label[data-tooltip]:not([data-tooltip=""]) {
   cursor: help;
 }
 /* 上方气泡（默认） */
-[data-tooltip]:not([data-tooltip-pos="bottom"]):not([data-tooltip-pos="right"])::after,
-[data-tooltip][data-tooltip-pos="top"]::after {
+[data-tooltip]:not([data-tooltip=""]):not([data-tooltip-pos="bottom"]):not([data-tooltip-pos="right"])::after,
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="top"]::after {
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 7px);
@@ -563,7 +563,7 @@ label[data-tooltip] {
   text-transform: none;
 }
 /* 下方气泡 */
-[data-tooltip][data-tooltip-pos="bottom"]::after {
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="bottom"]::after {
   content: attr(data-tooltip);
   position: absolute;
   top: calc(100% + 7px);
@@ -589,7 +589,7 @@ label[data-tooltip] {
   text-transform: none;
 }
 /* 右侧气泡 */
-[data-tooltip][data-tooltip-pos="right"]::after {
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="right"]::after {
   content: attr(data-tooltip);
   position: absolute;
   top: 50%;
@@ -615,8 +615,8 @@ label[data-tooltip] {
   text-transform: none;
 }
 /* 小箭头（上方） */
-[data-tooltip]:not([data-tooltip-pos="bottom"]):not([data-tooltip-pos="right"])::before,
-[data-tooltip][data-tooltip-pos="top"]::before {
+[data-tooltip]:not([data-tooltip=""]):not([data-tooltip-pos="bottom"]):not([data-tooltip-pos="right"])::before,
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="top"]::before {
   content: '';
   position: absolute;
   bottom: calc(100% + 1px);
@@ -630,7 +630,7 @@ label[data-tooltip] {
   z-index: var(--z-tooltip);
 }
 /* 小箭头（下方） */
-[data-tooltip][data-tooltip-pos="bottom"]::before {
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="bottom"]::before {
   content: '';
   position: absolute;
   top: calc(100% + 1px);
@@ -643,7 +643,7 @@ label[data-tooltip] {
   transition: opacity 0.15s ease, transform 0.15s ease;
   z-index: var(--z-tooltip);
 }
-[data-tooltip][data-tooltip-pos="right"]::before {
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="right"]::before {
   content: '';
   position: absolute;
   top: 50%;
@@ -656,13 +656,13 @@ label[data-tooltip] {
   transition: opacity 0.15s ease, transform 0.15s ease;
   z-index: var(--z-tooltip);
 }
-[data-tooltip]:not([data-tooltip-pos="right"]):hover::after,
-[data-tooltip]:not([data-tooltip-pos="right"]):hover::before {
+[data-tooltip]:not([data-tooltip=""]):not([data-tooltip-pos="right"]):hover::after,
+[data-tooltip]:not([data-tooltip=""]):not([data-tooltip-pos="right"]):hover::before {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-[data-tooltip][data-tooltip-pos="right"]:hover::after,
-[data-tooltip][data-tooltip-pos="right"]:hover::before {
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="right"]:hover::after,
+[data-tooltip]:not([data-tooltip=""])[data-tooltip-pos="right"]:hover::before {
   opacity: 1;
   transform: translateX(0) translateY(-50%);
 }

@@ -93,7 +93,8 @@ function actionClass(action: string): string {
             class="btn primary sm"
             :disabled="money < game.getBuyPrice(resId) * marketQty"
             @click="game.tradeBuy(resId, marketQty)"
-            :title="`买入 ${marketQty}: ${game.getBuyPrice(resId) * marketQty} 金`"
+            :data-tooltip="`买入 ${marketQty}: ${game.getBuyPrice(resId) * marketQty} 金`"
+            data-tooltip-pos="bottom"
           >
             买 {{ marketQty }} / ${{ game.getBuyPrice(resId) * marketQty }}
           </button>
@@ -101,7 +102,8 @@ function actionClass(action: string): string {
             class="btn danger sm"
             :disabled="(game.state.resource[resId]?.amount ?? 0) < marketQty"
             @click="game.tradeSell(resId, marketQty)"
-            :title="`卖出 ${marketQty}: ${game.getSellPrice(resId) * marketQty} 金`"
+            :data-tooltip="`卖出 ${marketQty}: ${game.getSellPrice(resId) * marketQty} 金`"
+            data-tooltip-pos="bottom"
           >
             卖 {{ marketQty }} / ${{ game.getSellPrice(resId) * marketQty }}
           </button>

@@ -98,7 +98,7 @@ function formatDuration(days: number): string {
 
 <style scoped>
 .stats-panel {
-  max-width: 860px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -120,11 +120,11 @@ function formatDuration(days: number): string {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
 }
 
 .stats-grid.compact {
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 </style>

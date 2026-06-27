@@ -10,6 +10,7 @@ import {
 import { getLibraryKnowledgeCapMultiplier } from './traits';
 import { getMaxTradeRoutes } from './trade';
 import { getBankVault, getCasinoVault } from './commerce';
+import { getAchievementLevel } from './achievements';
 import { hasPlanetTrait, magneticVars, permafrostVars } from './planet-traits';
 import {
   getSatelliteKnowledgeCapBonus,
@@ -26,6 +27,28 @@ import {
   getGasStorageUraniumCapBonus,
   getEleriumContainCapBonus,
 } from './space';
+
+function getStorageYardCrateCapacity(state: GameState): number {
+  let capacity = (state.tech['container'] ?? 0) >= 3 ? 20 : 10;
+  if (getAchievementLevel(state, 'pathfinder') >= 1) capacity += 10;
+  if ((state.tech['world_control'] ?? 0) >= 1) capacity += 10;
+  if ((state.tech['particles'] ?? 0) >= 2) capacity *= 2;
+  return capacity;
+}
+
+function getWarehouseContainerCapacity(state: GameState): number {
+  let capacity = (state.tech['steel_container'] ?? 0) >= 2 ? 20 : 10;
+  if (getAchievementLevel(state, 'pathfinder') >= 2) capacity += 10;
+  if ((state.tech['world_control'] ?? 0) >= 1) capacity += 10;
+  if ((state.tech['particles'] ?? 0) >= 2) capacity *= 2;
+  return capacity;
+}
+
+function getWharfStorageCapacity(state: GameState): number {
+  let capacity = (state.tech['world_control'] ?? 0) >= 1 ? 15 : 10;
+  if ((state.tech['particles'] ?? 0) >= 2) capacity *= 2;
+  return capacity;
+}
 
 export function applyDerivedStateInPlace(state: GameState): void {
   if (state.race.species === 'protoplasm') return;
@@ -385,10 +408,11 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const storageYards = getStructCount('storage_yard');
   const warehouses = getStructCount('warehouse');
   const wharves = getStructCount('wharf');
-  const crateCapacity = (s.tech['container'] ?? 0) >= 3 ? 20 : 10;
-  const containerCapacity = (s.tech['steel_container'] ?? 0) >= 2 ? 20 : 10;
+  const crateCapacity = getStorageYardCrateCapacity(s);
+  const containerCapacity = getWarehouseContainerCapacity(s);
+  const wharfCapacity = getWharfStorageCapacity(s);
   if (s.resource['Crates']) {
-    s.resource['Crates'].max = Math.max(0, storageYards * crateCapacity + wharves * 10 - getTotalAssignedCrates(s));
+    s.resource['Crates'].max = Math.max(0, storageYards * crateCapacity + wharves * wharfCapacity - getTotalAssignedCrates(s));
     if (s.resource['Crates'].amount > s.resource['Crates'].max) {
       s.resource['Crates'].amount = s.resource['Crates'].max;
     }
@@ -398,7 +422,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
     const garageContainers = garageCount * GARAGE_CONTAINERS_PER_BUILDING;
     s.resource['Containers'].max = Math.max(
       0,
-      warehouses * containerCapacity + wharves * 10 + garageContainers - getTotalAssignedContainers(s),
+      warehouses * containerCapacity + wharves * wharfCapacity + garageContainers - getTotalAssignedContainers(s),
     );
     if (s.resource['Containers'].amount > s.resource['Containers'].max) {
       s.resource['Containers'].amount = s.resource['Containers'].max;

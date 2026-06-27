@@ -6,6 +6,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel } from './achievements';
 
 // ============================================================
 // Womling 状态
@@ -27,6 +28,16 @@ export interface WomlingState {
   morale: number;
 }
 
+export interface ServantsState {
+  max: number;
+  used: number;
+  smax: number;
+  sused: number;
+  jobs: Record<string, number>;
+  sjobs: Record<string, number>;
+  force_scavenger: boolean;
+}
+
 export function defaultWomlingState(): WomlingState {
   return {
     discovered: false,
@@ -34,6 +45,49 @@ export function defaultWomlingState(): WomlingState {
     jobs: { farmer: 0, miner: 0, lab: 0, soldier: 0 },
     morale: 100,
   };
+}
+
+export function createServantsState(state: GameState): ServantsState | null {
+  const stats = state.stats as Record<string, unknown>;
+  const matrix = Number(stats['matrix'] ?? 0);
+  const retire = Number(stats['retire'] ?? 0);
+  const eden = Number(stats['eden'] ?? 0);
+  if (state.race['warlord'] || (matrix <= 0 && retire <= 0) || state.race['servants']) {
+    return null;
+  }
+
+  const max = Math.min(matrix, 100) + Math.min(retire, 100) + Math.min(eden, 100);
+  let smax = Math.min(Math.min(matrix, retire), 100);
+  if (getAchievementLevel(state, 'pathfinder') >= 5) {
+    smax += 2;
+  }
+
+  return {
+    max,
+    used: 0,
+    smax,
+    sused: 0,
+    jobs: {},
+    sjobs: {},
+    force_scavenger: false,
+  };
+}
+
+export function maybeGenerateServants(state: GameState): boolean {
+  // legacy main.js: daily long-loop check with Math.rand(0,25) === 0.
+  if (Math.floor(Math.random() * 26) !== 0) return false;
+  const servants = createServantsState(state);
+  if (!servants) return false;
+  state.race['servants'] = servants;
+  return true;
+}
+
+export function getServantsState(state: GameState): ServantsState | undefined {
+  return state.race['servants'] as ServantsState | undefined;
+}
+
+export function canUseServants(state: GameState): boolean {
+  return Boolean(getServantsState(state));
 }
 
 /** 初始化 Womling 状态（在 state.space 下挂） */

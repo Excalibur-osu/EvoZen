@@ -8,6 +8,7 @@ import { useGameStore } from '../stores/game'
 import type { ResourceState } from '@evozen/shared-types'
 import { buildResourceTooltip } from '../utils/resourceBreakdown'
 import AppIcon from './ui/AppIcon.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 import ProgressBar from './ui/ProgressBar.vue'
 
 const game = useGameStore()
@@ -67,7 +68,7 @@ function fillTone(res: { id: string; amount: number; max: number }): 'success' |
 }
 
 function resourceTooltip(res: ResourceState & { id: string }): string {
-  return buildResourceTooltip(game.state, res)
+  return buildResourceTooltip(game.state, res).trim()
 }
 </script>
 
@@ -80,12 +81,13 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
       </span>
     </div>
     <div class="res-scroll">
-      <div
+      <AppTooltip
         v-for="res in visibleResources"
         :key="res.id"
+        tag="div"
         class="res-row"
-        :data-tooltip="resourceTooltip(res)"
-        data-tooltip-pos="right"
+        :text="resourceTooltip(res)"
+        position="right"
       >
         <div class="res-top">
           <span class="res-name">{{ res.name }}</span>
@@ -98,7 +100,7 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
           <span class="res-max font-mono" v-if="res.max > 0">/ {{ formatNum(res.max) }}</span>
         </div>
         <ProgressBar v-if="res.max > 0" class="res-progress" :value="fillPercent(res)" :tone="fillTone(res)" />
-      </div>
+      </AppTooltip>
     </div>
   </div>
 </template>
@@ -109,6 +111,7 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -135,13 +138,16 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 
 .res-scroll {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 2px 8px;
+  min-width: 0;
 }
 
 .res-row {
   padding: 3px 0;
   border-bottom: 1px solid var(--surface-pressed);
+  min-width: 0;
 }
 .res-row:last-child {
   border-bottom: none;
@@ -151,13 +157,20 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 8px;
+  min-width: 0;
 }
 .res-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-primary);
 }
 .res-amount {
+  flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
@@ -167,10 +180,16 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 8px;
   font-size: 9px;
   margin-top: 1px;
+  min-width: 0;
 }
 .res-rate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 9px;
 }
 .rate-positive { color: var(--success); }
@@ -178,6 +197,7 @@ function resourceTooltip(res: ResourceState & { id: string }): string {
 .rate-zero { color: var(--text-muted); }
 
 .res-max {
+  flex: 0 0 auto;
   color: var(--text-muted);
   margin-left: auto;
 }

@@ -360,6 +360,7 @@ export interface StatsState {
   /** 阵亡士兵总数 */
   died: number;
   achieve?: Record<string, { l: number; a?: number; e?: number }>;
+  synth?: Record<string, boolean>;
   [key: string]: unknown;
 }
 
@@ -401,6 +402,7 @@ export interface SettingsState {
   statsTabs: number;
   marketTabs: number;
   animated: boolean;
+  boring: boolean;
   tabLoad: boolean;
   pause: boolean;
   showEvolution: boolean;
@@ -548,6 +550,13 @@ export interface GameState {
   /** 威望系统 */
   prestige: {
     Plasmid: { count: number };
+    AntiPlasmid?: { count: number };
+    Phage?: { count: number };
+    Dark?: { count: number };
+    Harmony?: { count: number };
+    Artifact?: { count: number };
+    AICore?: { count: number };
+    Supercoiled?: { count: number };
     [key: string]: unknown;
   };
 

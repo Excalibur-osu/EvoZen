@@ -238,7 +238,7 @@ export const ARPA_PROJECTS: ArpaProjectDef[] = [
 
   // ===== nexus（魔法枢纽） =====
   // 对标 legacy/src/arpa.js L242-258
-  // grant: nexus；magic Lv.5+ 解锁；每次完成 +5 Mana 上限
+  // grant: nexus；magic Lv.5+ 解锁；每次完成 +5 魔力上限
   {
     id: 'nexus',
     name: '魔法枢纽',
@@ -246,7 +246,7 @@ export const ARPA_PROJECTS: ArpaProjectDef[] = [
     reqs: { magic: 5 },
     grantKey: 'nexus',
     effectText:
-      '每次完成：+5 Mana 上限（spatialReasoning 加成后）；roguemagic Lv.7+ 时额外 +4 女巫加成。',
+      '每次完成：+5 魔力上限（空间推理加成后）；秘法 Lv.7+ 时额外 +4 女巫加成。',
     baseCost: () => ({
       Money:   5_000_000,
       Crystal:    60_000,
@@ -271,9 +271,9 @@ export const ARPA_PROJECTS: ArpaProjectDef[] = [
     effectText:
       '每次完成 +1 syphon 等级。阈值效果：' +
       '≥20: 解锁初级转化；' +
-      '≥40: 中级转化（mana 上限大幅增加）；' +
+      '≥40: 中级转化（魔力上限大幅增加）；' +
       '≥60: 显示真空坍塌倒计时；' +
-      '≥80: 触发真空坍塌转生（vacuumCollapse），获得 Plasmid + Phage + Dark。',
+      '≥80: 触发真空坍塌转生，获得质粒 + 噬菌体 + 暗能量。',
     baseCost: () => ({
       Money: 7_500_000,
       Mana: 5_000,

@@ -123,7 +123,7 @@ const canBuildContainer = computed(() => {
               tone="danger"
               :disabled="res.crates <= 0"
               @click="game.doUnassignCrate(res.id)"
-              data-tooltip="取消分配一个板条筐"
+              title="取消分配一个板条筐"
             />
             <StepperButton
               label="+"
@@ -131,7 +131,7 @@ const canBuildContainer = computed(() => {
               tone="success"
               :disabled="freeCrates <= 0"
               @click="game.doAssignCrate(res.id)"
-              data-tooltip="分配一个板条筐"
+              title="分配一个板条筐"
             />
           </div>
         </div>
@@ -179,7 +179,7 @@ const canBuildContainer = computed(() => {
               tone="danger"
               :disabled="res.containers <= 0"
               @click="game.doUnassignContainer(res.id)"
-              data-tooltip="取消分配一个集装箱"
+              title="取消分配一个集装箱"
             />
             <StepperButton
               label="+"
@@ -187,7 +187,7 @@ const canBuildContainer = computed(() => {
               tone="success"
               :disabled="freeContainers <= 0"
               @click="game.doAssignContainer(res.id)"
-              data-tooltip="分配一个集装箱"
+              title="分配一个集装箱"
             />
           </div>
         </div>

@@ -76,6 +76,17 @@ function handleFileImport(e: Event) {
           
           <div class="panel-content">
         <div class="setting-group">
+          <h4>显示偏好</h4>
+          <label class="toggle-row">
+            <input v-model="game.state.settings.boring" type="checkbox" />
+            <span>
+              <strong>关闭节日外观</strong>
+              <small>节日期间不替换种族名称、描述与节日 trait，并清除新的节日锁定。</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="setting-group">
           <h4>存档管理</h4>
           <p class="desc">你可以将当前进度下载为 JSON 文件安全备份，或随后从本地文件恢复进度。<br><strong class="text-warning">警告：导入操作将直接覆盖当前的全部心血！</strong></p>
           <div class="action-row">
@@ -184,6 +195,26 @@ function handleFileImport(e: Event) {
   font-size: 12px;
   margin-top: 8px;
   margin-bottom: 0;
+}
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.toggle-row input {
+  margin-top: 2px;
+}
+.toggle-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.toggle-row small {
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 .inline-error {
   margin: 8px 0 0;

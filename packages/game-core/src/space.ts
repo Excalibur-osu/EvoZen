@@ -591,7 +591,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Sheet_Metal: spaceCost(2000, 1.32),
       Helium_3: spaceCost(1000, 1.32),
     },
-    effect: '每座增加 Oil +3500, Helium_3 +2500, Uranium +1000 上限。',
+    effect: '每座增加石油 +3500、氦-3 +2500、铀 +1000 上限。',
     // 纯存储建筑，无电力。
   },
 
@@ -610,7 +610,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Helium_3: spaceCost(6000, 1.3),
       Mythril: spaceCost(300, 1.3),
     },
-    effect: '每座产出中子素，提供 +500 中子素上限。消耗 3 电力 + 2 Oil/tick。',
+    effect: '每座产出中子素，提供 +500 中子素上限。消耗 3 电力 + 2 石油/tick。',
     powerCost: 3,
   },
   {
@@ -645,7 +645,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Helium_3: spaceCost(2000, 1.3),
       Mythril: spaceCost(75, 1.25),
     },
-    effect: '每座提供 3 太空矿工岗位 + 5 Elerium 上限(asteroid>=5)。消耗 3 电力 + 2.5 He3 + 10 Food/tick。',
+    effect: '每座提供 3 太空矿工岗位 + 5 超铀上限（小行星带 5 级）。消耗 3 电力 + 2.5 氦-3 + 10 食物/tick。',
     powerCost: 3,
     // space_station 是 spc_belt 的支援池提供者（support: 'belt'）。
     // 但它自身也是消费者（电力 + 燃料 + 食物），与 moon_base/spaceport 类似。
@@ -664,7 +664,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Mythril: spaceCost(500, 1.3),
       Helium_3: spaceCost(5000, 1.3),
     },
-    effect: '每座产出 Elerium。消耗 2 小行星带支援。',
+    effect: '每座产出超铀。消耗 2 小行星带支援。',
     support: { pool: 'belt', amount: -2 },
   },
   {
@@ -680,7 +680,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Iridium: spaceCost(2800, 1.3),
       Helium_3: spaceCost(1800, 1.3),
     },
-    effect: '每座产出 Iridium。消耗 1 小行星带支援。',
+    effect: '每座产出铱。消耗 1 小行星带支援。',
     support: { pool: 'belt', amount: -1 },
   },
   {
@@ -696,7 +696,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Polymer: spaceCost(16000, 1.3),
       Helium_3: spaceCost(1200, 1.3),
     },
-    effect: '每座产出 Iron。消耗 1 小行星带支援。',
+    effect: '每座产出铁。消耗 1 小行星带支援。',
     support: { pool: 'belt', amount: -1 },
   },
 
@@ -714,7 +714,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Iridium: spaceCost(50000, 1.28),
       Neutronium: spaceCost(250, 1.28),
     },
-    effect: '每座增加 Elerium +100 上限。消耗 6 电力。',
+    effect: '每座增加超铀 +100 上限。消耗 6 电力。',
     powerCost: 6,
   },
   {
@@ -729,7 +729,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Neutronium: spaceCost(1250, 1.28),
       Mythril: spaceCost(2500, 1.28),
     },
-    effect: '每座产出 25 电力，消耗 0.05 Elerium/tick。',
+    effect: '每座产出 25 电力，消耗 0.05 超铀/tick。',
     powerCost: -25,
     supportFuel: { resource: 'Elerium', amountPerTick: 0.05 },
   },

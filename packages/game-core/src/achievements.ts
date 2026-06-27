@@ -93,8 +93,8 @@ export const ACHIEVE_LIST: Record<AchievementCategory, string[]> = {
 };
 
 // ============================================================
-// 简明文本（中文）— 对标 strings/loc_*.json
-// 仅核心成就给出中文，其余沿用 id 作为占位
+// 简明文本（中文）— 对标 legacy/strings/strings.zh-CN.json
+// 成就名称已覆盖为中文；描述与 flair 仍需继续按原版中文补齐。
 // ============================================================
 
 const ACHIEVE_NAMES: Record<string, string> = {
@@ -110,6 +110,33 @@ const ACHIEVE_NAMES: Record<string, string> = {
   shaken: '震荡', blacken_the_sun: '黑日', trade: '贸易帝国', resonance: '共鸣',
   enlightenment: '启蒙', gladiator: '角斗士', corrupted: '腐化', red_dead: '红死',
   godslayer: '弑神者', traitor: '叛徒', doppelganger: '化身',
+  // species
+  mass_extinction: '大灭绝',
+  extinct_human: '人类灭绝', extinct_elven: '精灵灭绝', extinct_orc: '兽人灭绝',
+  extinct_cath: '猫族灭绝', extinct_wolven: '狼族灭绝', extinct_vulpine: '狐族灭绝',
+  extinct_centaur: '半人马灭绝', extinct_rhinotaur: '犀牛人灭绝', extinct_capybara: '水豚族灭绝',
+  extinct_kobold: '狗头人灭绝', extinct_goblin: '哥布林灭绝', extinct_gnome: '侏儒灭绝',
+  extinct_ogre: '食人魔灭绝', extinct_cyclops: '独眼巨人灭绝', extinct_troll: '巨魔灭绝',
+  extinct_tortoisan: '陆龟人灭绝', extinct_gecko: '壁虎人灭绝', extinct_slitheryn: '蛇人灭绝',
+  extinct_arraak: '鸦人灭绝', extinct_pterodacti: '翼龙人灭绝', extinct_dracnid: '龙裔灭绝',
+  extinct_entish: '树灵灭绝', extinct_cacti: '仙人掌人灭绝', extinct_pinguicula: '捕虫堇灭绝',
+  extinct_sporgar: '孢子人灭绝', extinct_shroomi: '蘑菇人灭绝', extinct_moldling: '霉菌人灭绝',
+  extinct_mantis: '螳螂人灭绝', extinct_scorpid: '蝎人灭绝', extinct_antid: '蚁人灭绝',
+  extinct_sharkin: '鲨人灭绝', extinct_octigoran: '章鱼人灭绝',
+  extinct_dryad: '树精灭绝', extinct_satyr: '萨堤尔灭绝',
+  extinct_phoenix: '凤凰族灭绝', extinct_salamander: '火蜥蜴族灭绝',
+  extinct_yeti: '雪人灭绝', extinct_wendigo: '温迪戈灭绝',
+  extinct_tuskin: '塔斯肯人灭绝', extinct_kamel: '骆驼人灭绝',
+  extinct_balorg: '炎魔灭绝', extinct_imp: '小恶魔灭绝',
+  extinct_seraph: '炽天使灭绝', extinct_unicorn: '独角兽灭绝',
+  extinct_synth: '合成人灭绝', extinct_nano: '纳米群灭绝',
+  extinct_ghast: '食尸鬼灭绝', extinct_shoggoth: '修格斯灭绝',
+  extinct_dwarf: '矮人灭绝', extinct_raccoon: '浣熊人灭绝', extinct_lichen: '地衣族灭绝',
+  extinct_wyvern: '飞龙灭绝', extinct_beholder: '眼魔灭绝', extinct_djinn: '神灯精灵灭绝',
+  extinct_narwhal: '一角鲸人灭绝', extinct_bombardier: '爆甲虫人灭绝',
+  extinct_nephilim: '拿非利人灭绝', extinct_junker: '废物种灭绝',
+  extinct_sludge: '污泥族灭绝', extinct_ultra_sludge: '超级污泥族灭绝',
+  extinct_custom: '自定义种族灭绝', extinct_hybrid: '混血自定义灭绝',
   // genus
   creator: '造物主',
   genus_humanoid: '人形之巅', genus_carnivore: '食肉之巅', genus_herbivore: '食草之巅',
@@ -125,6 +152,11 @@ const ACHIEVE_NAMES: Record<string, string> = {
   biome_desert: '沙漠征服', biome_volcanic: '火山征服', biome_tundra: '苔原征服',
   biome_savanna: '草原热带征服', biome_swamp: '沼泽征服', biome_ashland: '灰土征服',
   biome_taiga: '泰加征服', biome_hellscape: '地狱征服', biome_eden: '伊甸征服',
+  atmo_toxic: '剧毒大气', atmo_mellow: '温和大气', atmo_rage: '狂怒大气',
+  atmo_stormy: '风暴大气', atmo_ozone: '臭氧层', atmo_magnetic: '磁性星球',
+  atmo_trashed: '垃圾星球', atmo_elliptical: '椭圆轨道', atmo_flare: '恒星耀斑',
+  atmo_dense: '稠密大气', atmo_unstable: '不稳定星球', atmo_permafrost: '永久冻土',
+  atmo_retrograde: '逆行星球', atmo_kamikaze: '自毁轨道',
   // challenge
   joyless: '无欢挑战', steelen: '钢铁挑战', dissipated: '消散挑战',
   technophobe: '科技恐惧', wheelbarrow: '手推车', iron_will: '钢铁意志',

@@ -40,7 +40,7 @@ export const UNIVERSES: Record<UniverseType, UniverseDefinition> = {
   heavy: {
     id: 'heavy',
     name: '重力宇宙',
-    desc: '重力增加，所有建筑成本 +20%，但 Plasmid 收益 +5%。',
+    desc: '重力增加，所有建筑成本 +20%，但质粒收益 +5%。',
     applyEffects: (state) => {
       state.race['heavy_universe'] = 1;
     },
@@ -49,7 +49,7 @@ export const UNIVERSES: Record<UniverseType, UniverseDefinition> = {
   antimatter: {
     id: 'antimatter',
     name: '反物质宇宙',
-    desc: '获得 AntiPlasmid 而非 Plasmid，挑战难度增加 10%。',
+    desc: '获得反质粒而非质粒，挑战难度增加 10%。',
     applyEffects: (state) => {
       state.race['antimatter_universe'] = 1;
     },
@@ -76,7 +76,7 @@ export const UNIVERSES: Record<UniverseType, UniverseDefinition> = {
   magic: {
     id: 'magic',
     name: '魔法宇宙',
-    desc: '解锁 Mana / 仪式 / 炼金等魔法系统。',
+    desc: '解锁魔力、仪式、炼金等魔法系统。',
     applyEffects: (state) => {
       state.race['magic_universe'] = 1;
       // 自动启用 Mana 资源

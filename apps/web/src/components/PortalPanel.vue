@@ -123,10 +123,10 @@ function fmtNum(n: number): string {
       </h3>
       <div class="pillar-info">
         <span>已调谐：{{ tunedPillars }} / {{ pillarCount }}</span>
-        <span>Harmony：{{ harmony.toFixed(2) }}</span>
+        <span>和谐：{{ harmony.toFixed(2) }}</span>
         <button class="tune-btn btn primary sm" :disabled="tunedPillars >= pillarCount || harmony < 1" @click="doTunePillar">
           <AppIcon name="sparkles" :size="14" />
-          调谐一根 (消耗 1 Harmony)
+          调谐一根（消耗 1 和谐）
         </button>
       </div>
       <p class="pillar-desc">每调谐一根柱子提供 +5% 全球产出。</p>

@@ -14,7 +14,7 @@ import {
   unlockFeat,
   type AchievementRecord,
 } from './achievements';
-import { RACES } from './races';
+import { getRaceMainType } from './races';
 import { galaxyPiracy } from './syndicate';
 
 type ChallengeTaskId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5';
@@ -94,14 +94,14 @@ function unlockPlanetAndGenusAchievements(state: GameState): void {
       unlockAchievement(state, `atmo_${trait}`);
     }
   }
-  const genus = RACES[state.race.species as keyof typeof RACES]?.type;
+  const genus = getRaceMainType(state);
   if (genus && GENUS_ACHIEVEMENTS.has(genus)) {
     unlockAchievement(state, `genus_${genus}`);
   }
 }
 
 function getSpeciesGenus(state: GameState): string | undefined {
-  return RACES[state.race.species as keyof typeof RACES]?.type;
+  return getRaceMainType(state);
 }
 
 function isHellscapeNonDemonic(state: GameState): boolean {
@@ -217,10 +217,64 @@ function updateSpireResetStats(state: GameState, resetType: string): void {
   spire[affix].dlstr = state.tech['dl_reset'] ? 0 : (spire[affix].dlstr ?? 0) + 1;
 }
 
+function countAchievementsByPrefix(
+  achievements: Record<string, AchievementRecord>,
+  prefix: string,
+  rank: number,
+  affix?: keyof AchievementRecord
+): number {
+  return Object.entries(achievements)
+    .filter(([id, record]) => id.startsWith(prefix) && (affix ? (record[affix] ?? 0) : record.l) >= rank)
+    .length;
+}
+
+function setAggregateAchievementRank(
+  achievements: Record<string, AchievementRecord>,
+  id: string,
+  rank: number,
+  affix?: keyof AchievementRecord
+): void {
+  achievements[id] ??= { l: 0 };
+  if (!affix || affix === 'l') {
+    if (achievements[id].l < rank) achievements[id].l = rank;
+    return;
+  }
+  if ((achievements[id][affix] ?? 0) < rank) {
+    achievements[id][affix] = rank;
+  }
+}
+
+function updateAggregateAchievements(state: GameState): void {
+  const achieve = state.stats?.['achieve'] as Record<string, AchievementRecord> | undefined;
+  if (!achieve) return;
+
+  const currentRank = getChallengeLevel(state);
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  for (let rank = currentRank; rank >= 1; rank--) {
+    if (countAchievementsByPrefix(achieve, 'extinct_', rank) >= 25) {
+      setAggregateAchievementRank(achieve, 'mass_extinction', rank);
+    }
+    if (countAchievementsByPrefix(achieve, 'genus_', rank) >= 9) {
+      setAggregateAchievementRank(achieve, 'creator', rank);
+    }
+    if (countAchievementsByPrefix(achieve, 'biome_', rank) >= 6) {
+      setAggregateAchievementRank(achieve, 'explorer', rank);
+    }
+    if (state.race.universe === 'evil' && countAchievementsByPrefix(achieve, 'extinct_', rank, affix) >= 12) {
+      setAggregateAchievementRank(achieve, 'vigilante', rank, affix);
+    }
+    if (state.race.universe === 'heavy' && countAchievementsByPrefix(achieve, 'genus_', rank, affix) >= 8) {
+      setAggregateAchievementRank(achieve, 'heavyweight', rank, affix);
+    }
+  }
+}
+
 /**
  * 主成就触发器 — 每 tick 调用一次
  */
 export function checkAchievements(state: GameState): void {
+  updateAggregateAchievements(state);
+
   // ----- 物种灭绝（每个种族对应一个 extinct_X 成就，在转生时触发） -----
   // 由 resets.ts 在转生时调用 unlockAchievement('extinct_X')
 
@@ -648,14 +702,7 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
     unlockAchievement(state, `extinct_${species}`);
   }
 
-  // mass_extinction: 完成 60+ 不同物种的灭绝
-  const achieve = state.stats?.['achieve'] as Record<string, { l?: number }> | undefined;
-  if (achieve) {
-    const extinctCount = Object.keys(achieve).filter((k) => k.startsWith('extinct_')).length;
-    if (extinctCount >= 60) {
-      unlockAchievement(state, 'mass_extinction');
-    }
-  }
+  updateAggregateAchievements(state);
 }
 
 function updatePathfinderAchievement(state: GameState): void {

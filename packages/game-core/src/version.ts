@@ -8,4 +8,4 @@
  */
 
 /** 存档版本，由 scripts/sync-version.mjs 维护 */
-export const SAVE_VERSION = '0.9.4';
+export const SAVE_VERSION = '0.9.5';

@@ -37,10 +37,21 @@ function migrateState(state: GameState): GameState {
     }
   }
 
-  // 4. stats.achieve / feat 容器
+  // 4. prestige 声望资源补全
+  const prestige = (state.prestige ??= { Plasmid: { count: 0 } }) as Record<string, { count?: number }>;
+  for (const [key, val] of Object.entries(fresh.prestige) as [string, { count?: number }][]) {
+    if (!prestige[key]) {
+      prestige[key] = { count: val.count ?? 0 };
+    } else if (prestige[key].count === undefined) {
+      prestige[key].count = val.count ?? 0;
+    }
+  }
+
+  // 5. stats.achieve / feat 容器
   const stats = state.stats as Record<string, unknown>;
   if (!stats['achieve']) stats['achieve'] = {};
   if (!stats['feat']) stats['feat'] = {};
+  if (!stats['synth']) stats['synth'] = {};
 
   return state;
 }

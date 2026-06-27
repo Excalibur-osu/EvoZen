@@ -10,6 +10,7 @@ import PanelHeader from './ui/PanelHeader.vue'
 import EmptyState from './ui/EmptyState.vue'
 import MetricCard from './ui/MetricCard.vue'
 import AllocationControl from './ui/AllocationControl.vue'
+import { getResourceName } from '../utils/resourceNames'
 
 const game = useGameStore()
 
@@ -66,10 +67,10 @@ function cancelAll() { game.cancelRituals() }
     <EmptyState v-if="!isMagic" text="该面板仅在魔法宇宙中可用。" icon="lock" />
 
     <template v-else>
-      <!-- Mana 状态 -->
+      <!-- 魔力状态 -->
       <div class="magic-metrics">
-        <MetricCard label="魔力 (Mana)" :value="`${Math.floor(totalMana)} / ${Math.floor(maxMana)}`" tone="accent" />
-        <MetricCard label="水晶 (Crystal)" :value="Math.floor(totalCrystal)" />
+        <MetricCard label="魔力" :value="`${Math.floor(totalMana)} / ${Math.floor(maxMana)}`" tone="accent" />
+        <MetricCard label="水晶" :value="Math.floor(totalCrystal)" />
       </div>
 
       <!-- 占星 -->
@@ -84,7 +85,7 @@ function cancelAll() { game.cancelRituals() }
       <!-- 仪式 -->
       <section class="section card">
         <h3 class="section-title">仪式</h3>
-        <p class="hint">使用 Mana 增强各类岗位产出（每次 +1 消耗 1 Mana，可累加）。</p>
+        <p class="hint">使用魔力增强各类岗位产出（每次 +1 消耗 1 魔力，可累加）。</p>
         <div class="rituals-grid">
           <div v-for="r in ritualOptions" :key="r.id" class="ritual-row card">
             <span class="ritual-label">{{ r.label }}</span>
@@ -112,10 +113,10 @@ function cancelAll() { game.cancelRituals() }
             :key="res"
             class="alchemy-item"
           >
-            <span>{{ res }}</span>
+            <span>{{ getResourceName(String(res)) }}</span>
             <span class="alchemy-amt">×{{ amount }}</span>
           </div>
-          <EmptyState v-if="Object.keys(alchemyMap).length === 0" text="尚未解锁炼金术（需研究 magic Lv.3+）。" icon="lock" />
+          <EmptyState v-if="Object.keys(alchemyMap).length === 0" text="尚未解锁炼金术（需研究魔法 3 级）。" icon="lock" />
         </div>
       </section>
 
@@ -127,13 +128,13 @@ function cancelAll() { game.cancelRituals() }
           :disabled="!conjuringUnlocked"
           @click="castFood"
         >
-          召唤食物（2 Mana + 5 Crystal）
+          召唤食物（2 魔力 + 5 水晶）
         </button>
         <button
           class="spell-btn btn primary"
           @click="castShrine"
         >
-          建造神龛（需满月，Stone 50K + Cement 25K）
+          建造神龛（需满月，石头 50K + 水泥 25K）
         </button>
         <p class="shrine-status">当前神龛数：{{ shrineCount }}</p>
       </section>

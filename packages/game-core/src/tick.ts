@@ -71,7 +71,7 @@ import { arpaTick } from './arpa';
 import { fortressTick, portalProductionTick } from './portal';
 import { mechBuildTick, mechStationPatrolTick } from './mech';
 import { syndicateTick, siegeTick } from './syndicate';
-import { womlingTick } from './womling';
+import { maybeGenerateServants, womlingTick } from './womling';
 import { checkAchievements } from './achievement-triggers';
 import { complexTraitTick, getSelenophobiaMultiplier } from './complex-traits';
 import { petTick } from './pet';
@@ -1164,12 +1164,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         const next = state as GameState;
         next.tech['asteroid'] = 4;
         if (!next.resource['Elerium']) {
-          next.resource['Elerium'] = { name: 'Elerium', amount: 0, max: 100, display: true, diff: 0, value: 0, rate: 0, crates: 0, delta: 0 };
+          next.resource['Elerium'] = { name: '超铀', amount: 0, max: 100, display: true, diff: 0, value: 0, rate: 0, crates: 0, delta: 0 };
         } else {
           next.resource['Elerium'].display = true;
         }
         messages.push({
-          text: '⚛️ 矿船在小行星带发现了超铀元素——Elerium！',
+          text: '⚛️ 矿船在小行星带发现了超铀元素！',
           type: 'info',
           category: 'progress',
         });
@@ -1187,7 +1187,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (asteroidTech >= 7) eleriumRate = 0.009;
     deltas['Elerium'] = (deltas['Elerium'] ?? 0) + eleriumShipSupported * eleriumRate;
   }
-  captureDeltaSection('Elerium 采矿船');
+  captureDeltaSection('超铀采矿船');
 
   // iridium_ship — 对标 legacy prod.js L172-175
   const iridiumShipSupported = spaceSupport.supportOn['iridium_ship'] ?? 0;
@@ -1445,6 +1445,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
       // 月相推进 — 对标 legacy main.js: moon 每天 +1, 到 28 归零
       newState.city.calendar.moon = ((newState.city.calendar.moon ?? 0) + 1) % 28;
+
+      if (maybeGenerateServants(newState)) {
+        const servants = newState.race['servants'] as { max?: number; smax?: number };
+        const totalServants = (servants.max ?? 0) + (servants.smax ?? 0);
+        messages.push({
+          text: `有 ${totalServants} 名 Womling 仆从抵达，其中 ${servants.smax ?? 0} 名熟练仆从可用。`,
+          type: 'info',
+          category: 'events',
+        });
+      }
 
       if (newState.city.calendar.day > newState.city.calendar.orbit) {
         newState.city.calendar.day = 1;

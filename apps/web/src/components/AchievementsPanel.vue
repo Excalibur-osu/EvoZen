@@ -73,7 +73,7 @@ function rankStars(rank: number): string {
 
     <div class="stats-row">
       <MetricCard label="已解锁成就" :value="`${counts.achievements} / ${allAchievements.length}`" tone="accent" />
-      <MetricCard label="已解锁 Feats" :value="`${counts.feats} / ${allFeats.length}`" />
+      <MetricCard label="已解锁功绩" :value="`${counts.feats} / ${allFeats.length}`" />
       <MetricCard label="挑战等级" :value="universeLvl.aLvl" />
       <MetricCard label="掌握度加成" :value="`+${(mastery * 100).toFixed(1)}%`" tone="accent" />
     </div>
@@ -96,7 +96,7 @@ function rankStars(rank: number): string {
       </div>
     </div>
 
-    <h3 class="section-title">Feats（功绩）</h3>
+    <h3 class="section-title">功绩</h3>
     <div class="achievements-grid">
       <div
         v-for="f in allFeats"
@@ -116,7 +116,7 @@ function rankStars(rank: number): string {
 
 <style scoped>
 .achievements-panel {
-  max-width: 1040px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -136,7 +136,7 @@ function rankStars(rank: number): string {
 
 .achievements-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 8px;
 }
 .ach-card {

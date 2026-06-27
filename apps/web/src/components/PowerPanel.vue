@@ -132,8 +132,8 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
           </span>
         </div>
         <div class="power-row-controls">
-          <StepperButton label="−" aria-label="关闭一台" :disabled="gen.configuredOn <= 0" data-tooltip="关闭一台" @click="adjustGeneratorOn(gen, -1)" />
-          <StepperButton label="+" aria-label="开启一台" :disabled="gen.configuredOn >= gen.count" data-tooltip="开启一台" @click="adjustGeneratorOn(gen, 1)" />
+          <StepperButton label="−" aria-label="关闭一台" title="关闭一台" :disabled="gen.configuredOn <= 0" @click="adjustGeneratorOn(gen, -1)" />
+          <StepperButton label="+" aria-label="开启一台" title="开启一台" :disabled="gen.configuredOn >= gen.count" @click="adjustGeneratorOn(gen, 1)" />
         </div>
       </div>
     </div>

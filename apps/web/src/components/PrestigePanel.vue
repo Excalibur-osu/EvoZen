@@ -29,19 +29,19 @@ interface ResetInfo {
 }
 
 const allResets: ResetInfo[] = [
-  { type: 'mad',        name: 'MAD 核灭',     icon: 'madReset', desc: '触发相互毁灭，结束当前世代。',                          rewards: 'Plasmid（或 AntiPlasmid）' },
-  { type: 'bioseed',    name: '生物播种',     icon: 'bioseedReset', desc: '将生命基因播种到新星球。',                              rewards: 'Plasmid + Phage' },
-  { type: 'cataclysm',  name: '灾变',         icon: 'cataclysmReset', desc: '不稳定行星地震，所有人迁徙至地下。',                    rewards: 'Plasmid + Phage（保留种族）' },
-  { type: 'blackhole',  name: '黑洞',         icon: 'blackholeReset', desc: '点燃黑洞引擎，缩成奇点重启宇宙。',                      rewards: 'Plasmid + Phage + Dark Energy' },
-  { type: 'vacuum',     name: '真空坍塌',     icon: 'vacuumReset', desc: '魔法虹吸过度，撕裂维度。',                              rewards: 'Plasmid + Phage + Dark Energy' },
-  { type: 'ascend',     name: '飞升',         icon: 'cloudReset', desc: '飞升至高维，地质 +0.02。',                              rewards: 'Plasmid + Phage + Harmony' },
-  { type: 'descend',    name: '堕落',         icon: 'descendReset', desc: '与恶魔融合，下一世代 corruption=5。',                   rewards: 'Artifact' },
-  { type: 'apotheosis', name: '神化',         icon: 'edenic', desc: '伊甸园终局，触发神化转生。',                            rewards: 'Plasmid + Supercoiled' },
-  { type: 'terraform',  name: '地球化',       icon: 'terraformReset', desc: '改造新行星至宜居态。',                                  rewards: 'Plasmid + Phage + Harmony' },
-  { type: 'aiApoc',     name: 'AI 末日',      icon: 'mech', desc: '人工智能觉醒并取代有机生命。',                          rewards: 'Plasmid + Phage + AI Core' },
-  { type: 'matrix',     name: '矩阵',         icon: 'matrixReset', desc: '进入模拟矩阵世代。',                                    rewards: 'Plasmid + Phage' },
-  { type: 'retire',     name: '退休',         icon: 'retireReset', desc: '点燃气态巨星 + AI 完成，安享退休。',                    rewards: 'Plasmid + Phage + AI Core' },
-  { type: 'eden',       name: '伊甸园',       icon: 'edenReset', desc: '完成伊甸园的终极目标。',                                rewards: 'Plasmid + Phage + Harmony' },
+  { type: 'mad',        name: 'MAD 核灭',     icon: 'madReset', desc: '触发相互毁灭，结束当前世代。',                          rewards: '质粒 / 反质粒' },
+  { type: 'bioseed',    name: '生物播种',     icon: 'bioseedReset', desc: '将生命基因播种到新星球。',                              rewards: '质粒 / 反质粒 + 噬菌体' },
+  { type: 'cataclysm',  name: '灾变',         icon: 'cataclysmReset', desc: '不稳定行星地震，所有人迁徙至地下。',                    rewards: '质粒 / 反质粒 + 噬菌体（保留种族）' },
+  { type: 'blackhole',  name: '黑洞',         icon: 'blackholeReset', desc: '点燃黑洞引擎，缩成奇点重启宇宙。',                      rewards: '质粒 / 反质粒 + 噬菌体 + 暗能量' },
+  { type: 'vacuum',     name: '真空坍塌',     icon: 'vacuumReset', desc: '魔法虹吸过度，撕裂维度。',                              rewards: '质粒 / 反质粒 + 噬菌体 + 暗能量' },
+  { type: 'ascend',     name: '飞升',         icon: 'cloudReset', desc: '飞升至高维，地质 +0.02。',                              rewards: '质粒 / 反质粒 + 噬菌体 + 和谐' },
+  { type: 'descend',    name: '堕落',         icon: 'descendReset', desc: '与恶魔融合，下一世代腐化值为 5。',                   rewards: '神器' },
+  { type: 'apotheosis', name: '神化',         icon: 'edenic', desc: '伊甸园终局，触发神化转生。',                            rewards: '质粒 / 反质粒 + 超螺旋' },
+  { type: 'terraform',  name: '地球化',       icon: 'terraformReset', desc: '改造新行星至宜居态。',                                  rewards: '质粒 / 反质粒 + 噬菌体 + 和谐' },
+  { type: 'aiApoc',     name: 'AI 末日',      icon: 'mech', desc: '人工智能觉醒并取代有机生命。',                          rewards: '质粒 / 反质粒 + 噬菌体 + AI 核心' },
+  { type: 'matrix',     name: '矩阵',         icon: 'matrixReset', desc: '进入模拟矩阵世代。',                                    rewards: '质粒 / 反质粒 + 噬菌体' },
+  { type: 'retire',     name: '退休',         icon: 'retireReset', desc: '点燃气态巨星 + AI 完成，安享退休。',                    rewards: '质粒 / 反质粒 + 噬菌体 + AI 核心' },
+  { type: 'eden',       name: '伊甸园',       icon: 'edenReset', desc: '完成伊甸园的终极目标。',                                rewards: '质粒 / 反质粒 + 噬菌体 + 和谐' },
 ]
 
 const availableResets = computed(() => allResets.filter((r) => game.canReset(r.type)))
@@ -50,10 +50,18 @@ function preview(type: ResetType) {
   return game.calcPrestigeGains(type)
 }
 
+function plasmidPreviewLabel(type: ResetType): string {
+  return game.state.race.universe === 'antimatter' ? `反质粒 +${preview(type).plasmid}` : `质粒 +${preview(type).plasmid}`
+}
+
+function resetLabel(type: ResetType): string {
+  return allResets.find((reset) => reset.type === type)?.name ?? '转生'
+}
+
 async function trigger(type: ResetType) {
   const ok = await confirm({
     title: '确认转生',
-    message: `确定要触发“${type}”转生吗？当前世代将彻底重置。`,
+    message: `确定要触发“${resetLabel(type)}”转生吗？当前世代将彻底重置。`,
     confirmLabel: '触发转生',
     tone: 'danger',
   })
@@ -66,11 +74,13 @@ async function trigger(type: ResetType) {
 }
 
 const currentPlasmid = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['Plasmid']?.count ?? 0)
+const currentAntiPlasmid = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['AntiPlasmid']?.count ?? 0)
 const currentPhage = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['Phage']?.count ?? 0)
 const currentDark = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['Dark']?.count ?? 0)
 const currentHarmony = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['Harmony']?.count ?? 0)
 const currentArtifact = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['Artifact']?.count ?? 0)
 const currentSupercoiled = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['Supercoiled']?.count ?? 0)
+const currentAICore = computed(() => (game.state.prestige as Record<string, { count?: number }> | undefined)?.['AICore']?.count ?? 0)
 </script>
 
 <template>
@@ -78,21 +88,23 @@ const currentSupercoiled = computed(() => (game.state.prestige as Record<string,
     <PanelHeader icon="prestige" title="转生" subtitle="选择一种结束方式，开启新世代并获得永久声望奖励。" />
 
     <div class="current-prestige">
-      <MetricCard label="Plasmid" :value="Math.floor(currentPlasmid)" tone="accent" />
-      <MetricCard label="Phage" :value="Math.floor(currentPhage)" />
-      <MetricCard label="Dark" :value="currentDark.toFixed(3)" />
-      <MetricCard label="Harmony" :value="currentHarmony.toFixed(2)" />
-      <MetricCard label="Artifact" :value="Math.floor(currentArtifact)" />
-      <MetricCard label="Supercoiled" :value="Math.floor(currentSupercoiled)" />
+      <MetricCard label="质粒" :value="Math.floor(currentPlasmid)" tone="accent" />
+      <MetricCard label="反质粒" :value="Math.floor(currentAntiPlasmid)" />
+      <MetricCard label="噬菌体" :value="Math.floor(currentPhage)" />
+      <MetricCard label="暗能量" :value="currentDark.toFixed(3)" />
+      <MetricCard label="和谐" :value="currentHarmony.toFixed(2)" />
+      <MetricCard label="神器" :value="Math.floor(currentArtifact)" />
+      <MetricCard label="超螺旋" :value="Math.floor(currentSupercoiled)" />
+      <MetricCard label="AI 核心" :value="Math.floor(currentAICore)" />
     </div>
 
     <!-- 真空坍塌警告（syphon ≥ 80）-->
     <div v-if="(game.state.tech['syphon'] ?? 0) >= 60" class="vacuum-warning card">
       <h3 class="section-title">真空坍塌警告</h3>
       <p>
-        魔法虹吸 (syphon) 等级：<strong>{{ game.state.tech['syphon'] }} / 80</strong>。
+        魔法虹吸等级：<strong>{{ game.state.tech['syphon'] }} / 80</strong>。
         <br>
-        当达到 80 时，维度将崩溃，触发真空转生 — 获得大量 Plasmid + Phage + Dark Energy。
+        当达到 80 时，维度将崩溃，触发真空转生，获得大量质粒 + 噬菌体 + 暗能量。
       </p>
       <p v-if="(game.state.tech['syphon'] ?? 0) >= 80" class="vacuum-imminent">
         <AppIcon name="dangerAlert" /> 维度即将崩溃，立即转生以获得收益。
@@ -122,12 +134,13 @@ const currentSupercoiled = computed(() => (game.state.prestige as Record<string,
       <p class="reset-desc">{{ r.desc }}</p>
       <p class="reset-rewards">奖励：{{ r.rewards }}</p>
       <div class="reset-preview">
-        <span v-if="preview(r.type).plasmid > 0">Plasmid +{{ preview(r.type).plasmid }}</span>
-        <span v-if="preview(r.type).phage > 0">Phage +{{ preview(r.type).phage }}</span>
-        <span v-if="preview(r.type).dark > 0">Dark +{{ preview(r.type).dark }}</span>
-        <span v-if="preview(r.type).harmony > 0">Harmony +{{ preview(r.type).harmony }}</span>
-        <span v-if="preview(r.type).artifact > 0">Artifact +{{ preview(r.type).artifact }}</span>
-        <span v-if="preview(r.type).supercoiled > 0">Supercoiled +{{ preview(r.type).supercoiled }}</span>
+        <span v-if="preview(r.type).plasmid > 0">{{ plasmidPreviewLabel(r.type) }}</span>
+        <span v-if="preview(r.type).phage > 0">噬菌体 +{{ preview(r.type).phage }}</span>
+        <span v-if="preview(r.type).dark > 0">暗能量 +{{ preview(r.type).dark }}</span>
+        <span v-if="preview(r.type).harmony > 0">和谐 +{{ preview(r.type).harmony }}</span>
+        <span v-if="preview(r.type).artifact > 0">神器 +{{ preview(r.type).artifact }}</span>
+        <span v-if="preview(r.type).cores > 0">AI 核心 +{{ preview(r.type).cores }}</span>
+        <span v-if="preview(r.type).supercoiled > 0">超螺旋 +{{ preview(r.type).supercoiled }}</span>
       </div>
     </div>
   </div>

@@ -193,15 +193,15 @@ function adjustRaid(delta: number) {
             <span class="gov-status" :class="{ 'occ': gov.occ, 'anx': gov.anx }">{{ gov.status }}</span>
           </div>
           <div class="gov-stats text-xs font-mono">
-            <span class="gov-stat" title="敌意">
+            <span class="gov-stat" data-tooltip="敌意" data-tooltip-pos="bottom">
               <AppIcon name="dangerAlert" />
               <span>{{ gov.hstl }}</span>
             </span>
-            <span class="gov-stat" title="军力">
+            <span class="gov-stat" data-tooltip="军力" data-tooltip-pos="bottom">
               <AppIcon name="military" />
               <span>{{ gov.mil }}</span>
             </span>
-            <span class="gov-stat" title="动荡" v-if="isSpyUnlocked">
+            <span class="gov-stat" data-tooltip="动荡" data-tooltip-pos="bottom" v-if="isSpyUnlocked">
               <AppIcon name="flame" />
               <span>{{ gov.unrest }}</span>
             </span>
@@ -217,7 +217,8 @@ function adjustRaid(delta: number) {
             <button
               v-if="isSpyUnlocked && !gov.occ && !gov.anx && !gov.buy"
               class="spy-btn"
-              title="训练间谍 (花费随参数指数增加)"
+              data-tooltip="训练间谍（花费随参数指数增加）"
+              data-tooltip-pos="bottom"
               @click="game.trainSpy(gov.index)"
               :disabled="gov.trn > 0"
             >

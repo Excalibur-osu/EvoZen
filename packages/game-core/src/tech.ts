@@ -6,6 +6,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel } from './achievements';
 
 export interface TechDefinition {
   id: string;
@@ -4106,6 +4107,9 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'quantum_signatures', name: '量子签名', description: '检测量子签名。', category: 'space_militarization', era: '太阳系', reqs: { syard_sensor: 3 }, grant: ['syard_sensor', 4], costs: { Knowledge: 800000 }, effect: '提升船坞传感器精度。' },
 
   // 钛锤
+
+  // Pathfinder 奖励
+  { id: 'iridium_smelting_perk', name: '铱冶炼', description: '将开拓者经验用于标准路线铱冶炼。', category: 'mining', era: '早期太空', reqs: { smelting: 6, space: 3 }, condition: (state) => state.race.truepath === undefined && getAchievementLevel(state, 'pathfinder') >= 3, grant: ['irid_smelting', 1], costs: { Knowledge: 350000, Mythril: 2500 }, effect: '解锁熔炉铱冶炼。' },
 
   // Womling
   { id: 'weasels', name: '鼬鼠', description: '与鼬鼠建立联系。', category: 'womling', era: 'Tauceti', reqs: { tau_red: 2 }, grant: ['tau_red', 3], costs: { Knowledge: 6250000 }, effect: '与鼬鼠建立外交关系。' },

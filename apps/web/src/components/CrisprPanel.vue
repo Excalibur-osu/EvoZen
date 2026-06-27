@@ -43,27 +43,27 @@ function doRoll() {
   if (result) {
     lastRolled.value = result
   } else {
-    lastRolled.value = '抽取失败：Plasmid/Phage 不足或已发现全部'
+    lastRolled.value = '抽取失败：质粒/噬菌体不足或已发现全部'
   }
 }
 </script>
 
 <template>
   <div class="crispr-panel">
-    <PanelHeader icon="crispr" title="CRISPR 基因强化" subtitle="用 Plasmid 永久强化基因，跨转生保留。" />
+    <PanelHeader icon="crispr" title="CRISPR 基因强化" subtitle="用质粒永久强化基因，跨转生保留。" />
 
-    <EmptyState v-if="!unlocked" text="需研究 genetics 科技并至少拥有 1 个 Plasmid。" icon="lock" />
+    <EmptyState v-if="!unlocked" text="需研究遗传学科技并至少拥有 1 个质粒。" icon="lock" />
 
     <template v-else>
       <div class="prestige-row">
-        <MetricCard label="Plasmid" :value="Math.floor(plasmid)" tone="accent" />
-        <MetricCard label="Phage" :value="Math.floor(phage)" />
+        <MetricCard label="质粒" :value="Math.floor(plasmid)" tone="accent" />
+        <MetricCard label="噬菌体" :value="Math.floor(phage)" />
       </div>
 
-      <!-- 抽取 Minor Trait -->
+      <!-- 抽取次要特质 -->
       <div class="roll-section card">
-        <h3 class="section-title">抽取 Minor Trait</h3>
-        <p>用 25 Plasmid + 1 Phage 随机抽取一个 minor trait 加入基因池。</p>
+        <h3 class="section-title">抽取次要特质</h3>
+        <p>用 25 质粒 + 1 噬菌体随机抽取一个次要特质加入基因池。</p>
         <p>已发现 ({{ discoveredMinor.length }}/13)：
           <span v-for="t in discoveredMinor" :key="t" class="minor-chip">{{ t }}</span>
         </p>
@@ -80,8 +80,8 @@ function doRoll() {
           <p class="upg-desc">{{ upg.desc }}</p>
           <div class="upg-buy">
             <span class="cost">
-              {{ plasmidCost(upg.id) }} Plasmid
-              <span v-if="phageCost(upg.id) > 0"> + {{ phageCost(upg.id) }} Phage</span>
+              {{ plasmidCost(upg.id) }} 质粒
+              <span v-if="phageCost(upg.id) > 0"> + {{ phageCost(upg.id) }} 噬菌体</span>
             </span>
             <button class="buy-btn btn primary sm" :disabled="!canBuy(upg.id)" @click="buy(upg.id)">
               强化

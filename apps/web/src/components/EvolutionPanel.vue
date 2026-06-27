@@ -11,8 +11,8 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { BASIC_CHALLENGE_UNLOCK_LEVEL, SCENARIO_CHALLENGE_UNLOCK_LEVEL, type ChallengeStartOptions } from '../stores/game'
-import { computed, ref, onMounted } from 'vue'
-import { applyCustomRace, getAchievementLevel, getSpeciesTraitDescriptors, type EvoUpgrade } from '@evozen/game-core'
+import { computed, ref, onMounted, watch } from 'vue'
+import { getAchievementLevel, type EvoUpgrade } from '@evozen/game-core'
 import AppIcon from './ui/AppIcon.vue'
 import ProgressBar from './ui/ProgressBar.vue'
 
@@ -58,8 +58,16 @@ const evoFinal = computed(() => (game.state.evolution as Record<string, number |
 const availableUpgrades = computed(() => game.getAvailableUpgrades())
 const availableSteps = computed(() => game.getAvailableSteps())
 const availableRaces = computed(() => game.getAvailableRaces())
+const selectableAvailableRaces = computed(() => availableRaces.value.filter(race => canUseRaceWithChallenge(race.id)))
+const customRaceOption = computed(() => selectableAvailableRaces.value.find(r => r.id === 'custom'))
+const hybridRaceOption = computed(() => selectableAvailableRaces.value.find(r => r.id === 'hybrid'))
+const selectableRaces = computed(() => selectableAvailableRaces.value.filter(r => r.id !== 'custom' && r.id !== 'hybrid'))
+const hasSpecifiedRaceOption = computed(() => selectableRaces.value.length > 0 || !!customRaceOption.value || !!hybridRaceOption.value)
+const canUseRandomSentience = computed(() => selectedChallengeMode.value !== 'warlord')
+const usesWeakMasteryChallenge = computed(() => game.state.race.universe === 'antimatter')
 
-const showRaceSelect = computed(() => availableRaces.value.length > 0)
+const showRaceSelect = computed(() => selectableRaces.value.length > 0)
+const showSentience = computed(() => evoLevel.value >= 7 && evoFinal.value >= 100)
 
 // 行星特性
 const TRAIT_EMOJIS: Record<string, string> = {
@@ -73,7 +81,8 @@ const activeTraits = computed(() =>
 
 const selectedSpecies = ref('human')
 const selectedPtrait = ref('none')
-const useCustom = ref(false)
+const selectedCustomSpecies = ref<'none' | 'custom' | 'hybrid'>('none')
+const selectedImitationTarget = ref('')
 type ChallengeMode = NonNullable<ChallengeStartOptions['mode']>
 const selectedChallengeMode = ref<ChallengeMode>('standard')
 const noPlasmidChallenge = ref(false)
@@ -94,9 +103,73 @@ const witchHunterChallenge = ref(false)
 const sludgeChallenge = ref(false)
 const ultraSludgeChallenge = ref(false)
 const hasCustomRace = computed(() => {
-  const cust = (game.state as Record<string, unknown>)['custom'] as { race0?: unknown } | undefined
-  return !!cust?.race0
+  const cust = (game.state as Record<string, unknown>)['custom'] as { race0?: unknown; race1?: unknown } | undefined
+  return !!cust?.race0 && !!customRaceOption.value
 })
+const hasHybridRace = computed(() => {
+  const cust = (game.state as Record<string, unknown>)['custom'] as { race1?: unknown } | undefined
+  return !!cust?.race1 && !!hybridRaceOption.value
+})
+const customRaceState = computed(() => (game.state as Record<string, unknown>)['custom'] as {
+  race0?: { genus?: string; hybrid?: string[] }
+  race1?: { genus?: string; hybrid?: string[] }
+} | undefined)
+const customGenusLabel = computed(() => {
+  const genus = customRaceState.value?.race0?.genus
+  return genus ? game.GENUS_DEFS[genus as keyof typeof game.GENUS_DEFS]?.name ?? genus : ''
+})
+const hybridParentLabel = computed(() => {
+  const parents = customRaceState.value?.race1?.hybrid ?? []
+  return parents
+    .map(genus => game.GENUS_DEFS[genus as keyof typeof game.GENUS_DEFS]?.name ?? genus)
+    .filter(Boolean)
+    .join(' + ')
+})
+const selectedFinalSpecies = computed(() => selectedCustomSpecies.value !== 'none'
+  ? selectedCustomSpecies.value
+  : selectedSpecies.value)
+const synthImitationTargets = computed(() => game.getSynthImitationTargets())
+const selectedCustomConfig = computed(() => {
+  if (selectedFinalSpecies.value !== 'custom' && selectedFinalSpecies.value !== 'hybrid') return null
+  const key = selectedFinalSpecies.value === 'hybrid' ? 'race1' : 'race0'
+  return customRaceState.value?.[key] as { traits?: string[] } | undefined
+})
+const needsImitationTarget = computed(() => {
+  if (synthImitationTargets.value.length === 0) return false
+  if (selectedFinalSpecies.value === 'synth') return true
+  if (selectedFinalSpecies.value === 'custom' || selectedFinalSpecies.value === 'hybrid') {
+    return Boolean(selectedCustomConfig.value?.traits?.includes('imitation'))
+  }
+  return false
+})
+const hasValidImitationTarget = computed(() =>
+  !needsImitationTarget.value || synthImitationTargets.value.some(race => race.id === selectedImitationTarget.value)
+)
+const canChooseSpecifiedRace = computed(() =>
+  rnaAmount.value >= 320 && dnaAmount.value >= 320 && hasValidImitationTarget.value
+)
+
+watch(selectableRaces, (races) => {
+  if (races.length > 0 && !races.some(race => race.id === selectedSpecies.value)) {
+    selectedSpecies.value = races[0].id
+  }
+}, { immediate: true })
+
+watch([customRaceOption, hybridRaceOption], ([customRace, hybridRace]) => {
+  if (selectedCustomSpecies.value === 'custom' && !customRace) selectedCustomSpecies.value = 'none'
+  if (selectedCustomSpecies.value === 'hybrid' && !hybridRace) selectedCustomSpecies.value = 'none'
+})
+
+watch(usesWeakMasteryChallenge, (usesWeakMastery) => {
+  if (usesWeakMastery) noPlasmidChallenge.value = false
+  else weakMasteryChallenge.value = false
+}, { immediate: true })
+
+watch(synthImitationTargets, (targets) => {
+  if (targets.length > 0 && !targets.some(race => race.id === selectedImitationTarget.value)) {
+    selectedImitationTarget.value = targets[0].id
+  }
+}, { immediate: true })
 const challengeLevel = computed(() => Number((game.state.genes as Record<string, number>)['challenge'] ?? 0))
 const isChallengeUnlocked = computed(() => challengeLevel.value >= 1)
 
@@ -130,8 +203,8 @@ const challengeOptions = computed<ChallengeStartOptions>(() => {
   if (mode !== 'standard') return { mode }
   return {
     mode,
-    noPlasmid: noPlasmidChallenge.value,
-    weakMastery: weakMasteryChallenge.value,
+    noPlasmid: !usesWeakMasteryChallenge.value && noPlasmidChallenge.value,
+    weakMastery: usesWeakMasteryChallenge.value && weakMasteryChallenge.value,
     noTrade: noTradeChallenge.value,
     noCraft: noCraftChallenge.value,
     noCrispr: noCrisprChallenge.value,
@@ -154,7 +227,13 @@ const selectedChallengePreset = computed(() => {
   if (selectedChallengeMode.value === 'truepath' || selectedChallengeMode.value === 'lone_survivor') {
     return ['削弱', '坏基因', '禁贸易', '禁制造']
   }
-  if (selectedChallengeMode.value === 'cataclysm' || selectedChallengeMode.value === 'warlord' || selectedChallengeMode.value === 'banana') {
+  if (
+    selectedChallengeMode.value === 'cataclysm' ||
+    selectedChallengeMode.value === 'warlord' ||
+    selectedChallengeMode.value === 'banana' ||
+    selectedChallengeMode.value === 'junker' ||
+    selectedChallengeMode.value === 'fasting'
+  ) {
     return ['无质粒', '禁 CRISPR', '禁贸易', '禁制造']
   }
   return []
@@ -164,7 +243,9 @@ const finalSpeciesName = computed(() => {
   if (selectedChallengeMode.value === 'junker') return '废物种'
   if (selectedChallengeMode.value === 'standard' && ultraSludgeChallenge.value && canSelectSpecialChallenge('ultraSludge')) return '超级污泥族'
   if (selectedChallengeMode.value === 'standard' && sludgeChallenge.value && canSelectSpecialChallenge('sludge')) return '污泥族'
-  return availableRaces.value.find(r => r.id === selectedSpecies.value)?.name ?? selectedSpecies.value
+  if (selectedCustomSpecies.value === 'custom' && customRaceOption.value) return customRaceOption.value.name
+  if (selectedCustomSpecies.value === 'hybrid' && hybridRaceOption.value) return hybridRaceOption.value.name
+  return game.getRaceDisplayName(selectedSpecies.value)
 })
 
 function hasAchievement(id: string, affix?: 'h' | 'mg' | 'e') {
@@ -232,14 +313,24 @@ function toggleSpecialChallenge(flag: keyof Omit<ChallengeStartOptions, 'mode'>,
 function selectChallengeMode(mode: typeof challengeModes[number]) {
   if (!canSelectChallengeMode(mode)) return
   selectedChallengeMode.value = mode.id
+  if (mode.id === 'warlord' && selectedCustomSpecies.value !== 'none') {
+    selectedCustomSpecies.value = 'none'
+  }
 }
 
 function chooseRaceFinal() {
-  game.chooseRace(selectedSpecies.value, selectedPtrait.value, challengeOptions.value)
-  // 选择后若启用自定义种族，应用 trait
-  if (useCustom.value && hasCustomRace.value) {
-    applyCustomRace(game.state, false)
-  }
+  if (!hasValidImitationTarget.value) return
+  game.chooseRace(selectedFinalSpecies.value, selectedPtrait.value, challengeOptions.value, {
+    imitationTarget: needsImitationTarget.value ? selectedImitationTarget.value : undefined,
+  })
+}
+
+function canUseRaceWithChallenge(speciesId: string) {
+  return !(selectedChallengeMode.value === 'warlord' && ['custom', 'hybrid', 'nano'].includes(speciesId))
+}
+
+function randomSentience() {
+  game.randomSentience(selectedPtrait.value, challengeOptions.value)
 }
 
 function quickStart() {
@@ -456,23 +547,45 @@ const stageDesc = computed(() => {
     </div>
 
     <!-- 种族 + 行星特性选择（evo=7 后出现） -->
-    <div v-if="showRaceSelect" class="evo-species">
+    <div v-if="showSentience" class="evo-species">
       <h3>选择你的种族</h3>
-      <div class="species-grid">
+      <div v-if="showRaceSelect" class="species-grid">
         <button
-          v-for="race in availableRaces"
+          v-for="race in selectableRaces"
           :key="race.id"
           class="species-card"
           :class="{ active: selectedSpecies === race.id }"
-          @click="selectedSpecies = race.id"
+          @click="selectedSpecies = race.id; selectedCustomSpecies = 'none'"
         >
           <span class="species-emoji">{{ race.emoji }}</span>
-          <span class="species-name">{{ race.name }}</span>
+          <span class="species-name">{{ game.getRaceDisplayName(race.id) }}</span>
+          <span v-if="game.getRaceAltLabel(race.id)" class="species-alt">{{ game.getRaceAltLabel(race.id) }}</span>
           <span class="species-traits">
-            {{ getSpeciesTraitDescriptors(race.id).map(t => t.label).join(' / ') }}
+            {{ game.getRaceTraitLabels(race.id).join(' / ') }}
           </span>
-          <span class="species-effect">{{ race.desc }}</span>
+          <span class="species-effect">{{ game.getRaceDisplayDesc(race.id) }}</span>
         </button>
+      </div>
+
+      <div v-if="needsImitationTarget" class="imitation-section">
+        <h4>
+          <AppIcon name="sparkles" />
+          <span>模仿目标</span>
+        </h4>
+        <div class="species-grid">
+          <button
+            v-for="race in synthImitationTargets"
+            :key="race.id"
+            class="species-card"
+            :class="{ active: selectedImitationTarget === race.id }"
+            @click="selectedImitationTarget = race.id"
+          >
+            <span class="species-emoji">{{ game.GENUS_DEFS[race.type]?.name?.slice(0, 1) ?? '•' }}</span>
+            <span class="species-name">{{ game.getRaceDisplayName(race.id) }}</span>
+            <span class="species-traits">{{ game.getRaceTraitLabels(race.id).join(' / ') }}</span>
+            <span class="species-effect">{{ game.getRaceDisplayDesc(race.id) }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- 行星特性 -->
@@ -494,21 +607,41 @@ const stageDesc = computed(() => {
       </div>
 
       <!-- 自定义种族（已配置时显示） -->
-      <div v-if="hasCustomRace" class="custom-race-option">
+      <div v-if="hasCustomRace || hasHybridRace" class="custom-race-option">
         <h4>
           <AppIcon name="customRace" />
           <span>自定义种族</span>
         </h4>
+        <div class="species-grid">
         <button
+          v-if="hasCustomRace && customRaceOption"
           class="species-card"
-          :class="{ active: useCustom }"
-          @click="useCustom = !useCustom"
+          :class="{ active: selectedCustomSpecies === 'custom' }"
+          @click="selectedCustomSpecies = selectedCustomSpecies === 'custom' ? 'none' : 'custom'"
         >
           <span class="custom-race-label">
-            <AppIcon :name="useCustom ? 'achievement' : 'customRace'" />
-            <span>使用自定义种族</span>
+            <AppIcon :name="selectedCustomSpecies === 'custom' ? 'achievement' : 'customRace'" />
+            <span>{{ customRaceOption.name }}</span>
           </span>
+          <span v-if="customGenusLabel" class="species-traits">属类：{{ customGenusLabel }}</span>
+          <span class="species-traits">{{ game.getRaceTraitLabels('custom').join(' / ') }}</span>
+          <span class="species-effect">{{ customRaceOption.desc }}</span>
         </button>
+        <button
+          v-if="hasHybridRace && hybridRaceOption"
+          class="species-card"
+          :class="{ active: selectedCustomSpecies === 'hybrid' }"
+          @click="selectedCustomSpecies = selectedCustomSpecies === 'hybrid' ? 'none' : 'hybrid'"
+        >
+          <span class="custom-race-label">
+            <AppIcon :name="selectedCustomSpecies === 'hybrid' ? 'achievement' : 'customRace'" />
+            <span>{{ hybridRaceOption.name }}</span>
+          </span>
+          <span v-if="hybridParentLabel" class="species-traits">父属：{{ hybridParentLabel }}</span>
+          <span class="species-traits">{{ game.getRaceTraitLabels('hybrid').join(' / ') }}</span>
+          <span class="species-effect">{{ hybridRaceOption.desc }}</span>
+        </button>
+        </div>
       </div>
 
       <div class="challenge-section">
@@ -537,11 +670,11 @@ const stageDesc = computed(() => {
           <span v-for="flag in selectedChallengePreset" :key="flag" class="challenge-chip">{{ flag }}</span>
         </div>
         <div v-if="isChallengeUnlocked && selectedChallengeMode === 'standard'" class="challenge-flags">
-          <label class="challenge-toggle">
+          <label v-if="!usesWeakMasteryChallenge" class="challenge-toggle">
             <input v-model="noPlasmidChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('noPlasmid')">
             <span>无质粒</span>
           </label>
-          <label class="challenge-toggle">
+          <label v-else class="challenge-toggle">
             <input v-model="weakMasteryChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('weakMastery')">
             <span>弱化精通</span>
           </label>
@@ -589,22 +722,47 @@ const stageDesc = computed(() => {
       </div>
 
       <!-- 费用展示 + 进化按钮 -->
-      <div class="sentience-cost">
-        <span>消耗：</span>
-        <span data-tooltip="RNA 费用">🔮 320</span>
-        <span data-tooltip="DNA 费用">🧬 320</span>
-        <span :class="{ 'cost-lack': rnaAmount < 320 || dnaAmount < 320 }">
-          （当前 RNA {{ rnaAmount }} / DNA {{ dnaAmount }}）
+      <template v-if="hasSpecifiedRaceOption">
+        <div class="sentience-cost">
+          <span>指定种族：</span>
+          <span data-tooltip="RNA 费用">🔮 320</span>
+          <span data-tooltip="DNA 费用">🧬 320</span>
+          <span :class="{ 'cost-lack': rnaAmount < 320 || dnaAmount < 320 }">
+            （当前 RNA {{ rnaAmount }} / DNA {{ dnaAmount }}）
+          </span>
+        </div>
+        <button
+          class="btn primary sentience-btn"
+          :disabled="!canChooseSpecifiedRace"
+          @click="chooseRaceFinal()"
+        >
+          <AppIcon name="edenic" />
+          <span>进化为 {{ finalSpeciesName }} 踏上文明</span>
+        </button>
+      </template>
+      <div v-else class="sentience-notice">
+        首次觉醒会从当前完成的属类中随机诞生文明；完成灭绝、播种或大灭绝后可指定种族。
+      </div>
+      <div v-if="canUseRandomSentience" class="sentience-cost">
+        <span>随机觉醒：</span>
+        <span data-tooltip="RNA 费用">🔮 300</span>
+        <span data-tooltip="DNA 费用">🧬 300</span>
+        <span :class="{ 'cost-lack': rnaAmount < 300 || dnaAmount < 300 }">
+          （从当前属类随机诞生文明）
         </span>
       </div>
       <button
-        class="btn primary sentience-btn"
-        :disabled="rnaAmount < 320 || dnaAmount < 320"
-        @click="chooseRaceFinal()"
+        v-if="canUseRandomSentience"
+        class="btn sentience-btn"
+        :disabled="rnaAmount < 300 || dnaAmount < 300"
+        @click="randomSentience()"
       >
-        <AppIcon name="edenic" />
-        <span>进化为 {{ finalSpeciesName }} 踏上文明</span>
+        <AppIcon name="sparkles" />
+        <span>随机觉醒文明</span>
       </button>
+      <div v-else class="sentience-notice">
+        战争之主需要指定一个已解锁的合法起源种族，不能使用随机觉醒。
+      </div>
     </div>
   </div>
 </template>
@@ -826,6 +984,7 @@ const stageDesc = computed(() => {
 .species-card.active { border-color: var(--accent); background: var(--accent-glow); box-shadow: inset 0 0 0 1px var(--accent); }
 .species-emoji { font-size: 20px; }
 .species-name { font-size: 12px; font-weight: 700; }
+.species-alt { font-size: 10px; color: var(--warning); }
 .species-traits { font-size: 10px; color: var(--secondary); }
 .species-effect { font-size: 10px; line-height: 1.3; color: var(--text-secondary); }
 .custom-race-label {
@@ -989,6 +1148,17 @@ const stageDesc = computed(() => {
   gap: 8px;
   align-items: center;
   font-family: var(--font-mono);
+}
+.sentience-notice {
+  margin-top: 16px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
 }
 .sentience-btn {
   width: 100%;

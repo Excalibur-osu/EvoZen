@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
-import type { GenusId } from '@evozen/game-core'
+import type { GenusId, RaceTraitDetail } from '@evozen/game-core'
 import PanelHeader from './ui/PanelHeader.vue'
 import SegmentedTabs from './ui/SegmentedTabs.vue'
 
@@ -40,10 +40,9 @@ function basicAvailable(raceId: string): boolean {
   return def.basic(game.state)
 }
 
-function showTraits(raceId: string): Array<[string, number]> {
-  const def = game.RACES[raceId as keyof typeof game.RACES]
-  if (!def) return []
-  return Object.entries(def.traits)
+function showTraits(raceId: string): RaceTraitDetail[] {
+  if (currentSpecies.value === raceId) return game.getCurrentRaceTraitDetails()
+  return game.getRaceTraitDetailsForDisplay(raceId)
 }
 
 const currentSpecies = computed(() => game.state.race.species)
@@ -62,17 +61,25 @@ const currentSpecies = computed(() => game.state.race.species)
         :class="['race-card', { current: currentSpecies === r.id, locked: !basicAvailable(r.id) && currentSpecies !== r.id }]"
       >
         <div class="race-header">
-          <span class="race-name">{{ r.name }}</span>
+          <span class="race-name">{{ game.getRaceDisplayName(r.id) }}</span>
           <span class="race-genus">[{{ genusLabel(r.type) }}]</span>
+          <span v-if="game.getRaceAltLabel(r.id)" class="alt-badge">{{ game.getRaceAltLabel(r.id) }}</span>
           <span v-if="currentSpecies === r.id" class="current-badge">当前</span>
         </div>
-        <p class="race-desc">{{ r.desc }}</p>
+        <p class="race-desc">{{ game.getRaceDisplayDesc(r.id) }}</p>
         <div class="race-meta">
-          <span class="home">家园：{{ r.home }}</span>
+          <span class="home">家园：{{ game.getRaceDisplayHome(r.id) }}</span>
         </div>
         <div class="race-traits">
-          <span v-for="[t, rank] in showTraits(r.id)" :key="t" class="trait-chip">
-            {{ t }}<span v-if="rank !== 1" class="rank">×{{ rank }}</span>
+          <span
+            v-for="trait in showTraits(r.id)"
+            :key="trait.id"
+            :class="['trait-chip', { positive: trait.val > 0, negative: trait.val < 0, fanatic: trait.isFanaticism }]"
+            :data-tooltip="trait.desc || undefined"
+            data-tooltip-pos="bottom"
+          >
+            {{ trait.name }}<span v-if="trait.rank !== 1" class="rank">×{{ trait.rank }}</span>
+            <span v-if="trait.isFanaticism" class="fanatic-mark">狂热</span>
           </span>
         </div>
       </div>
@@ -82,7 +89,7 @@ const currentSpecies = computed(() => game.state.race.species)
 
 <style scoped>
 .races-panel {
-  max-width: 1100px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -90,7 +97,7 @@ const currentSpecies = computed(() => game.state.race.species)
 
 .races-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 8px;
 }
 .race-card {
@@ -114,6 +121,10 @@ const currentSpecies = computed(() => game.state.race.species)
 .race-genus {
   font-size: 10px;
   color: var(--text-muted);
+}
+.alt-badge {
+  color: var(--warning);
+  font-size: 10px;
 }
 .current-badge {
   margin-left: auto;
@@ -148,8 +159,15 @@ const currentSpecies = computed(() => game.state.race.species)
   border-radius: var(--radius-sm);
   font-size: 10px;
 }
+.trait-chip.positive { color: var(--success); }
+.trait-chip.negative { color: var(--danger); }
+.trait-chip.fanatic { border-color: var(--warning); }
 .rank {
   color: var(--warning);
   margin-left: 0.2rem;
+}
+.fanatic-mark {
+  color: var(--warning);
+  margin-left: 0.25rem;
 }
 </style>

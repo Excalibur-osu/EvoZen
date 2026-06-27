@@ -14,6 +14,12 @@ const game = useGameStore()
 const unlocked = computed(() => game.canUseWomling())
 const w = computed(() => game.getWomling())
 const cap = computed(() => game.getWomlingPopCap())
+const servants = computed(() => game.getServants())
+const hasWomlingVillage = computed(() => w.value.discovered)
+const hasServants = computed(() => Boolean(servants.value))
+const servantTotal = computed(() => (servants.value?.max ?? 0) + (servants.value?.smax ?? 0))
+const servantUsed = computed(() => (servants.value?.used ?? 0) + (servants.value?.sused ?? 0))
+const servantFree = computed(() => Math.max(0, servantTotal.value - servantUsed.value))
 
 const totalAssigned = computed(() => {
   const j = w.value.jobs
@@ -46,6 +52,13 @@ function discover() {
     </div>
 
     <template v-else>
+      <div v-if="hasServants" class="stats-row">
+        <MetricCard label="仆从" :value="`${servants?.used ?? 0} / ${servants?.max ?? 0}`" />
+        <MetricCard label="熟练仆从" :value="`${servants?.sused ?? 0} / ${servants?.smax ?? 0}`" tone="accent" />
+        <MetricCard label="可用仆从" :value="servantFree" />
+      </div>
+
+      <template v-if="hasWomlingVillage">
       <div class="stats-row">
         <MetricCard label="人口" :value="`${Math.floor(w.population)} / ${cap}`" />
         <MetricCard label="士气" :value="Math.floor(w.morale)" tone="accent" />
@@ -65,6 +78,7 @@ function discover() {
           @increment="adjust(job, 1)"
         />
       </div>
+      </template>
     </template>
   </div>
 </template>

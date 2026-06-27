@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import {
+  Apple,
   Archive,
   Atom,
   BadgeAlert,
@@ -69,6 +70,7 @@ import {
 
 export const iconMap = {
   achievement: Trophy,
+  apple: Apple,
   arpa: Landmark,
   blackholeReset: CircleDotDashed,
   bioseedReset: Sprout,

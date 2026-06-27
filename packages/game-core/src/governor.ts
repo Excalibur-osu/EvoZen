@@ -12,6 +12,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getRaceMainType } from './races';
 
 // ============================================================
 // 总督背景（10 种）— 对标 gmen L14-105
@@ -226,7 +227,7 @@ export interface GovernorState {
 
 /** 生成 N 位候选总督 — 对标 genGovernor L332-361 */
 export function generateGovernorCandidates(state: GameState, count: number = 10): GovernorCandidate[] {
-  const genus = (state.race['maintype'] as string) || 'humanoid';
+  const genus = getRaceMainType(state) ?? 'humanoid';
   const namePool = [...(GOVERNOR_NAMES[genus] ?? GOVERNOR_NAMES['humanoid'])];
   const bgPool = Object.keys(GOVERNOR_BACKGROUNDS) as GovernorBackgroundId[];
 

@@ -33,6 +33,7 @@ export function defaultSettings(): SettingsState {
     statsTabs: 0,
     marketTabs: 0,
     animated: true,
+    boring: false,
     tabLoad: false,
     pause: false,
     showEvolution: true,
@@ -257,6 +258,7 @@ export function createNewGame(): GameState {
       tdays: 0,
       attacks: 0,
       died: 0,
+      synth: {},
     } as StatsState,
 
     settings: defaultSettings(),
@@ -276,6 +278,13 @@ export function createNewGame(): GameState {
 
     prestige: {
       Plasmid: { count: 0 },
+      AntiPlasmid: { count: 0 },
+      Phage: { count: 0 },
+      Dark: { count: 0 },
+      Harmony: { count: 0 },
+      Artifact: { count: 0 },
+      AICore: { count: 0 },
+      Supercoiled: { count: 0 },
     },
   };
 

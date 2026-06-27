@@ -8,7 +8,9 @@
 
 import type { GameState } from '@evozen/shared-types';
 import { getTraitVar } from './trait-ranks';
-import { RACES } from './races';
+import { GENUS_DEFS, getRaceFullTraits, RACES } from './races';
+import { TRAITS } from './trait-data';
+import { loadCustomRace } from './custom-race';
 
 function rankVal(state: GameState, trait: string, idx: number = 0): number {
   if (!state.race[trait]) return 0;
@@ -88,22 +90,48 @@ export function getImitatedSpecies(state: GameState): string | null {
   return (state.race['srace'] as string | undefined) ?? null;
 }
 
-/** Synth 模仿：从 srace 借用 trait，按 vars[1] 比例（如 0.5 → 半效果） */
+/** Synth 模仿：从 srace 借用属类与种族 trait。正面使用 imitation vars[0]，负面使用 vars[1]。 */
 export function applyImitationTraits(state: GameState): void {
   if (!state.race['imitation']) return;
   const srace = state.race['srace'] as string | undefined;
   if (!srace) return;
-  const srcRace = RACES[srace as keyof typeof RACES];
-  if (!srcRace) return;
+  const traits = getImitationTraitIds(state, srace);
+  if (traits.length === 0) return;
 
-  // imitation vars[1]：模仿比例（0.5-1.0），vars[0] 固定 0.5
-  const ratio = rankVal(state, 'imitation', 1) || 0.5;
+  const positiveRank = rankVal(state, 'imitation', 0) || 0.5;
+  const negativeRank = rankVal(state, 'imitation', 1) || positiveRank;
 
-  for (const [t, lvl] of Object.entries(srcRace.traits)) {
+  for (const t of traits) {
+    if (t === 'evil' || t === 'imitation') continue;
+    const targetRank = (TRAITS[t]?.val ?? 0) < 0 ? negativeRank : positiveRank;
     const existingLvl = (state.race[t] as number) ?? 0;
     // 取最大值（不会因模仿降低已有 trait）
-    state.race[t] = Math.max(existingLvl, (lvl as number) * ratio);
+    state.race[t] = Math.max(existingLvl, targetRank);
   }
+}
+
+function getImitationTraitIds(state: GameState, srace: string): string[] {
+  if (srace === 'custom' || srace === 'hybrid') {
+    const config = loadCustomRace(state, srace === 'hybrid');
+    if (!config) return [];
+    const traitIds = new Set<string>();
+    for (const trait of Object.keys(GENUS_DEFS[config.genus]?.traits ?? {})) {
+      traitIds.add(trait);
+    }
+    for (const parentGenus of config.hybrid ?? []) {
+      for (const trait of Object.keys(GENUS_DEFS[parentGenus]?.traits ?? {})) {
+        traitIds.add(trait);
+      }
+    }
+    for (const trait of config.traits) {
+      traitIds.add(trait);
+    }
+    if (config.fanaticism) traitIds.add(config.fanaticism);
+    return [...traitIds];
+  }
+
+  const srcRace = RACES[srace as keyof typeof RACES];
+  return srcRace ? Object.keys(getRaceFullTraits(srcRace.id)) : [];
 }
 
 // ============================================================
@@ -370,6 +398,7 @@ export function isCataclysmRace(state: GameState): boolean {
 // ============================================================
 export function complexTraitTick(state: GameState, timeMul: number): void {
   if (state.race.species === 'protoplasm') return;
+  applyImitationTraits(state);
   // unstable 死亡
   processUnstableDeath(state, timeMul);
 }

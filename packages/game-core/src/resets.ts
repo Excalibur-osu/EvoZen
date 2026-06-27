@@ -10,9 +10,13 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel, getUniverseAffix } from './achievements';
 import { checkResetAchievements, markChallengeTask } from './achievement-triggers';
 import { applyUniverse, UNIVERSES, type UniverseType } from './bigbang';
 import { createNewGame } from './state';
+import { applyCustomRace, loadCustomRace } from './custom-race';
+import { applyRaceTraits, getRaceMainType, isGenusId, RACES, type GenusId, type RaceId } from './races';
+import { applySpecialRaceTraits } from './special-races';
 
 // ============================================================
 // 转生类型枚举
@@ -43,6 +47,7 @@ export interface PrestigeGains {
   dark: number;
   harmony: number;
   artifact: number;
+  cores: number;
   supercoiled: number;
   pdebt: number;
 }
@@ -136,6 +141,68 @@ function getGeology(state: GameState): Record<string, number> {
   return (state.city as unknown as { geology?: Record<string, number> })?.geology ?? {};
 }
 
+function getSynthImitationSource(state: GameState, speciesId: string): string {
+  const race = RACES[speciesId as RaceId];
+  if (race && race.type !== 'synthetic' && !['junker', 'sludge', 'ultra_sludge'].includes(speciesId)) {
+    return speciesId;
+  }
+  return typeof state.race['srace'] === 'string' ? state.race['srace'] : speciesId;
+}
+
+function restoreCurrentRaceTraits(
+  state: GameState,
+  speciesId: string,
+  mainType?: GenusId,
+  junkType?: GenusId
+): void {
+  const effectiveMainType = mainType ?? junkType;
+  if (speciesId === 'custom' || speciesId === 'hybrid') {
+    const applied = applyCustomRace(state, speciesId === 'hybrid', effectiveMainType);
+    if (!applied) state.race.species = speciesId;
+  } else if (RACES[speciesId as RaceId]) {
+    applyRaceTraits(state, speciesId as RaceId, effectiveMainType);
+  } else {
+    state.race.species = speciesId;
+  }
+
+  if (isJunkLikeSpecies(speciesId) && effectiveMainType) state.race['jtype'] = effectiveMainType;
+  applySpecialRaceTraits(state, speciesId);
+  if (isJunkLikeSpecies(speciesId) && effectiveMainType) state.race['jtype'] = effectiveMainType;
+}
+
+function isJunkLikeSpecies(speciesId: string): boolean {
+  return speciesId === 'junker' || speciesId === 'sludge' || speciesId === 'ultra_sludge';
+}
+
+function ensureSpeciesPopulationResource(state: GameState, speciesId: string): void {
+  if (!speciesId || speciesId === 'protoplasm') return;
+  state.resource[speciesId] ??= {
+    name: getSpeciesResourceName(state, speciesId),
+    display: true,
+    value: 0,
+    amount: 0,
+    max: 0,
+    rate: 0,
+    crates: 0,
+    diff: 0,
+    delta: 0,
+  };
+  state.resource[speciesId].display = true;
+}
+
+function getSpeciesResourceName(state: GameState, speciesId: string): string {
+  if (speciesId === 'custom' || speciesId === 'hybrid') {
+    return loadCustomRace(state, speciesId === 'hybrid')?.name || RACES[speciesId]?.name || speciesId;
+  }
+  return RACES[speciesId as RaceId]?.name ?? speciesId;
+}
+
+function getSludgeDarkMultiplier(state: GameState): number {
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  const rank = getAchievementLevel(state, 'extinct_sludge', affix);
+  return rank > 0 ? 1 + rank * 0.03 : 1;
+}
+
 // ============================================================
 // 声望计算（对标 legacy/src/functions.js L1493-1755）
 // ============================================================
@@ -204,6 +271,15 @@ function getAscendLevel(state: GameState): number {
   return Math.min(5, a_level);
 }
 
+function getOccupiedForeignGarrison(state: GameState): number {
+  const foreign = state.civic?.foreign as Record<string, { occ?: boolean }> | undefined;
+  if (!foreign) return 0;
+  const occupiedCount = [0, 1, 2].filter((idx) => foreign[`gov${idx}`]?.occ).length;
+  if (occupiedCount <= 0) return 0;
+  const occupationSize = state.civic?.govern?.type === 'federation' ? 15 : 20;
+  return occupiedCount * occupationSize;
+}
+
 /**
  * 计算声望收益（对标 legacy/src/functions.js calcPrestige L1574-1755）
  *
@@ -221,6 +297,7 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
     dark:       0,
     harmony:    0,
     artifact:   0,
+    cores:      0,
     supercoiled: 0,
     pdebt:      0,
   };
@@ -231,7 +308,7 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
   let k_inc = rc.k_inc;
 
   // --- 人口计算 ---
-  const isSynth = (state.race as Record<string, unknown>)['type'] === 'synthetic';
+  const isSynth = getRaceMainType(state) === 'synthetic';
   // MAD 合成种族减少人口效率
   if (type === 'mad' && isSynth) {
     pop_divisor = 5;
@@ -248,9 +325,10 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
   if (isHighPop) {
     pop = Math.round(pop / HIGH_POP_DIVISOR);
   }
-  // 加上驻扎兵力（从 civic.garrison 读取，不含占领区额外驻军）
+  // 加上驻扎兵力；被占领外国政府按 legacy 计入等效驻军。
   const civic = state.civic as Record<string, Record<string, number>> | undefined;
   let garrisoned = civic?.['garrison']?.['workers'] ?? 0;
+  garrisoned += getOccupiedForeignGarrison(state);
   if (isHighPop) garrisoned = Math.round(garrisoned / HIGH_POP_DIVISOR);
   pop += garrisoned;
 
@@ -274,13 +352,21 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
   // challenge_multiplier：对标 legacy functions.js challenge_multiplier() L1442-1490
   // 包括：宇宙类型加成 + truepath加成 + alevel 挑战等级加成（后者最重要，最高 45% 加成）
   const universe = state.race.universe ?? 'standard';
+  const aLvl = getAscendLevel(state);
   let cm = 1;
   if (universe === 'micro')      cm *= 0.25;
   if (universe === 'antimatter') cm *= 1.1;
-  if (universe === 'heavy' && type !== 'mad') cm *= 1.05;   // heavy 对 mad 无加成
+  if (universe === 'heavy' && type !== 'mad') {
+    switch (aLvl - 1) {
+      case 1: cm *= 1.1; break;
+      case 2: cm *= 1.15; break;
+      case 3: cm *= 1.2; break;
+      case 4: cm *= 1.25; break;
+      default: cm *= 1.05; break;
+    }
+  }
   if (state.race['truepath'])    cm *= 1.1;
   // alevel 挑战等级加成（对标 L1479-1490）
-  const aLvl = getAscendLevel(state);
   switch (aLvl) {
     case 2: cm *= 1.05; break;
     case 3: cm *= 1.12; break;
@@ -312,11 +398,11 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
     const mass   = stellar?.['mass']   ?? 8;
     let new_dark = +(Math.log(1 + exotic * 40)).toFixed(3);
     new_dark    += +(Math.log2(Math.max(8, mass) - 7) / 2.5).toFixed(3);
-    gains.dark   = +(new_dark * cm).toFixed(3);
+    gains.dark   = +(new_dark * cm * getSludgeDarkMultiplier(state)).toFixed(3);
   } else if (type === 'vacuum') {
     const manaGen = (state.resource['Mana'] as unknown as Record<string, number> | undefined)?.['gen'] ?? 0;
     const new_dark = +(Math.log2(Math.max(1, manaGen)) / 5).toFixed(3);
-    gains.dark   = +(new_dark * cm).toFixed(3);
+    gains.dark   = +(new_dark * cm * getSludgeDarkMultiplier(state)).toFixed(3);
   }
 
   // --- Harmony / Artifact / Supercoiled（ascend 系）---
@@ -351,9 +437,9 @@ export function calcPrestigeGains(state: GameState, type: ResetType): PrestigeGa
     }
   }
 
-  // --- AICore（退休）---
+  // --- AICore（AI 末日 / 退休）---
   if (type === 'aiApoc') {
-    gains.artifact = universe === 'micro' ? 2 : 5; // reuse artifact field for cores
+    gains.cores = universe === 'micro' ? 2 : 5;
   }
 
   // --- pdebt（质疑债务）---
@@ -494,10 +580,14 @@ export function resetCataclysm(state: GameState): GameState | null {
   const geo = getGeology(newState);
   const srace = newState.race['srace'] as string | false ?? false;
   const corruption = getCorruption(newState);
-  const mainType = newState.race['maintype'] as string | false ?? false;
+  const speciesId = newState.race.species;
+  const mainTypeValue = newState.race['maintype'];
+  const junkTypeValue = newState.race['jtype'];
+  const mainType = isGenusId(mainTypeValue) ? mainTypeValue : undefined;
+  const junkType = isGenusId(junkTypeValue) ? junkTypeValue : undefined;
 
   newState.race = {
-    species: newState.race.species,   // 保留种族
+    species: speciesId,   // 保留种族
     gods: newState.race.gods,
     old_gods: newState.race['old_gods'],
     universe: newState.race.universe,
@@ -506,9 +596,11 @@ export function resetCataclysm(state: GameState): GameState | null {
   };
   if (corruption > 0) newState.race['corruption'] = corruption;
   if (srace) newState.race['srace'] = srace;
-  if (mainType) newState.race['maintype'] = mainType;
 
-  // 标记下一次为 cataclysm 模式
+  resetCommon(newState, { orbit, biome, ptrait, geology: geo });
+  restoreCurrentRaceTraits(newState, speciesId, mainType, junkType);
+  if (corruption > 0) newState.race['corruption'] = corruption;
+  if (srace) newState.race['srace'] = srace;
   if (newState.race.universe === 'antimatter') {
     newState.race['weak_mastery'] = 1;
   } else {
@@ -519,8 +611,7 @@ export function resetCataclysm(state: GameState): GameState | null {
   }
   newState.race['start_cataclysm'] = 1;
   newState.race['cataclysm'] = 1;
-
-  resetCommon(newState, { orbit, biome, ptrait, geology: geo });
+  ensureSpeciesPopulationResource(newState, speciesId);
   return newState;
 }
 
@@ -760,7 +851,7 @@ export function resetRetire(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'retire');
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
-  applyAICore(newState, gains.artifact);
+  applyAICore(newState, gains.cores);
   applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'retire');
   updateResetStats(newState.stats);
@@ -921,7 +1012,7 @@ export function resetTerraform(state: GameState): GameState {
  * AI Apocalypse（AI 末日）转生 — 对标 legacy/src/resets.js aiApocalypse L934-1043
  * 触发：ai_core 科技 ≥ 5（titan AI 核心已建造并通电）
  * 奖励：Phage + Plasmid + AICore
- * 携带：种族变更为 synth
+ * 携带：记录当前种族为可被 synth 模仿的历史目标
  */
 export function resetAiApocalypse(state: GameState): GameState {
   const newState: GameState = JSON.parse(JSON.stringify(state));
@@ -929,19 +1020,24 @@ export function resetAiApocalypse(state: GameState): GameState {
   const gains = calcPrestigeGains(newState, 'aiApoc');
   applyPlasmid(newState, gains.plasmid);
   applyPhage(newState, gains.phage);
-  applyAICore(newState, gains.artifact);
+  applyAICore(newState, gains.cores);
   applyPrestigeDebt(newState, gains.pdebt);
   newState.stats = incrementStat(newState.stats, 'aiappoc');
   updateResetStats(newState.stats);
 
   const god = newState.race.species;
   const oldGod = newState.race.gods;
+  const srace = getSynthImitationSource(newState, god);
   const orbit = getOrbit(newState);
   const biome = getBiome(newState);
   const ptrait = getPtrait(newState);
   const geo = getGeology(newState);
+  newState.stats.synth = {
+    ...(newState.stats.synth ?? {}),
+    [god]: true,
+  };
 
-  // AI 末日：保存原种族 ID 为 srace，自身变为 synth
+  // AI 末日：保存可模仿来源，后续选择 synth 时可指定 srace。
   newState.race = {
     species: 'protoplasm',
     gods: god,
@@ -950,7 +1046,7 @@ export function resetAiApocalypse(state: GameState): GameState {
     seeded: false,
     seed: Math.floor(Math.random() * 10000),
     ascended: newState.race['ascended'] ?? false,
-    srace: god,  // 用 srace 记录原种族，便于 synth 复制
+    srace,
   };
 
   resetCommon(newState, { orbit, biome, ptrait, geology: geo });
@@ -1088,7 +1184,8 @@ function applyPhage(state: GameState, amount: number): void {
 function applyDark(state: GameState, amount: number): void {
   if (amount <= 0) return;
   const prestige = state.prestige as Record<string, { count: number }> | undefined;
-  if (prestige?.['Dark']) {
+  if (prestige) {
+    prestige['Dark'] ??= { count: 0 };
     prestige['Dark'].count = +((prestige['Dark'].count + amount).toFixed(3));
   }
   incrementStatByFixed(state.stats, 'dark', amount);
@@ -1097,7 +1194,8 @@ function applyDark(state: GameState, amount: number): void {
 function applyHarmony(state: GameState, amount: number): void {
   if (amount <= 0) return;
   const prestige = state.prestige as Record<string, { count: number }> | undefined;
-  if (prestige?.['Harmony']) {
+  if (prestige) {
+    prestige['Harmony'] ??= { count: 0 };
     prestige['Harmony'].count = parseFloat((prestige['Harmony'].count + amount).toFixed(2));
   }
   incrementStatByFixed(state.stats, 'harmony', amount);
@@ -1128,9 +1226,9 @@ function applyAICore(state: GameState, amount: number): void {
 
 function addPrestige(state: GameState, key: string, amount: number): void {
   const prestige = state.prestige as Record<string, { count: number }> | undefined;
-  if (prestige?.[key]) {
-    prestige[key].count += amount;
-  }
+  if (!prestige) return;
+  prestige[key] ??= { count: 0 };
+  prestige[key].count += amount;
 }
 
 function incrementStatBy(stats: GameState['stats'], key: string, amount: number): void {

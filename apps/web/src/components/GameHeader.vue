@@ -237,7 +237,6 @@ watch(() => game.lastSaveTime, () => {
   font-weight: 600;
   font-size: 11px;
   font-family: var(--font-mono);
-  cursor: help;
   white-space: pre-line;
 }
 .morale-low {
