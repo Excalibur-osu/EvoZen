@@ -103,6 +103,20 @@ function getCount(id: string): number {
   return (game.state.city[id] as { count: number } | undefined)?.count ?? 0
 }
 
+function getBanquetState(): { on: number; strength: number } {
+  const banquet = game.state.city['banquet'] as { on?: number; strength?: number } | undefined
+  return {
+    on: banquet?.on ?? 0,
+    strength: banquet?.strength ?? 0,
+  }
+}
+
+function isAtBuildLimit(def: StructureDefinition): boolean {
+  if (!def.maxCount) return false
+  const queued = game.state.queue.queue.filter(item => item.id === def.id).length
+  return getCount(def.id) + queued >= def.maxCount(game.state)
+}
+
 function formatCost(structureId: string): Array<{ resId: string; amount: number; affordable: boolean }> {
   const costs = game.getBuildCost(structureId)
   return (Object.entries(costs) as Array<[string, number]>)
@@ -122,10 +136,15 @@ function isStorageFull(resId: string): boolean {
 
 function buildingTooltip(def: StructureDefinition): string {
   const costs = formatCost(def.id)
-  const costText = costs.length > 0
+  const costText = isAtBuildLimit(def)
+    ? '已达到成就等级上限'
+    : costs.length > 0
     ? costs.map(cost => `${getResourceName(cost.resId)} ${cost.amount.toLocaleString()}`).join('，')
     : '无'
-  return `${def.description}\n效果：${def.effect}\n当前数量：${getCount(def.id)}\n本次费用：${costText}`
+  const strengthText = def.id === 'banquet' && getCount(def.id) > 0
+    ? `\n当前强度：${getBanquetState().strength}`
+    : ''
+  return `${def.description}\n效果：${def.effect}\n当前数量：${getCount(def.id)}${strengthText}\n本次费用：${costText}`
 }
 </script>
 
@@ -184,17 +203,27 @@ function buildingTooltip(def: StructureDefinition): string {
                   <span class="build-name">{{ def.name }}</span>
                   <span class="build-count font-mono" v-if="getCount(def.id) > 0">{{ getCount(def.id) }}</span>
                 </div>
-                <button 
-                  v-if="game.isQueueUnlocked"
-                  class="q-btn" 
-                  :disabled="!game.canEnqueueBuilding"
-                  @click.stop="game.enqueueBuilding(def.id)"
-                  data-tooltip="加入建造队列"
-                  data-tooltip-pos="bottom"
-                >
-                  <AppIcon name="queue" />
-                  队列
-                </button>
+                <div class="build-actions">
+                  <button
+                    v-if="def.id === 'banquet' && getCount(def.id) > 0"
+                    class="banquet-toggle"
+                    :class="{ active: getBanquetState().on > 0 }"
+                    @click.stop="game.setBanquetActive(getBanquetState().on < 1)"
+                  >
+                    {{ getBanquetState().on > 0 ? '营业中' : '已停业' }}
+                  </button>
+                  <button
+                    v-if="game.isQueueUnlocked"
+                    class="q-btn"
+                    :disabled="!game.canEnqueueBuilding || isAtBuildLimit(def)"
+                    @click.stop="game.enqueueBuilding(def.id)"
+                    data-tooltip="加入建造队列"
+                    data-tooltip-pos="bottom"
+                  >
+                    <AppIcon name="queue" />
+                    队列
+                  </button>
+                </div>
               </div>
               <p class="build-effect">{{ def.effect }}</p>
               <div class="build-costs">
@@ -357,6 +386,11 @@ function buildingTooltip(def: StructureDefinition): string {
   align-items: center;
   gap: 8px;
 }
+.build-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .q-btn {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -375,6 +409,21 @@ function buildingTooltip(def: StructureDefinition): string {
 .q-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+.banquet-toggle {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--surface-pressed);
+  color: var(--text-secondary);
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.banquet-toggle.active {
+  border-color: var(--success);
+  color: var(--success);
 }
 
 .build-name {

@@ -32,6 +32,7 @@ import {
   type SupportPool,
   type SpaceStructureDefinition,
 } from './space';
+import { getAchievementLevel } from './achievements';
 
 /**
  * 支援解算输出结构。tick.ts 基于此计算产出 / 合并电力。
@@ -137,7 +138,10 @@ function resolvePool(
     }
 
     result.supplierEffectiveOn[def.id] = effectiveOn;
-    sMax += effectiveOn * def.support!.amount;
+    const supportPerBuilding = def.id === 'spaceport' && getAchievementLevel(state, 'iron_will') >= 4
+      ? def.support!.amount + 1
+      : def.support!.amount;
+    sMax += effectiveOn * supportPerBuilding;
   }
 
   // --- (2) 对消耗者按声明顺序分配支援 ---

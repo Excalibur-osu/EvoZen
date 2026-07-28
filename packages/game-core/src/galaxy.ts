@@ -1,4 +1,5 @@
 import type { GameState } from '@evozen/shared-types';
+import { applyInflationToCosts } from './challenges';
 import { applySpaceScaling } from './space';
 
 export type GalaxySupportPool = 'gateway' | 'gorddon' | 'alien1' | 'alien2' | 'chthonian';
@@ -462,7 +463,7 @@ export function getGalaxyBuildCost(state: GameState, id: string): Record<string,
   for (const [resId, fn] of Object.entries(def.costs)) {
     costs[resId] = fn(state, count);
   }
-  return costs;
+  return applyInflationToCosts(state, costs);
 }
 
 export function canBuildGalaxyStructure(state: GameState, id: string): boolean {

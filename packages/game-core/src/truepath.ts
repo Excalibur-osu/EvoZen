@@ -14,6 +14,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { addInflationPoints, applyInflationToCosts } from './challenges';
 
 // ============================================================
 // Truepath 区域定义
@@ -242,7 +243,7 @@ export function getTruepathBuildCost(state: GameState, buildingId: string): Reco
   for (const [res, base] of Object.entries(building.baseCost)) {
     cost[res] = Math.round(base * mult);
   }
-  return cost;
+  return applyInflationToCosts(state, cost);
 }
 
 /** 判断 Truepath 建筑是否可建造 */
@@ -271,5 +272,6 @@ export function buildTruepathStructure(state: GameState, buildingId: string): bo
   const space = state.space as Record<string, Record<string, number>>;
   if (!space[buildingId]) space[buildingId] = { count: 0, on: 0 };
   space[buildingId].count++;
+  addInflationPoints(state, 1);
   return true;
 }

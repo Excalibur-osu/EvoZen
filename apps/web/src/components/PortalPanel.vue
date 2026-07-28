@@ -15,6 +15,7 @@ import EmptyState from './ui/EmptyState.vue'
 import MetricCard from './ui/MetricCard.vue'
 import ProgressBar from './ui/ProgressBar.vue'
 import AppIcon from './ui/AppIcon.vue'
+import StepperButton from './ui/StepperButton.vue'
 
 const game = useGameStore()
 
@@ -41,6 +42,22 @@ const buildings = computed(() => {
 })
 
 const fortress = computed(() => game.getFortressState())
+const availableSoldiers = computed(() => game.state.civic.garrison?.workers ?? 0)
+const patrolCapacity = computed(() => Math.floor(
+  Number(fortress.value?.garrison ?? 0) / Math.max(1, Number(fortress.value?.patrol_size ?? 1)),
+))
+
+function adjustFortressGarrison(delta: number) {
+  game.setFortressGarrison(Number(fortress.value?.garrison ?? 0) + delta)
+}
+
+function adjustPatrols(delta: number) {
+  game.setFortressPatrols(Number(fortress.value?.patrols ?? 0) + delta)
+}
+
+function adjustPatrolSize(delta: number) {
+  game.setFortressPatrolSize(Number(fortress.value?.patrol_size ?? 1) + delta)
+}
 
 function buildingCount(id: string) {
   const portal = game.state.portal as Record<string, Record<string, number>>
@@ -110,6 +127,35 @@ function fmtNum(n: number): string {
       <MetricCard label="威胁等级" :value="Math.floor(fortress?.threat ?? 0)" tone="danger" />
       <MetricCard label="城墙完整度" :value="`${Math.floor(fortress?.walls ?? 100)} / ${fortress?.max_walls ?? 100}`" />
       <MetricCard label="巡逻队" :value="`${fortress?.patrols ?? 0} x ${fortress?.patrol_size ?? 10}`" />
+      <MetricCard label="昨日击杀" :value="Math.floor(fortress?.last_kills ?? 0)" />
+      <MetricCard label="昨日宝石" :value="Math.floor(fortress?.last_gems ?? 0)" tone="accent" />
+    </div>
+
+    <div v-if="game.isPortalUnlocked && activeRegion === 'fortress'" class="fortress-controls">
+      <div class="fortress-control-row">
+        <span class="control-label">要塞驻军</span>
+        <span class="control-value">{{ fortress?.garrison ?? 0 }} / {{ availableSoldiers }}</span>
+        <div class="control-actions">
+          <StepperButton label="−" title="撤回一名驻军" :disabled="Number(fortress?.garrison ?? 0) <= Number(fortress?.patrols ?? 0) * Number(fortress?.patrol_size ?? 1)" @click="adjustFortressGarrison(-1)" />
+          <StepperButton label="+" title="派驻一名士兵" :disabled="Number(fortress?.garrison ?? 0) >= availableSoldiers" @click="adjustFortressGarrison(1)" />
+        </div>
+      </div>
+      <div class="fortress-control-row">
+        <span class="control-label">巡逻队数量</span>
+        <span class="control-value">{{ fortress?.patrols ?? 0 }} / {{ patrolCapacity }}</span>
+        <div class="control-actions">
+          <StepperButton label="−" title="减少一支巡逻队" :disabled="Number(fortress?.patrols ?? 0) <= 0" @click="adjustPatrols(-1)" />
+          <StepperButton label="+" title="增加一支巡逻队" :disabled="Number(fortress?.patrols ?? 0) >= patrolCapacity" @click="adjustPatrols(1)" />
+        </div>
+      </div>
+      <div class="fortress-control-row">
+        <span class="control-label">每队人数</span>
+        <span class="control-value">{{ fortress?.patrol_size ?? 1 }}</span>
+        <div class="control-actions">
+          <StepperButton label="−" title="每队减少一人" :disabled="Number(fortress?.patrol_size ?? 1) <= 1" @click="adjustPatrolSize(-1)" />
+          <StepperButton label="+" title="每队增加一人" :disabled="Number(fortress?.patrol_size ?? 1) >= Number(fortress?.garrison ?? 0)" @click="adjustPatrolSize(1)" />
+        </div>
+      </div>
     </div>
 
     <!-- 区域切换 Tab -->
@@ -218,6 +264,54 @@ function fmtNum(n: number): string {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 8px;
+}
+
+.fortress-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 1px solid var(--border-color);
+}
+
+.fortress-control-row {
+  display: grid;
+  grid-template-columns: minmax(76px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+}
+
+.fortress-control-row + .fortress-control-row {
+  border-left: 1px solid var(--border-color);
+}
+
+.control-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.control-value {
+  min-width: 52px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+}
+
+.control-actions {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 760px) {
+  .fortress-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .fortress-control-row + .fortress-control-row {
+    border-top: 1px solid var(--border-color);
+    border-left: 0;
+  }
 }
 
 .special-section {

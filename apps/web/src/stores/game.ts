@@ -59,6 +59,12 @@ import {
   CONTAINER_VALUE,
   CRATE_COST_PLYWOOD,
   CONTAINER_COST_STEEL,
+  applyTechnophobeStartRewards,
+  setBanquetActive as coreSetBanquetActive,
+  normalizeChallengeStartOptions as coreNormalizeChallengeStartOptions,
+  applyChallengeStartOptions as coreApplyChallengeStartOptions,
+  resolveChallengeStartSpecies,
+  type ChallengeStartOptions,
   assignSpeciesTraits,
   getSpeciesTraitDescriptors,
   applySpecialRaceTraits,
@@ -120,7 +126,10 @@ import {
   PORTAL_REGIONS,
   PORTAL_BUILDINGS,
   fortressTick,
-  defaultFortressState,
+  setFortressGarrison as coreSetFortressGarrison,
+  setFortressPatrols as coreSetFortressPatrols,
+  setFortressPatrolSize as coreSetFortressPatrolSize,
+  getFortressState as coreGetFortressState,
   isRegionUnlocked as coreIsRegionUnlocked,
   getPortalBuildCost as coreGetPortalBuildCost,
   canBuildPortalStructure as coreCanBuildPortalStructure,
@@ -164,7 +173,6 @@ import {
   unlockFeat,
   countAchievements,
   calcUniverseLevel,
-  getAchievementLevel,
   calcMastery,
   checkAchievementHunterFeats,
   // 种族系统
@@ -229,97 +237,6 @@ import {
   canUseServants,
 } from '@evozen/game-core'
 import { trainSpy as coreTrainSpy, startSpyAction as coreStartSpyAction } from '@evozen/game-core'
-
-export interface ChallengeStartOptions {
-  mode?: 'standard' | 'cataclysm' | 'lone_survivor' | 'truepath' | 'warlord' | 'banana' | 'junker' | 'fasting'
-  noPlasmid?: boolean
-  weakMastery?: boolean
-  noTrade?: boolean
-  noCraft?: boolean
-  noCrispr?: boolean
-  nerfed?: boolean
-  badGenes?: boolean
-  joyless?: boolean
-  steelen?: boolean
-  decay?: boolean
-  emfield?: boolean
-  inflation?: boolean
-  orbitDecay?: boolean
-  gravityWell?: boolean
-  witchHunter?: boolean
-  sludge?: boolean
-  ultraSludge?: boolean
-}
-
-type ChallengeMode = NonNullable<ChallengeStartOptions['mode']>
-
-export const BASIC_CHALLENGE_UNLOCK_LEVEL: Record<keyof Omit<ChallengeStartOptions, 'mode'>, number> = {
-  noPlasmid: 1,
-  noTrade: 1,
-  noCraft: 1,
-  noCrispr: 1,
-  weakMastery: 2,
-  nerfed: 2,
-  badGenes: 2,
-  joyless: 1,
-  steelen: 1,
-  decay: 1,
-  emfield: 1,
-  inflation: 1,
-  orbitDecay: 1,
-  gravityWell: 1,
-  witchHunter: 1,
-  sludge: 1,
-  ultraSludge: 1,
-}
-
-export const SCENARIO_CHALLENGE_UNLOCK_LEVEL: Record<Exclude<ChallengeMode, 'standard'>, number> = {
-  cataclysm: 2,
-  banana: 3,
-  truepath: 3,
-  junker: 3,
-  fasting: 3,
-  lone_survivor: 4,
-  warlord: 4,
-}
-
-const SPECIAL_CHALLENGE_FLAGS = [
-  'joyless',
-  'steelen',
-  'decay',
-  'emfield',
-  'inflation',
-  'orbitDecay',
-  'gravityWell',
-  'witchHunter',
-  'sludge',
-  'ultraSludge',
-] as const
-
-type SpecialChallengeFlag = typeof SPECIAL_CHALLENGE_FLAGS[number]
-
-const SPECIAL_CHALLENGE_RACE_FLAG: Record<SpecialChallengeFlag, string> = {
-  joyless: 'joyless',
-  steelen: 'steelen',
-  decay: 'decay',
-  emfield: 'emfield',
-  inflation: 'inflation',
-  orbitDecay: 'orbit_decay',
-  gravityWell: 'gravity_well',
-  witchHunter: 'witch_hunter',
-  sludge: 'sludge',
-  ultraSludge: 'ultra_sludge',
-}
-
-const BASIC_CHALLENGE_FLAGS = [
-  'noPlasmid',
-  'weakMastery',
-  'noTrade',
-  'noCraft',
-  'noCrispr',
-  'nerfed',
-  'badGenes',
-] as const
 
 const RESET_TYPE_LABELS: Partial<Record<ResetType, string>> = {
   mad: 'MAD 核灭',
@@ -636,6 +553,11 @@ export const useGameStore = defineStore('game', () => {
     addMessage(`${def.name}已竣工。`, 'success', 'progress')
   }
 
+  function setBanquetActive(active: boolean) {
+    if (!coreSetBanquetActive(state.value, active)) return
+    addMessage(active ? '餐馆已营业。' : '餐馆已停业，积累的强度已重置。', 'info', 'progress')
+  }
+
   // ---- 建筑队列操作 ----
 
   const isQueueUnlocked = computed(() => coreIsQueueUnlocked(state.value))
@@ -756,7 +678,7 @@ export const useGameStore = defineStore('game', () => {
     challenges?: ChallengeStartOptions,
     options: { imitationTarget?: string } = {},
   ) {
-    const normalizedChallenges = normalizeChallengeStartOptions(challenges)
+    const normalizedChallenges = coreNormalizeChallengeStartOptions(state.value, challenges)
     if (normalizedChallenges?.mode === 'warlord' && !canUseWarlordOriginSpecies(speciesId)) {
       addMessage('战争之主不能以自定义种族、混血自定义或纳米群作为起源种族。', 'warning', 'progress')
       return
@@ -777,7 +699,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function randomSentience(ptrait: string = 'none', challenges?: ChallengeStartOptions) {
-    const normalizedChallenges = normalizeChallengeStartOptions(challenges)
+    const normalizedChallenges = coreNormalizeChallengeStartOptions(state.value, challenges)
     if (normalizedChallenges?.mode === 'warlord') {
       addMessage('战争之主需要指定一个合法起源种族，不能使用随机觉醒。', 'warning', 'progress')
       return
@@ -799,8 +721,8 @@ export const useGameStore = defineStore('game', () => {
     mainType?: string,
     imitationTarget?: string,
   ) {
-    const normalizedChallenges = normalizeChallengeStartOptions(challenges)
-    const startSpeciesId = resolveStartSpecies(speciesId, normalizedChallenges)
+    const normalizedChallenges = coreNormalizeChallengeStartOptions(state.value, challenges)
+    const startSpeciesId = resolveChallengeStartSpecies(speciesId, normalizedChallenges)
     const resolvedMainType = mainType ?? getSpeciesMainType(speciesId)
     const replacedBySpecialSpecies = startSpeciesId !== speciesId
 
@@ -825,7 +747,7 @@ export const useGameStore = defineStore('game', () => {
     if (normalizedChallenges?.mode === 'warlord') {
       applyWarlordOrigin(speciesId)
     }
-    applyChallengeStartOptions(normalizedChallenges)
+    coreApplyChallengeStartOptions(state.value, normalizedChallenges)
     const altRace = applyAltRaceLock(state.value, startSpeciesId)
     if (altRace) applyAltRaceTraits(state.value, startSpeciesId)
     applyChallengeGeneTraits(state.value)
@@ -852,6 +774,7 @@ export const useGameStore = defineStore('game', () => {
     state.value.resource['Stone'].amount = 0
     state.value.resource['Furs'].display = false // 由猎场/驻军解锁
     state.value.resource['Furs'].amount = 0
+    applyTechnophobeStartRewards(state.value)
 
     // 隐藏进化资源
     state.value.resource['RNA'].display = false
@@ -882,162 +805,6 @@ export const useGameStore = defineStore('game', () => {
       addMessage(`⚑ 开局挑战：${challengeSummary}`, 'special', 'progress')
     }
     addMessage(`💡 提示：万幸的是你已经懂得如何在荒野中收集木材。先从周围捡拾一些木头，看能发掘出什么吧。`, 'info', 'progress')
-  }
-
-  function normalizeChallengeStartOptions(challenges?: ChallengeStartOptions): ChallengeStartOptions | undefined {
-    if (!challenges) return undefined
-    const challengeLevel = Number((state.value.genes as Record<string, number>)['challenge'] ?? 0)
-    if (challengeLevel < 1) return undefined
-
-    const requestedMode = challenges?.mode ?? 'standard'
-    const mode: ChallengeMode = requestedMode !== 'standard' &&
-      (challengeLevel < SCENARIO_CHALLENGE_UNLOCK_LEVEL[requestedMode] || !canUseScenarioMode(requestedMode))
-      ? 'standard'
-      : requestedMode
-
-    const normalized: ChallengeStartOptions = { mode }
-    if (mode !== 'standard') return normalized
-
-    for (const flag of BASIC_CHALLENGE_FLAGS) {
-      if (challenges[flag] && challengeLevel >= BASIC_CHALLENGE_UNLOCK_LEVEL[flag]) {
-        normalized[flag] = true
-      }
-    }
-    if (state.value.race.universe === 'antimatter') {
-      delete normalized.noPlasmid
-    } else {
-      delete normalized.weakMastery
-    }
-    for (const flag of SPECIAL_CHALLENGE_FLAGS) {
-      if (!challenges[flag]) continue
-      if (challengeLevel < BASIC_CHALLENGE_UNLOCK_LEVEL[flag]) continue
-      if (!canUseSpecialChallenge(flag)) continue
-      normalized[flag] = true
-    }
-    return normalized
-  }
-
-  function applyChallengeStartOptions(challenges?: ChallengeStartOptions) {
-    const mode = challenges?.mode ?? 'standard'
-    const scenarioFlags = ['cataclysm', 'lone_survivor', 'truepath', 'warlord', 'banana', 'junker', 'fasting']
-    const challengeFlags = [
-      'no_plasmid',
-      'weak_mastery',
-      'no_trade',
-      'no_craft',
-      'no_crispr',
-      'nerfed',
-      'badgenes',
-      'orbit_decayed',
-      ...Object.values(SPECIAL_CHALLENGE_RACE_FLAG),
-    ]
-    for (const flag of scenarioFlags) {
-      delete state.value.race[flag]
-    }
-    for (const flag of challengeFlags) {
-      delete state.value.race[flag]
-    }
-
-    if (!challenges) {
-      return
-    }
-
-    if (mode !== 'standard') {
-      state.value.race[mode] = 1
-    }
-    if (mode === 'warlord') {
-      state.value.race['universe'] = 'evil'
-    }
-
-    if (mode === 'truepath' || mode === 'lone_survivor') {
-      state.value.race['nerfed'] = 1
-      state.value.race['badgenes'] = 1
-      state.value.race['no_trade'] = 1
-      state.value.race['no_craft'] = 1
-      return
-    }
-
-    if (mode === 'cataclysm' || mode === 'warlord' || mode === 'banana' || mode === 'junker' || mode === 'fasting') {
-      if (state.value.race.universe === 'antimatter') {
-        state.value.race['weak_mastery'] = 1
-      } else {
-        state.value.race['no_plasmid'] = 1
-      }
-      state.value.race['no_crispr'] = 1
-      state.value.race['no_trade'] = 1
-      state.value.race['no_craft'] = 1
-      return
-    }
-
-    if (challenges.noPlasmid) state.value.race['no_plasmid'] = 1
-    if (challenges.weakMastery) state.value.race['weak_mastery'] = 1
-    if (challenges.noTrade) state.value.race['no_trade'] = 1
-    if (challenges.noCraft) state.value.race['no_craft'] = 1
-    if (challenges.noCrispr) state.value.race['no_crispr'] = 1
-    if (challenges.nerfed) state.value.race['nerfed'] = 1
-    if (challenges.badGenes) state.value.race['badgenes'] = 1
-
-    for (const flag of SPECIAL_CHALLENGE_FLAGS) {
-      if (!challenges[flag]) continue
-      state.value.race[SPECIAL_CHALLENGE_RACE_FLAG[flag]] = flag === 'orbitDecay' ? 5000 : 1
-    }
-  }
-
-  function hasAchievementLevel(id: string, affix?: 'h' | 'mg' | 'e'): boolean {
-    return getAchievementLevel(state.value, id, affix) > 0
-  }
-
-  function canUseScenarioMode(mode: Exclude<ChallengeMode, 'standard'>): boolean {
-    switch (mode) {
-      case 'cataclysm':
-        return hasAchievementLevel('shaken')
-      case 'banana':
-        return hasAchievementLevel('whitehole') || hasAchievementLevel('ascended')
-      case 'truepath':
-        return hasAchievementLevel('ascended') || hasAchievementLevel('corrupted')
-      case 'lone_survivor':
-        return hasAchievementLevel('retired')
-      case 'warlord':
-        return state.value.race.universe === 'evil' && hasAchievementLevel('godslayer', 'e')
-      case 'fasting':
-        return hasAchievementLevel('corrupted')
-      case 'junker':
-        return true
-    }
-  }
-
-  function canUseSpecialChallenge(flag: SpecialChallengeFlag): boolean {
-    switch (flag) {
-      case 'joyless':
-      case 'steelen':
-        return true
-      case 'decay':
-        return hasAchievementLevel('whitehole')
-      case 'emfield':
-        return hasAchievementLevel('ascended')
-      case 'inflation':
-        return hasAchievementLevel('scrooge')
-      case 'orbitDecay':
-        return hasAchievementLevel('whitehole') || hasAchievementLevel('ascended')
-      case 'gravityWell':
-        return state.value.race.universe === 'heavy' && hasAchievementLevel('seeder', 'h')
-      case 'witchHunter':
-        return state.value.race.universe === 'magic' && hasAchievementLevel('ascended', 'mg')
-      case 'sludge':
-        return (hasAchievementLevel('ascended') || hasAchievementLevel('corrupted')) && hasAchievementLevel('extinct_junker')
-      case 'ultraSludge':
-        return hasAchievementLevel('godslayer') && hasAchievementLevel('extinct_sludge')
-    }
-  }
-
-  function resolveStartSpecies(speciesId: string, challenges?: ChallengeStartOptions): string {
-    if (challenges?.mode === 'warlord') return 'hellspawn'
-    if (challenges?.mode === 'junker') return 'junker'
-    if (challenges?.mode === 'standard' || !challenges?.mode) {
-      if (challenges?.ultraSludge && canUseSpecialChallenge('ultraSludge')) return 'ultra_sludge'
-      if (challenges?.sludge && canUseSpecialChallenge('sludge')) return 'sludge'
-    }
-    return speciesId
   }
 
   function getSpeciesMainType(speciesId: string): string | undefined {
@@ -1162,7 +929,7 @@ export const useGameStore = defineStore('game', () => {
       return ['削弱', '坏基因', '禁贸易', '禁制造']
     }
     if (mode === 'cataclysm' || mode === 'warlord' || mode === 'banana' || mode === 'junker' || mode === 'fasting') {
-      return ['无质粒', '禁 CRISPR', '禁贸易', '禁制造']
+      return [state.value.race.universe === 'antimatter' ? '弱化精通' : '无质粒', '禁 CRISPR', '禁贸易', '禁制造']
     }
     const parts: string[] = []
     if (challenges.noPlasmid) parts.push('无质粒')
@@ -1170,12 +937,10 @@ export const useGameStore = defineStore('game', () => {
     if (challenges.noTrade) parts.push('禁贸易')
     if (challenges.noCraft) parts.push('禁制造')
     if (challenges.noCrispr) parts.push('禁 CRISPR')
-    if (challenges.nerfed) parts.push('削弱')
-    if (challenges.badGenes) parts.push('坏基因')
-    if (challenges.joyless) parts.push('无欢')
-    if (challenges.steelen) parts.push('钢铁')
-    if (challenges.decay) parts.push('基因衰退')
-    if (challenges.emfield) parts.push('电磁场')
+    if (challenges.joyless) parts.push('无趣')
+    if (challenges.steelen) parts.push('无钢')
+    if (challenges.decay) parts.push('衰变')
+    if (challenges.emfield) parts.push('E.M. 磁场')
     if (challenges.inflation) parts.push('通货膨胀')
     if (challenges.orbitDecay) parts.push('轨道衰退')
     if (challenges.gravityWell) parts.push('重力井')
@@ -1617,6 +1382,7 @@ export const useGameStore = defineStore('game', () => {
     canAfford,
     getBuildCost,
     build,
+    setBanquetActive,
     isTechAvailable,
     canAffordTech,
     getTechCost,
@@ -1759,11 +1525,10 @@ export const useGameStore = defineStore('game', () => {
       addMessage(ok ? '尖塔登顶进度 +1' : '尖塔登顶失败：资源不足', ok ? 'special' : 'warning', 'portal')
       return ok
     },
-    getFortressState: () => {
-      const portal = state.value.portal as Record<string, Record<string, number>>
-      if (!portal['fortress']) portal['fortress'] = defaultFortressState() as unknown as Record<string, number>
-      return portal['fortress']
-    },
+    getFortressState: () => coreGetFortressState(state.value),
+    setFortressGarrison: (amount: number) => coreSetFortressGarrison(state.value, amount),
+    setFortressPatrols: (amount: number) => coreSetFortressPatrols(state.value, amount),
+    setFortressPatrolSize: (amount: number) => coreSetFortressPatrolSize(state.value, amount),
 
     // Governor 总督
     GOVERNOR_BACKGROUNDS,

@@ -19,6 +19,8 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { applyInflationToCosts } from './challenges';
+import { getAchievementLevel } from './achievements';
 
 export type SpaceCostFunction = (state: GameState, count: number) => number;
 
@@ -498,13 +500,14 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     name: '地狱赌场',
     description: '在地狱行星建立娱乐设施，提高士气上限并产生收入。',
     reqs: { hell: 1, gambling: 1 },
+    condition: (state) => Boolean(state.race['cataclysm']) || getAchievementLevel(state, 'iron_will') >= 5,
     costs: {
       Money: spaceCost(400000, 1.35),
       Furs: spaceCost(75000, 1.35),
       Cement: spaceCost(100000, 1.35),
       Plywood: spaceCost(20000, 1.35),
     },
-    effect: '每座提供 1 娱乐岗位、+1 士气上限。消耗 3 电力。',
+    effect: '大灾变模式或“钢铁意志”5 级解锁；每座提供 1 娱乐岗位、+1 士气上限，消耗 3 电力。',
     powerCost: 3,
   },
   {
@@ -1033,7 +1036,7 @@ export function getSpaceBuildCost(state: GameState, id: string): Record<string, 
   for (const [resId, fn] of Object.entries(def.costs)) {
     costs[resId] = fn(state, count);
   }
-  return costs;
+  return applyInflationToCosts(state, costs);
 }
 
 export function canBuildSpaceStructure(state: GameState, id: string): boolean {

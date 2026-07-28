@@ -1,4 +1,6 @@
 import type { GameState } from '@evozen/shared-types';
+import { applyInflationToCosts } from './challenges';
+import { getThermalCollectorPowerReduction } from './achievements';
 import { applySpaceScaling } from './space';
 
 export type InterstellarSupportPool = 'alpha' | 'nebula';
@@ -12,7 +14,7 @@ export interface InterstellarStructureDefinition {
   spaceReqs?: Record<string, number>;
   notTrait?: string[];
   costs: Record<string, (state: GameState, count: number) => number>;
-  effect: string;
+  effect: string | ((state: GameState) => string);
   powerCost?: number;
   support?: { pool: InterstellarSupportPool; amount: number };
   supportFuel?: { resource: string; amountPerTick: number };
@@ -428,18 +430,66 @@ export const INTERSTELLAR_STRUCTURES: InterstellarStructureDefinition[] = [
       Bolognium: (_state, count) => count < 100 ? 100_000 : 0,
       Mythril:   (_state, count) => count < 100 ? 125_000 : 0,
     },
-    effect: '共需建造 100 段；完工后开启升天触发器，可选择终局转生路线。',
+    effect: '共需建造 100 段；完工后解锁重力穹顶。',
+  },
+  {
+    id: 'gravity_dome',
+    region: 'int_sirius',
+    name: '重力穹顶（建造中）',
+    description: '在天狼星伴星上建造覆盖全球的重力穹顶，为飞升装置提供稳定环境。',
+    reqs: { ascension: 5 },
+    condition: (state) =>
+      ((state.interstellar['gravity_dome'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:      (_state, count) => count < 100 ? 35_000_000 : 0,
+      Cement:     (_state, count) => count < 100 ? 1_250_000 : 0,
+      Adamantite: (_state, count) => count < 100 ? 650_000 : 0,
+      Aerogel:    (_state, count) => count < 100 ? 180_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后解锁飞升装置和集热器。',
+  },
+  {
+    id: 'ascension_machine',
+    region: 'int_sirius',
+    name: '飞升装置（建造中）',
+    description: '建造将整个文明转化为高维形态的巨型装置。',
+    reqs: { ascension: 6 },
+    condition: (state) =>
+      ((state.interstellar['ascension_machine'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    costs: {
+      Money:       (_state, count) => count < 100 ? 75_000_000 : 0,
+      Alloy:       (_state, count) => count < 100 ? 750_000 : 0,
+      Neutronium:  (_state, count) => count < 100 ? 125_000 : 0,
+      Elerium:     (_state, count) => count < 100 ? 1_000 : 0,
+      Orichalcum:  (_state, count) => count < 100 ? 250_000 : 0,
+      Nanoweave:   (_state, count) => count < 100 ? 75_000 : 0,
+    },
+    effect: '共需建造 100 段；完工后生成需要供电的飞升触发器。',
   },
   {
     id: 'ascension_trigger',
     region: 'int_sirius',
-    name: '升天触发器',
-    description: '太空电梯完工后解锁的终局建筑，触发后执行升天转生。',
-    reqs: { ascension: 5 },
-    condition: (state) =>
-      ((state.interstellar['space_elevator'] as { count?: number } | undefined)?.count ?? 0) >= 100,
+    name: '飞升装置',
+    description: '飞升装置的通电形态；获得足够电力后才可执行飞升重置。',
+    reqs: { ascension: 7 },
+    condition: () => false,
     costs: {},
-    effect: '触发后选择升天路线（大爆炸 / 播种 / 黑洞 等），执行终局转生并获得永久加成。',
+    effect: (state) => `基础耗电 10,000MW；当前每座集热器降低 ${getThermalCollectorPowerReduction(state)}MW。`,
+    powerCost: 10000,
+  },
+  {
+    id: 'thermal_collector',
+    region: 'int_sirius',
+    name: '集热器',
+    description: '收集飞升装置散发的热量，降低其维持所需的电力。',
+    reqs: { ascension: 6 },
+    costs: {
+      Money: interstellarCost(5_000_000, 1.08),
+      Infernite: interstellarCost(25_000, 1.08),
+      Stanene: interstellarCost(1_000_000, 1.08),
+      Vitreloy: interstellarCost(100_000, 1.08),
+    },
+    effect: (state) => `每座使飞升装置耗电降低 ${getThermalCollectorPowerReduction(state)}MW。`,
   },
 ];
 
@@ -456,7 +506,7 @@ export function getInterstellarBuildCost(state: GameState, id: string): Record<s
   for (const [resId, fn] of Object.entries(def.costs)) {
     costs[resId] = fn(state, count);
   }
-  return costs;
+  return applyInflationToCosts(state, costs);
 }
 
 export function canBuildInterstellarStructure(state: GameState, id: string): boolean {

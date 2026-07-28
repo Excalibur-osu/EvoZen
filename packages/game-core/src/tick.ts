@@ -16,6 +16,7 @@ import type {
 } from '@evozen/shared-types';
 import { craftingTickWithSupport } from './crafting';
 import { tradeTick } from './trade';
+import { getInflationMultiplier } from './challenges';
 import {
   getTaxMultiplier,
   getKnowledgeMultiplier,
@@ -68,11 +69,28 @@ import {
 } from './planet-traits';
 import { evolutionTick } from './evolution';
 import { arpaTick } from './arpa';
+import {
+  addInflationPoints,
+  advanceEmfieldChallenge,
+  applyInflationToCosts,
+  getDecayChallengeDeltas,
+  getDischargePoweredBonus,
+} from './challenges';
 import { fortressTick, portalProductionTick } from './portal';
 import { mechBuildTick, mechStationPatrolTick } from './mech';
 import { syndicateTick, siegeTick } from './syndicate';
 import { maybeGenerateServants, womlingTick } from './womling';
 import { checkAchievements } from './achievement-triggers';
+import {
+  advanceBanquetStrength,
+  getAchievementLevel,
+  getBanquetBirthMultiplier,
+  getBanquetFoodConsumptionMultiplier,
+  getBanquetHuntingMultiplier,
+  getBanquetLevel,
+  getBanquetLuxuryMultiplier,
+  resetBanquetStrength,
+} from './achievements';
 import { complexTraitTick, getSelenophobiaMultiplier } from './complex-traits';
 import { petTick } from './pet';
 import { magicTick } from './magic';
@@ -288,6 +306,8 @@ function getOilBiomeMultiplier(state: GameState): number {
 export function gameTick(state: GameState): { state: GameState; result: GameTickResult } {
   const messages: GameMessage[] = [];
   const deltas: Record<string, number> = {};
+  const settledDeltas: Record<string, number> = {};
+  const eventDeltas: Record<string, number> = {};
   const breakdownEntries: Record<string, ResourceBreakdownEntry[]> = {};
   const lastBreakdownSnapshot: Record<string, number> = {};
   const addBreakdownEntry = (
@@ -315,6 +335,23 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         addBreakdownEntry(resId, label, amount, kindForAmount(amount), label, detail);
       }
       lastBreakdownSnapshot[resId] = current;
+    }
+  };
+  const markCurrentDeltasSettled = () => {
+    for (const [resId, delta] of Object.entries(deltas)) {
+      settledDeltas[resId] = delta;
+    }
+  };
+  const settlePendingDeltas = (resourceState: GameState['resource']) => {
+    for (const [resId, finalDelta] of Object.entries(deltas)) {
+      const pending = finalDelta - (settledDeltas[resId] ?? 0);
+      if (Math.abs(pending) < 1e-9) continue;
+      const res = resourceState[resId];
+      if (!res) continue;
+      res.amount += pending;
+      if (res.max > 0 && res.amount > res.max) res.amount = res.max;
+      if (res.amount < 0) res.amount = 0;
+      settledDeltas[resId] = finalDelta;
     }
   };
   const buildBreakdowns = (resourceState: GameState['resource']): Record<string, ResourceBreakdownState> => {
@@ -389,6 +426,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     (state.civic[id] as { workers: number } | undefined)?.workers ?? 0;
   const techLevel = (id: string) => state.tech[id] ?? 0;
   const explosiveLevel = techLevel('explosives');
+  const emfieldTick = advanceEmfieldChallenge(state);
+  const dischargeActive = emfieldTick?.active ?? false;
 
   // ============================================================
   // 0a. 电力网格
@@ -462,7 +501,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     let processingBonus = 0;
     const processingSupported = interstellarSupport.supportOn['processing'] ?? 0;
     if (processingSupported > 0) {
-      processingBonus = processingSupported * 0.12;
+      processingBonus = getDischargePoweredBonus(
+        processingSupported,
+        0.12,
+        dischargeActive,
+      );
     }
 
     if (alloc.adam > 0) {
@@ -674,13 +717,24 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 同时食物消耗会被 gluttony / ravenous / high_metabolism 放大
   const foodProdTraitMult = getSuctionGripBonus(state) * getCalmGlobalBonus(state)
     * getRitualMultiplier(state, 'farmer') * getSlaverBonus(state);
-  const huntTraitMult = getTrackerHuntBonus(state) * getRitualMultiplier(state, 'hunting');
+  const huntTraitMult = getTrackerHuntBonus(state) * getRitualMultiplier(state, 'hunting')
+    * getBanquetHuntingMultiplier(state);
   const foodConsumptionMul = getGluttonyFoodMultiplier(state) * getRavenousFoodMultiplier(state) * getHighMetabolismFoodMultiplier(state);
+  const banquetActive = getBanquetLevel(state) >= 1
+    && ((state.city['banquet'] as { on?: number } | undefined)?.on ?? 0) > 0;
+  const banquetFoodMultiplier = getBanquetFoodConsumptionMultiplier(state);
+  let effectiveFoodConsumption = foodConsumption * foodConsumptionMul;
+  if (banquetActive) effectiveFoodConsumption = Math.max(100, effectiveFoodConsumption);
+
+  // 付不起餐馆的额外口粮时，本 tick 不收取额外部分，并在克隆后的状态中清空强度。
+  const banquetFoodShortage = banquetFoodMultiplier > 1
+    && effectiveFoodConsumption * banquetFoodMultiplier >= (state.resource['Food']?.amount ?? 0);
+  if (!banquetFoodShortage) effectiveFoodConsumption *= banquetFoodMultiplier;
 
   deltas['Food'] =
     (hunterFood * rageHuntMult * huntTraitMult + farmerFood * weatherFoodMult) * prodMult * planetGlobalMult * foodProdTraitMult
     + biodomeFood * prodMult
-    - foodConsumption * foodConsumptionMul
+    - effectiveFoodConsumption
     - tourismFoodDemand;
   captureDeltaSection('食物生产与口粮');
 
@@ -713,7 +767,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // legacy 这里是分段相乘，不是把 lumber_yard 与 sawmill 直接加到同一个线性项里
   let lumberMult = (1 + lumberYards * 0.02) * (1 + sawmills * sawmillBonus);
   if (activeSawmills > 0) {
-    lumberMult *= 1 + activeSawmills * 0.04;
+    lumberMult *= 1 + getDischargePoweredBonus(activeSawmills, 0.04, dischargeActive);
   }
   // Trait: weak (-X%), suction_grip (+X%), calm (+X%), hivemind, intelligent, ritual:lumberjack
   const lumberTraitMult = getWeakWorkerMultiplier(state) * getSuctionGripBonus(state) * getCalmGlobalBonus(state)
@@ -743,7 +797,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const stoneMult = 1 + quarries * 0.02;
   let quarryPowerMult = 1;
   if (activeQuarries > 0) {
-    quarryPowerMult += activeQuarries * 0.04;
+    quarryPowerMult += getDischargePoweredBonus(activeQuarries, 0.04, dischargeActive);
   }
   const stoneTraitMult = getWeakWorkerMultiplier(state) * getSuctionGripBonus(state) * getCalmGlobalBonus(state)
     * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, quarryWorkers)
@@ -772,7 +826,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     // 如果研发了 alumina >= 2，通电的精炼厂额外 +6%/座
     if (techLevel('alumina') >= 2) {
       const activeRefineries = poweredOn['metal_refinery'] ?? 0;
-      refineryMult += activeRefineries * 0.06;
+      refineryMult += getDischargePoweredBonus(activeRefineries, 0.06, dischargeActive);
     }
     alumDelta *= refineryMult;
     deltas['Aluminium'] = alumDelta;
@@ -791,7 +845,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const minerExplosiveMult = explosiveLevel >= 2 ? 0.95 + explosiveLevel * 0.15 : 1;
   // 矿井通电加成：+5%/座
   const activeMines = poweredOn['mine'] ?? 0;
-  const minePowerMult = activeMines > 0 ? 1 + activeMines * 0.05 : 1;
+  const minePowerMult = 1 + getDischargePoweredBonus(activeMines, 0.05, dischargeActive);
   // dense/permafrost/magnetic 行星特性：影响矿工产出
   const minerPlanetMult = getMinerPlanetMultiplier(state);
   const copperGeologyMult = 1 + (state.city.geology?.['Copper'] ?? 0);
@@ -815,7 +869,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const actualCoalMiners = workers('coal_miner');
   const coalToolMult = 1 + pickaxeLevel * 0.12;
   const activeCoalMines = poweredOn['coal_mine'] ?? 0;
-  const coalPowerMult = activeCoalMines > 0 ? 1 + activeCoalMines * 0.05 : 1;
+  const coalPowerMult = 1 + getDischargePoweredBonus(activeCoalMines, 0.05, dischargeActive);
   const coalGeologyMult = 1 + (state.city.geology?.['Coal'] ?? 0);
   const coalTraitMult = getWeakWorkerMultiplier(state) * getToughMiningMultiplier(state) * getSuctionGripBonus(state)
     * getCalmGlobalBonus(state) * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, actualCoalMiners)
@@ -849,7 +903,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const cementTechMult = cementLevel >= 7 ? 1.45 : (cementLevel >= 4 ? 1.2 : 1);
     const activeCementPlants = poweredOn['cement_plant'] ?? 0;
     const cementPowerRate = cementLevel >= 6 ? 0.08 : 0.05;
-    const cementPowerMult = activeCementPlants > 0 ? 1 + activeCementPlants * cementPowerRate : 1;
+    const cementPowerMult = 1 + getDischargePoweredBonus(
+      activeCementPlants,
+      cementPowerRate,
+      dischargeActive,
+    );
     deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * cementPowerMult * effectiveProdMult;
     deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
   }
@@ -995,7 +1053,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     let oilFuel = smelterState.Oil ?? 0;
 
     let ironSmelter = smelterState.Iron ?? 0;
-    let steelSmelter = smelterState.Steel ?? 0;
+    let steelSmelter = Object.prototype.hasOwnProperty.call(state.race, 'steelen')
+      ? 0
+      : smelterState.Steel ?? 0;
     const iridiumSmelter = smelterState.Iridium ?? 0;
 
     const availableLumber = (state.resource['Lumber']?.amount ?? 0) / TIME_MULTIPLIER;
@@ -1091,7 +1151,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       if (techLevel('smelting') >= 7) steelBase *= 1.25;
 
       // 原版：钢的合成受全局效率 (effectiveProdMult) 加成
-      const steelOutput = steelSmelter * steelBase * effectiveProdMult * smelterTraitMult;
+      const steelenBonus = 1 + getAchievementLevel(state, 'steelen') * 0.02;
+      const steelOutput = steelSmelter * steelBase * effectiveProdMult * smelterTraitMult * steelenBonus;
       deltas['Steel'] = (deltas['Steel'] ?? 0) + steelOutput;
 
       // 钛副产物
@@ -1124,12 +1185,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 9c. 深空建筑产出分段 — 对标 legacy/src/prod.js
   // ============================================================
   // gas_mining (He3 采集船) — prod.js L340-375
-  const gasShipCount = (state.space['gas_mining'] as { on?: number } | undefined)?.on ?? 0;
+  const gasShipCount = poweredOn['gas_mining'] ?? 0;
   if (gasShipCount > 0) {
     const gasTech = techLevel('helium');
     let gasRate = 0.5;
     if (gasTech >= 4) gasRate = 0.65;
     if (gasTech >= 5) gasRate = 0.85;
+    if (dischargeActive) gasRate *= 0.5;
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + gasShipCount * gasRate;
   }
   captureDeltaSection('气态巨行星采集');
@@ -1142,6 +1204,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       extractRate *= 2;
     } else if (techLevel('oil') >= 5) {
       extractRate *= techLevel('oil') >= 6 ? 1.75 : 1.25;
+    }
+    const miningDrones = (state.space['drone'] as { count?: number } | undefined)?.count ?? 0;
+    if (miningDrones > 0) {
+      const droneRate = getAchievementLevel(state, 'iron_will') >= 3 ? 0.12 : 0.06;
+      extractRate *= 1 + miningDrones * droneRate;
     }
     deltas['Oil'] = (deltas['Oil'] ?? 0) + oilExtractorCount * extractRate;
   }
@@ -1185,6 +1252,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     let eleriumRate = 0.005;
     if (asteroidTech >= 6) eleriumRate = 0.0075;
     if (asteroidTech >= 7) eleriumRate = 0.009;
+    if (dischargeActive) eleriumRate *= 0.75;
     deltas['Elerium'] = (deltas['Elerium'] ?? 0) + eleriumShipSupported * eleriumRate;
   }
   captureDeltaSection('超铀采矿船');
@@ -1245,6 +1313,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
   captureDeltaSection('自动贸易');
 
+  for (const [resId, delta] of Object.entries(getDecayChallengeDeltas(state))) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+  }
+  captureDeltaSection('衰变挑战');
+
   // 对标 legacy/src/main.js L2406-2410：每座 powered red_factory 额外消耗 1 Helium_3/tick。
   if (redFactoryPowered > 0) {
     deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) - redFactoryPowered;
@@ -1262,6 +1335,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   captureDeltaSection('时间缩放', () => 'modifier', `x${TIME_MULTIPLIER}`);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
+  if (banquetFoodShortage) resetBanquetStrength(newState);
+  if (emfieldTick) {
+    newState.race['emfield'] = emfieldTick.emfield;
+    newState.race['discharge'] = emfieldTick.discharge;
+  }
 
   for (const [resId, delta] of Object.entries(deltas)) {
     const res = newState.resource[resId];
@@ -1288,6 +1366,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     }
   }
 
+  markCurrentDeltasSettled();
+
   // 没有 delta 的资源 diff 归零
   for (const [resId, res] of Object.entries(newState.resource)) {
     if (!Object.prototype.hasOwnProperty.call(deltas, resId)) {
@@ -1306,8 +1386,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       const currCount = structObj?.count ?? 0;
       
       let finished = true;
-      for (const [resId, costFunc] of Object.entries(def.costs)) {
-        const reqAmount = costFunc(newState, currCount);
+      const queueCosts = applyInflationToCosts(
+        newState,
+        Object.fromEntries(Object.entries(def.costs).map(([resId, costFunc]) => [resId, costFunc(newState, currCount)])),
+      );
+      for (const [resId, reqAmount] of Object.entries(queueCosts)) {
         item.progress = item.progress || {};
         const current = item.progress[resId] || 0;
         
@@ -1329,11 +1412,15 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         if (!newState.city[item.id]) {
           newState.city[item.id] = { count: 0, on: 0 };
         }
-        const building = newState.city[item.id] as { count: number; on?: number };
+        const building = newState.city[item.id] as { count: number; on?: number; strength?: number };
         building.count++;
-        if (building.on !== undefined) {
+        if (item.id === 'banquet') {
+          building.on = 1;
+          building.strength ??= 0;
+        } else if (building.on !== undefined) {
           building.on++;
         }
+        addInflationPoints(newState, 1);
 
         messages.push({
           text: `✔️ 建造完成：${item.label}`,
@@ -1422,10 +1509,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 原版 Evolve：fast loop = 250ms, long loop = 250 × 20 = 5000ms
   // 日历推进在 long loop 中执行，即每 20 个 fast tick 推进 1 天
   // 这里用 dayTick 计数器模拟 long loop 比例
+  let dayAdvanced = false;
   if (newState.city.calendar) {
     newState.city.calendar.dayTick = (newState.city.calendar.dayTick ?? 0) + 1;
     if (newState.city.calendar.dayTick >= 20) {
       newState.city.calendar.dayTick = 0;
+      dayAdvanced = true;
       newState.city.calendar.day++;
       newState.stats.days = (newState.stats.days ?? 0) + 1;
 
@@ -1603,6 +1692,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     activeGenerators: powerResult.activeGenerators,
     activeConsumers: powerResult.activeConsumers,
   };
+  if ((newState.tech['ascension'] ?? 0) >= 7) {
+    newState.tech['ascension'] = (powerResult.activeConsumers['ascension_trigger'] ?? 0) > 0 ? 8 : 7;
+  }
 
   // ============================================================
   // 13. 政体切换冷却推进
@@ -1632,7 +1724,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     // 对标 legacy main.js L3622: hunting = armyRating(garrisonSize(),'hunting') / 3
     const gSize = garrisonSize(newState);
     if (gSize > 0 && newState.resource.Furs) {
-      const hunting = armyRating(gSize, newState) / 3;
+      const hunting = armyRating(gSize, newState) / 3 * getBanquetHuntingMultiplier(newState);
       const fursProd = hunting * TIME_MULTIPLIER;
       if (fursProd > 0) {
         newState.resource.Furs.amount = Math.min(
@@ -1643,6 +1735,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
     captureDeltaSection('军队狩猎');
+    markCurrentDeltasSettled();
 
     // 14d. 厌战衰减
     if (newState.civic.garrison.protest > 0) {
@@ -1677,14 +1770,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     effectiveProdMult,
     redFactoryPowered,
     redFactoryMaxLines,
+    dischargeActive,
   );
   captureDeltaSection('工厂产线');
+  markCurrentDeltasSettled();
 
   // ============================================================
   // 15a. Portal 要塞入侵 tick + 建筑产出
   // ============================================================
   if ((newState.tech['portal'] ?? 0) >= 2) {
-    fortressTick(newState, TIME_MULTIPLIER);
+    const patrolResult = fortressTick(newState, TIME_MULTIPLIER, { runPatrols: dayAdvanced });
+    if (patrolResult.gems > 0) eventDeltas['Soul_Gem'] = patrolResult.gems;
+    messages.push(...patrolResult.messages);
     portalProductionTick(newState, TIME_MULTIPLIER, deltas);
     captureDeltaSection('Portal 建筑');
     mechBuildTick(newState, TIME_MULTIPLIER);
@@ -1728,6 +1825,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     runGovernorTasks(newState);
   }
 
+  if (dayAdvanced) advanceBanquetStrength(newState);
+
   // ============================================================
   // 15e. 成就自动检查（每 tick 简化版；高频检查不会显著影响性能）
   // ============================================================
@@ -1767,6 +1866,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
   }
+  for (const [resId, delta] of Object.entries(eventDeltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+    settledDeltas[resId] = (settledDeltas[resId] ?? 0) + delta;
+    addBreakdownEntry(resId, '事件掉落', delta, 'source', 'Portal 巡逻');
+    lastBreakdownSnapshot[resId] = deltas[resId];
+  }
 
   // ============================================================
   // 16. ARPA 长线研究 tick
@@ -1784,6 +1889,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       category: 'progress',
     });
   }
+
+  settlePendingDeltas(newState.resource);
 
   // 14-16 阶段仍可能继续改写 deltas；在返回前统一回填最终 diff。
   for (const [resId, delta] of Object.entries(deltas)) {
@@ -1891,6 +1998,7 @@ function tickPopulationGrowth(state: GameState, timeMultiplier: number, messages
   // TODO: 后续可接入各种族特质加成 (fast_growth, spores, promiscuous)
 
   // 概率衰减曲线: 随着运行逐渐降低实际命中概率
+  lowerBound *= getBanquetBirthMultiplier(state);
   upperBound *= (3 - Math.pow(2, timeMultiplier));
   
   // 原版采用 Math.rand(0, upperBound) = Math.floor(Math.random() * upperBound)
@@ -1928,6 +2036,7 @@ export function factoryTick(
   prodMultiplier: number,
   extraPoweredLines: number = 0,
   extraMaxLines: number = 0,
+  dischargeActive: boolean = false,
 ): void {
   const factory = state.city['factory'] as {
     count: number;
@@ -1962,10 +2071,13 @@ export function factoryTick(
 
   const assembly = Math.min(state.tech['factory'] ?? 0, 4);
   let outputMultiplier = getFactoryOutputMultiplier(state);
+  const ironWillFactoryMultiplier = getAchievementLevel(state, 'iron_will') >= 2 ? 1.1 : 1;
+  outputMultiplier *= ironWillFactoryMultiplier;
   // 蘑菇人种族 (toxic)：工厂工人产出 +20% 默认
   outputMultiplier *= getToxicFactoryBonus(state);
   // 仪式：factory ritual
   outputMultiplier *= getRitualMultiplier(state, 'factory');
+  if (dischargeActive) outputMultiplier *= 0.5;
   const luxDemandMultiplier = state.civic.govern?.type === 'corpocracy'
     ? 2.5
     : (state.civic.govern?.type === 'socialist' ? 0.8 : 1);
@@ -1987,8 +2099,11 @@ export function factoryTick(
       deltas['Furs'] = (deltas['Furs'] ?? 0) - furCost;
 
       const demand = (getPopulation(state) * [0.14, 0.21, 0.28, 0.35, 0.42][assembly] * eff)
-        * luxDemandMultiplier;
-      pendingMoneyGain += workDone * demand * prodMultiplier * timeMul;
+        * luxDemandMultiplier
+        * ironWillFactoryMultiplier
+        * getBanquetLuxuryMultiplier(state)
+        * getInflationMultiplier(state, 1250);
+      pendingMoneyGain += workDone * demand * prodMultiplier * timeMul * (dischargeActive ? 0.5 : 1);
     }
   }
 

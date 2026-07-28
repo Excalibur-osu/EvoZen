@@ -10,6 +10,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel } from './achievements';
 
 export type CostFunction = (state: GameState, count: number) => number;
 
@@ -22,6 +23,8 @@ export interface StructureDefinition {
   reqs: Record<string, number>;
   /** 原版 condition() 可见性/可建造判断 */
   condition?: (state: GameState) => boolean;
+  /** 可拥有数量上限；队列中的同类建筑也会占用名额 */
+  maxCount?: (state: GameState) => number;
   /** 各资源费用（基于已有数量递增） */
   costs: Record<string, CostFunction>;
   /** 效果描述 */
@@ -953,10 +956,12 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
   // ----- 后期解锁建筑 -----
   {
     id: 'banquet',
-    name: '盛宴',
-    description: '需要 endless_hunger 成就；每级显著提升食物产出，共 5 级，每级成本递增。',
+    name: '餐馆',
+    description: '制作食物，提供逐日增强的加成；关闭餐馆或食物不足时，强度会重置。',
     category: 'food',
     reqs: { banquet: 1 },
+    condition: (state) => getAchievementLevel(state, 'endless_hunger') >= 1,
+    maxCount: (state) => Math.min(5, getAchievementLevel(state, 'endless_hunger')),
     costs: {
       // banquet 是 leveled 建筑，cost 按 level（即 count）切换（0-4）
       Money: (_state, count) => {
@@ -1024,7 +1029,7 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
       },
       Bolognium: (_state, count) => (count === 4 ? 150_000 : 0),
     },
-    effect: '每级大幅提升城市食物产量；共 5 级，由 endless_hunger 成就等级控制。',
+    effect: '增加食物消耗和人口增长；更高等级依次增强伤兵治愈、狩猎及奢侈品收入，5 级减缓额外食耗增长。',
   },
   {
     id: 'mass_driver',

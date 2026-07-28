@@ -3779,7 +3779,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 特殊科技 (Special) =====
 
-  { id: 'banquet', name: '宴会', description: '举办盛大宴会。', category: 'special', era: '发现', reqs: { high_tech: 2 }, grant: ['banquet', 1], costs: { Knowledge: 18500 }, effect: '解锁宴会建筑（需要无尽饥饿成就）。' },
+  { id: 'banquet', name: '餐馆', description: '学习建造能够烹饪食物并提供多种加成的设施。', category: 'special', era: '发现', reqs: { high_tech: 2 }, condition: (state) => getAchievementLevel(state, 'endless_hunger') >= 1 && !state.race['fasting'] && !state.race['cataclysm'] && !state.race['lone_survivor'] && !state.race['warlord'], grant: ['banquet', 1], costs: { Knowledge: 18500 }, effect: '解锁餐馆建筑。' },
   { id: 'matter_replicator', name: '物质复制器', description: '建造物质复制器。', category: 'special', era: '发现', reqs: { high_tech: 2 }, condition: (state) => state.race.truepath === undefined, grant: ['replicator', 1], costs: { Knowledge: 25000 }, effect: '解锁物质复制器（需要亚当夏娃成就）。' },
   { id: 'incorporeal', name: '无形体', description: '研究无形体状态。', category: 'special', era: '星系际', reqs: { science: 19 }, grant: ['ascension', 1], costs: { Knowledge: 17500000, Phage: 25 }, effect: '解锁飞升路径。' },
   { id: 'tech_ascension', name: '技术飞升', description: '通过技术实现飞升。', category: 'special', era: '星系际', reqs: { ascension: 1 }, grant: ['ascension', 2], costs: { Knowledge: 18500000, Plasmid: 100 }, effect: '解锁天狼星区域。' },

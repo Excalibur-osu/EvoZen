@@ -158,8 +158,8 @@ const ACHIEVE_NAMES: Record<string, string> = {
   atmo_dense: '稠密大气', atmo_unstable: '不稳定星球', atmo_permafrost: '永久冻土',
   atmo_retrograde: '逆行星球', atmo_kamikaze: '自毁轨道',
   // challenge
-  joyless: '无欢挑战', steelen: '钢铁挑战', dissipated: '消散挑战',
-  technophobe: '科技恐惧', wheelbarrow: '手推车', iron_will: '钢铁意志',
+  joyless: '无趣', steelen: '物美价廉', dissipated: '消散',
+  technophobe: '技术恐惧症', wheelbarrow: '钱如废纸', iron_will: '钢铁意志',
   failed_history: '历史失败', banana: '香蕉', pathfinder: '开拓者',
   ashanddust: '灰烬与尘', exodus: '出埃及', obsolete: '过时', bluepill: '蓝药丸',
   retired: '退休', gross: '极差', lamentis: '哀叹', overlord: '霸主',
@@ -183,12 +183,22 @@ const ACHIEVE_DESCS: Record<string, string> = {
   pathfinder: '完成开拓者挑战。',
   banana: '在 500x500 香蕉共和国挑战获胜。',
   explorer: '探索发现五种以上不同星球。',
+  joyless: '无趣地定居到另一个星球上。',
+  steelen: '在不知道如何冶炼钢的情况下进行播种重置。',
+  dissipated: '毁灭衰变的宇宙。',
+  technophobe: '在电子技术经常暴走的条件下进行飞升重置。',
+  wheelbarrow: '在通货膨胀的条件下获得 250000M 资金。',
 };
 
 const ACHIEVE_FLAIR: Record<string, string> = {
   apocalypse: '世界在火焰中终结。',
   ascended: '尘归尘，土归土。',
   trade: '一手交钱一手交货。',
+  joyless: '这是一个没有欢笑的世界。',
+  steelen: '说真的，那是什么？',
+  dissipated: '反正放着不管它也要完蛋了。',
+  technophobe: '能量憎恨你，而你自己成为了能量，有趣吗？',
+  wheelbarrow: '是不是该考虑金圆券了？',
 };
 
 // ============================================================
@@ -234,7 +244,7 @@ export const FEATS: Record<string, FeatDefinition> = {
   finish_line: { id: 'finish_line', name: '终点线', desc: '冲过终点。', flair: '终于完成了！' },
   blank_slate: { id: 'blank_slate', name: '空白石板', desc: '从零开始。', flair: '一无所有。' },
   supermassive: { id: 'supermassive', name: '超大质量', desc: '极大质量黑洞。', flair: '太巨大了。' },
-  steelem: { id: 'steelem', name: '偷走它们', desc: '在钢铁挑战中获胜。', flair: '钢铁意志。' },
+  steelem: { id: 'steelem', name: '偷走它们', desc: '在无钢挑战中获胜。', flair: '钢铁意志。' },
   banana: { id: 'banana', name: '香蕉共和国', desc: '500x500 香蕉获胜。', flair: '香蕉万岁。' },
   rocky_road: { id: 'rocky_road', name: '崎岖之路', desc: '艰难旅程。', flair: '一路坎坷。' },
   demon_slayer: { id: 'demon_slayer', name: '屠魔者', desc: '击败大量恶魔。', flair: '魔界征服者。' },
@@ -392,6 +402,111 @@ export function getAchievementLevel(
   if (!rec) return 0;
   if (!affix || affix === 'l') return rec.l;
   return (rec[affix] as number | undefined) ?? 0;
+}
+
+interface BanquetState {
+  count?: number;
+  on?: number;
+  strength?: number;
+}
+
+function getBanquetState(state: GameState): BanquetState | undefined {
+  return state.city['banquet'] as BanquetState | undefined;
+}
+
+/** 餐馆的有效等级不能超过“无尽饥饿”成就等级。 */
+export function getBanquetLevel(state: GameState): number {
+  const built = Math.max(0, getBanquetState(state)?.count ?? 0);
+  return Math.min(5, built, getAchievementLevel(state, 'endless_hunger'));
+}
+
+export function getBanquetStrength(state: GameState): number {
+  if (getBanquetLevel(state) < 1 || (getBanquetState(state)?.on ?? 0) < 1) return 0;
+  return Math.max(0, getBanquetState(state)?.strength ?? 0);
+}
+
+export function getBanquetFoodConsumptionMultiplier(state: GameState): number {
+  const strength = getBanquetStrength(state);
+  if (strength <= 0) return 1;
+  return (getBanquetLevel(state) >= 5 ? 1.02 : 1.022) ** strength;
+}
+
+export function getBanquetBirthMultiplier(state: GameState): number {
+  const strength = getBanquetStrength(state);
+  return getBanquetLevel(state) >= 1 ? 1 + strength ** 0.75 / 100 : 1;
+}
+
+export function getBanquetHealingMultiplier(state: GameState): number {
+  const strength = getBanquetStrength(state);
+  return getBanquetLevel(state) >= 2 ? 1 + strength ** 0.65 / 100 : 1;
+}
+
+export function getBanquetHuntingMultiplier(state: GameState): number {
+  const strength = getBanquetStrength(state);
+  return getBanquetLevel(state) >= 3 ? 1 + strength ** 0.65 / 100 : 1;
+}
+
+export function getBanquetLuxuryMultiplier(state: GameState): number {
+  const strength = getBanquetStrength(state);
+  return getBanquetLevel(state) >= 4 ? 1 + strength ** 0.75 / 100 : 1;
+}
+
+/** 原版每天为启用中的餐馆增加 1 点强度，关闭或食物不足时清零。 */
+export function advanceBanquetStrength(state: GameState): void {
+  const banquet = getBanquetState(state);
+  if (!banquet || getBanquetLevel(state) < 1 || (banquet.on ?? 0) < 1) return;
+  banquet.strength = Math.max(0, banquet.strength ?? 0) + 1;
+}
+
+export function resetBanquetStrength(state: GameState): void {
+  const banquet = getBanquetState(state);
+  if (banquet) banquet.strength = 0;
+}
+
+export function setBanquetActive(state: GameState, active: boolean): boolean {
+  const banquet = getBanquetState(state);
+  if (!banquet || (banquet.count ?? 0) < 1 || getAchievementLevel(state, 'endless_hunger') < 1) {
+    return false;
+  }
+  banquet.on = active ? 1 : 0;
+  if (!active) banquet.strength = 0;
+  return true;
+}
+
+/** 技术恐惧症奖励：文明开局携带钢，三级后额外携带灵魂宝石。 */
+export function applyTechnophobeStartRewards(state: GameState): void {
+  const level = getAchievementLevel(state, 'technophobe');
+  if (level < 1) return;
+
+  const steel = state.resource['Steel'];
+  if (steel) {
+    steel.display = true;
+    steel.amount = 25;
+  }
+
+  if (level < 3) return;
+  const soulGem = state.resource['Soul_Gem'];
+  if (!soulGem) return;
+
+  const achievement = (state.stats.achieve as Record<string, AchievementRecord> | undefined)?.['technophobe'];
+  const universeAffixes: (keyof AchievementRecord)[] = ['e', 'a', 'h', 'm', 'mg'];
+  const crossUniverseBonus = universeAffixes.filter((affix) => (achievement?.[affix] ?? 0) >= 5).length;
+  soulGem.amount = 1 + crossUniverseBonus;
+  if (!state.race['truepath'] && !state.race['lone_survivor']) {
+    soulGem.display = true;
+  }
+}
+
+/** 每座集热器降低的飞升装置耗电，包含技术恐惧症等级与跨宇宙五级奖励。 */
+export function getThermalCollectorPowerReduction(state: GameState): number {
+  const level = getAchievementLevel(state, 'technophobe');
+  let reduction = 100;
+  if (level >= 2) reduction += level >= 4 ? 25 : 10;
+
+  const achievement = (state.stats.achieve as Record<string, AchievementRecord> | undefined)?.['technophobe'];
+  const universeAffixes: (keyof AchievementRecord)[] = ['e', 'a', 'h', 'm', 'mg'];
+  reduction += universeAffixes.filter((affix) => (achievement?.[affix] ?? 0) >= 5).length * 5;
+  return reduction;
 }
 
 /** 统计当前已解锁的成就/feat 数量 */

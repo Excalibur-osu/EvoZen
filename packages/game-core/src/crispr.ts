@@ -40,7 +40,7 @@ export const CRISPR_UPGRADES: CrisprUpgrade[] = [
     plasmidCost: (lvl) => CHALLENGE_GENE_COSTS[lvl] ?? CHALLENGE_GENE_COSTS[CHALLENGE_GENE_COSTS.length - 1],
     maxLevel: CHALLENGE_GENE_COSTS.length,
     appliesRaceTrait: false,
-    condition: (state, lvl) => lvl < 2 || (state.race.universe ?? 'standard') !== 'standard',
+    condition: (state, lvl) => lvl < 2 || lvl >= 4 || (state.race.universe ?? 'standard') !== 'standard',
   },
   {
     id: 'minor_creative',

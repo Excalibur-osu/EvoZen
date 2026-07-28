@@ -13,6 +13,7 @@
 
 import type { GameState } from '@evozen/shared-types';
 import { getRaceMainType } from './races';
+import { hireMerc, mercCost } from './military';
 
 // ============================================================
 // 总督背景（10 种）— 对标 gmen L14-105
@@ -383,7 +384,7 @@ function runStorageTask(state: GameState): void {
   }
 }
 
-/** 自动招募雇佣兵 — 简化版 */
+/** 自动招募雇佣兵 */
 function runMercTask(state: GameState): void {
   const garrison = state.civic.garrison;
   if (!garrison || !garrison.mercs) return;
@@ -394,13 +395,10 @@ function runMercTask(state: GameState): void {
   const money = state.resource['Money'];
   if (!money) return;
 
-  // 简化：当金钱储备超过保留比例时招募一名雇佣兵（成本 = 50）
+  // 保留比例只决定自动化触发线；实际价格与手动招募共用同一公式。
   const reserveAmount = (money.max * reserve) / 100;
-  if (money.amount > reserveAmount + 50) {
-    garrison.workers++;
-    money.amount -= 50;
-    garrison.m_use = (garrison.m_use ?? 0) + 1;
-  }
+  const cost = mercCost(state);
+  if (money.amount > reserveAmount + cost) hireMerc(state);
 }
 
 /** 自动招募间谍 — 简化版 */

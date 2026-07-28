@@ -97,6 +97,22 @@ export const SPACE_ACTIONS: SpaceActionDefinition[] = [
     reqs: { ftl: 2 },
     costs: { Helium_3: 40000 },
   },
+  {
+    id: 'sirius_mission',
+    name: '天狼星任务',
+    description: '派遣远征队前往天狼星，寻找能够承载飞升工程的恒星系统。',
+    effect: '完成后将 ascension 推进到 Lv.3，解锁天狼星伴星研究。',
+    reqs: { ascension: 2 },
+    costs: { Helium_3: 480000, Deuterium: 225000 },
+  },
+  {
+    id: 'sirius_b',
+    name: '天狼星伴星研究',
+    description: '完成天狼星伴星的工程勘测，确定太空电梯的锚定位置。',
+    effect: '完成后将 ascension 推进到 Lv.4，解锁太空电梯。',
+    reqs: { ascension: 3 },
+    costs: { Knowledge: 20000000 },
+  },
 ];
 
 function cloneState(state: GameState): GameState {
@@ -139,6 +155,8 @@ export function canRunSpaceAction(state: GameState, actionId: string): boolean {
   if (actionId === 'belt_mission' && (state.tech['asteroid'] ?? 0) >= 1) return false;
   if (actionId === 'dwarf_mission' && (state.tech['dwarf'] ?? 0) >= 1) return false;
   if (actionId === 'alpha_mission' && (state.tech['alpha'] ?? 0) >= 1) return false;
+  if (actionId === 'sirius_mission' && (state.tech['ascension'] ?? 0) >= 3) return false;
+  if (actionId === 'sirius_b' && (state.tech['ascension'] ?? 0) >= 4) return false;
 
   const costs = getSpaceActionCost(state, actionId);
   for (const [resId, cost] of Object.entries(costs)) {
@@ -203,6 +221,13 @@ export function runSpaceAction(state: GameState, actionId: string): GameState | 
     case 'alpha_mission':
       next.tech['alpha'] = Math.max(next.tech['alpha'] ?? 0, 1);
       ensureInterstellarStructure(next, 'starport');
+      return next;
+    case 'sirius_mission':
+      next.tech['ascension'] = Math.max(next.tech['ascension'] ?? 0, 3);
+      return next;
+    case 'sirius_b':
+      next.tech['ascension'] = Math.max(next.tech['ascension'] ?? 0, 4);
+      ensureInterstellarStructure(next, 'space_elevator');
       return next;
     default:
       return null;

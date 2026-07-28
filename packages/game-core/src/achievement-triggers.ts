@@ -63,6 +63,7 @@ const ATMO_ACHIEVEMENTS = new Set([
 ]);
 const GROSS_EXCLUDED_SPECIES = new Set(['custom', 'hybrid', 'sludge', 'ultra_sludge']);
 const DEATH_TOUR_RESET_TYPES: DeathTourResetType[] = ['ct', 'bh', 'di', 'ai', 'vc', 'md'];
+const EXTINCTION_RESET_TYPES = new Set(['mad', 'cataclysm', 'blackhole', 'vacuum', 'descend', 'aiApoc']);
 const RESET_DEATH_TOUR_TYPE: Record<string, DeathTourResetType | undefined> = {
   mad: 'md',
   cataclysm: 'ct',
@@ -527,6 +528,9 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       break;
     case 'ascend':
       unlockAchievement(state, 'ascended');
+      if (state.race['emfield']) {
+        unlockAchievement(state, 'technophobe');
+      }
       if (!state.race['modified'] && (state.race.species === 'synth' || state.race.species === 'nano') && state.race['emfield']) {
         unlockFeat(state, 'digital_ascension');
       }
@@ -696,10 +700,12 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
   updateBananaAchievement(state);
   updateWarlordAchievement(state);
 
-  // genus + species 灭绝
-  const species = state.race.species;
-  if (species && species !== 'protoplasm') {
-    unlockAchievement(state, `extinct_${species}`);
+  // 原版只在真正终结当前物种的六类 reset 记录灭绝。
+  if (EXTINCTION_RESET_TYPES.has(resetType)) {
+    const species = state.race.species;
+    if (species && species !== 'protoplasm') {
+      unlockAchievement(state, `extinct_${species}`);
+    }
   }
 
   updateAggregateAchievements(state);

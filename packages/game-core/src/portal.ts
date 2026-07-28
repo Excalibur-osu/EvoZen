@@ -18,7 +18,10 @@
  *   - Spire 战斗系统骨架
  */
 
-import type { GameState } from '@evozen/shared-types';
+import type { GameMessage, GameState } from '@evozen/shared-types';
+import { addInflationPoints, applyInflationToCosts } from './challenges';
+import { getAchievementLevel } from './achievements';
+import { armyRating } from './military';
 
 // ============================================================
 // 区域定义
@@ -171,12 +174,33 @@ export interface FortressState {
   threat: number;
   /** 当前已部署巡逻队（活动数） */
   garrison: number;
-  /** 最大兵力 */
+  /** 当前城墙完整度 */
   walls: number;
-  /** 最大兵力上限（要塞墙体血量） */
+  /** 城墙完整度上限 */
   max_walls: number;
   /** 最大威胁衰减率 */
   notify: string;
+  /** 连续未掉落天数，逐日缩小灵魂宝石随机范围 */
+  pity: number;
+  last_encounters: number;
+  last_kills: number;
+  last_gems: number;
+  last_dead: number;
+  last_wounded: number;
+}
+
+export interface FortressPatrolResult {
+  encounters: number;
+  kills: number;
+  gems: number;
+  deaths: number;
+  wounded: number;
+  messages: GameMessage[];
+}
+
+export interface FortressTickOptions {
+  runPatrols?: boolean;
+  random?: () => number;
 }
 
 export function defaultFortressState(): FortressState {
@@ -188,7 +212,227 @@ export function defaultFortressState(): FortressState {
     walls: 100,
     max_walls: 100,
     notify: 'Yes',
+    pity: 0,
+    last_encounters: 0,
+    last_kills: 0,
+    last_gems: 0,
+    last_dead: 0,
+    last_wounded: 0,
   };
+}
+
+export function getFortressState(state: GameState): FortressState {
+  const portal = state.portal as unknown as Record<string, unknown>;
+  const defaults = defaultFortressState();
+  const existing = portal['fortress'];
+  if (!existing || typeof existing !== 'object') {
+    portal['fortress'] = defaults;
+    return defaults;
+  }
+
+  const fort = existing as Partial<FortressState>;
+  const complete = (Object.keys(defaults) as Array<keyof FortressState>)
+    .every((key) => fort[key] !== undefined);
+  if (!complete) {
+    const normalized = { ...defaults, ...fort } as FortressState;
+    portal['fortress'] = normalized;
+    return normalized;
+  }
+  return fort as FortressState;
+}
+
+function normalizeFortressAssignments(state: GameState): void {
+  const fort = getFortressState(state);
+  const workers = Math.max(0, state.civic.garrison?.workers ?? 0);
+  fort['garrison'] = Math.min(workers, Math.max(0, Number(fort['garrison']) || 0));
+  fort['patrol_size'] = Math.max(1, Math.floor(Number(fort['patrol_size']) || 1));
+  const maxPatrols = Math.floor(Number(fort['garrison']) / Number(fort['patrol_size']));
+  fort['patrols'] = Math.min(maxPatrols, Math.max(0, Math.floor(Number(fort['patrols']) || 0)));
+}
+
+export function setFortressGarrison(state: GameState, amount: number): void {
+  const fort = getFortressState(state);
+  fort['garrison'] = Math.floor(amount);
+  normalizeFortressAssignments(state);
+}
+
+export function setFortressPatrols(state: GameState, amount: number): void {
+  const fort = getFortressState(state);
+  fort['patrols'] = Math.floor(amount);
+  normalizeFortressAssignments(state);
+}
+
+export function setFortressPatrolSize(state: GameState, amount: number): void {
+  const fort = getFortressState(state);
+  fort['patrol_size'] = Math.floor(amount);
+  normalizeFortressAssignments(state);
+}
+
+/** 原版使用 0..N 随机整数；返回值越小，单次灵魂宝石掉落率越高。 */
+export function getSoulGemDropDenominator(state: GameState): number {
+  const fort = getFortressState(state);
+  const portal = state.portal as Record<string, Record<string, number>>;
+  const base = getAchievementLevel(state, 'technophobe') >= 5 ? 9000 : 10000;
+  const pity = Math.max(0, Number(fort['pity']) || 0);
+  const attractors = Math.max(0, portal['attractor']?.['on'] ?? 0);
+  return Math.max(12, Math.round((base - pity) * Math.pow(0.948, attractors)));
+}
+
+function randomInt(random: () => number, min: number, maxExclusive: number): number {
+  if (maxExclusive <= min) return min;
+  return min + Math.floor(random() * (maxExclusive - min));
+}
+
+function applyPatrolCasualties(
+  state: GameState,
+  demons: number,
+  patrolSize: number,
+  armor: number,
+  ambush: boolean,
+  random: () => number,
+): { deaths: number; wounded: number } {
+  let casualties = Math.round(Math.log2((demons / patrolSize) / Math.max(1, armor)))
+    - randomInt(random, 0, armor + 1);
+  if (casualties <= 0) return { deaths: 0, wounded: 0 };
+
+  casualties = Math.min(patrolSize, casualties);
+  casualties = randomInt(random, ambush ? 1 : 0, casualties + 1);
+  const deaths = randomInt(random, 0, casualties + 1);
+  const wounded = casualties - deaths;
+  const garrison = state.civic.garrison;
+  garrison.workers = Math.max(0, garrison.workers - deaths);
+  garrison.wounded = Math.min(garrison.workers, garrison.wounded + wounded);
+  state.stats.died = (state.stats.died ?? 0) + deaths;
+  const population = state.resource[state.race.species];
+  if (population) population.amount = Math.max(0, population.amount - deaths);
+  return { deaths, wounded };
+}
+
+function recordPatrolResult(
+  fort: FortressState,
+  result: FortressPatrolResult,
+): FortressPatrolResult {
+  fort['last_encounters'] = result.encounters;
+  fort['last_kills'] = result.kills;
+  fort['last_gems'] = result.gems;
+  fort['last_dead'] = result.deaths;
+  fort['last_wounded'] = result.wounded;
+  return result;
+}
+
+function resolveFortressPatrols(state: GameState, random: () => number): FortressPatrolResult {
+  const result: FortressPatrolResult = {
+    encounters: 0,
+    kills: 0,
+    gems: 0,
+    deaths: 0,
+    wounded: 0,
+    messages: [],
+  };
+  const fort = getFortressState(state);
+  if (state.race['warlord']) return recordPatrolResult(fort, result);
+
+  normalizeFortressAssignments(state);
+  const portal = state.portal as Record<string, Record<string, number>>;
+  const patrols = Number(fort['patrols']) || 0;
+  const patrolSize = Number(fort['patrol_size']) || 1;
+  if (patrols <= 0 || patrolSize <= 0) {
+    fort['pity'] = Math.min(10000, (Number(fort['pity']) || 0) + 1);
+    return recordPatrolResult(fort, result);
+  }
+
+  const stationed = Number(fort['garrison']) || 0;
+  const nonPatrolling = Math.max(0, stationed - patrols * patrolSize);
+  const woundedAtFortress = Math.max(0, state.civic.garrison.wounded - (state.civic.garrison.workers - stationed));
+  const woundedPerPatrol = Math.max(0, woundedAtFortress - nonPatrolling) / patrols;
+  const armor = Math.max(0, state.tech['armor'] ?? 0);
+  let droids = Math.max(0, portal['war_droid']?.['on'] ?? 0);
+  let anyDrop = false;
+
+  for (let index = 0; index < patrols; index++) {
+    const threat = Math.max(0, Number(fort['threat']) || 0);
+    if (randomInt(random, 0, Math.floor(threat) + 1) < randomInt(random, 0, 1000)) continue;
+    result.encounters++;
+
+    let effectiveSize = patrolSize;
+    if (droids > 0) {
+      effectiveSize += (state.tech['hdroid'] ?? 0) > 0 ? 2 : 1;
+      droids--;
+    }
+    const hurt = index < Math.round((woundedPerPatrol % 1) * patrols)
+      ? Math.ceil(woundedPerPatrol)
+      : Math.floor(woundedPerPatrol);
+    const patrolRating = Math.max(0, Math.round(armyRating(effectiveSize, state, hurt)));
+    const minDemons = Math.max(1, Math.floor(threat / 50));
+    const maxDemons = Math.max(minDemons + 1, Math.floor(threat / 10) + 1);
+    const demons = randomInt(random, minDemons, maxDemons);
+    const ambush = randomInt(random, 0, 31) === 0;
+
+    let killed: number;
+    if (ambush) {
+      const casualties = applyPatrolCasualties(
+        state,
+        Math.round(demons * (1 + random() * 3)),
+        patrolSize,
+        0,
+        true,
+        random,
+      );
+      result.deaths += casualties.deaths;
+      result.wounded += casualties.wounded;
+      killed = Math.min(demons, Math.round(patrolRating / 2));
+    } else {
+      killed = Math.min(demons, patrolRating);
+      if (demons > killed) {
+        const casualties = applyPatrolCasualties(state, demons - killed, patrolSize, armor, false, random);
+        result.deaths += casualties.deaths;
+        result.wounded += casualties.wounded;
+      }
+    }
+
+    result.kills += killed;
+    fort['threat'] = Math.max(0, threat - killed);
+    state.stats['dkills'] = Number(state.stats['dkills'] ?? 0) + killed;
+
+    if (!ambush && killed > 0) {
+      const attractors = Math.max(0, portal['attractor']?.['on'] ?? 0);
+      const attempts = Math.round(killed / Math.max(5, 35 - Math.floor(attractors / 3)));
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        if (randomInt(random, 0, getSoulGemDropDenominator(state) + 1) === 0) {
+          result.gems++;
+          anyDrop = true;
+          fort['pity'] = 0;
+        }
+      }
+    }
+  }
+
+  if (!anyDrop) fort['pity'] = Math.min(10000, (Number(fort['pity']) || 0) + 1);
+  if (result.gems > 0) {
+    const soulGem = state.resource['Soul_Gem'];
+    if (soulGem) {
+      const firstDrop = !soulGem.display;
+      soulGem.amount += result.gems;
+      soulGem.display = true;
+      result.messages.push({
+        text: firstDrop
+          ? `巡逻队首次从恶魔身上发现了灵魂宝石，共获得 ${result.gems} 块。`
+          : `地狱巡逻获得 ${result.gems} 块灵魂宝石。`,
+        type: 'special',
+        category: 'portal',
+      });
+    }
+  }
+  if (result.deaths > 0) {
+    result.messages.push({
+      text: `地狱巡逻遭遇恶魔伏击：击杀 ${result.kills}，阵亡 ${result.deaths}，负伤 ${result.wounded}。`,
+      type: 'danger',
+      category: 'portal',
+    });
+  }
+
+  normalizeFortressAssignments(state);
+  return recordPatrolResult(fort, result);
 }
 
 /**
@@ -263,16 +507,18 @@ export function portalProductionTick(state: GameState, timeMul: number, deltas: 
  *   2. 巡逻队与恶魔遭遇战
  *   3. 城墙修复（repair_droid）
  */
-export function fortressTick(state: GameState, timeMul: number = 1): void {
+export function fortressTick(
+  state: GameState,
+  timeMul: number = 1,
+  options: FortressTickOptions = {},
+): FortressPatrolResult {
   const portal = state.portal as Record<string, Record<string, number>>;
-  if (!portal['fortress']) {
-    portal['fortress'] = defaultFortressState() as unknown as Record<string, number>;
-  }
-  const fort = portal['fortress'];
+  const fort = getFortressState(state);
+  const random = options.random ?? Math.random;
 
   // 1. 威胁增长（每 tick 随机 + 受 attractor 影响）
   const attractors = (portal['attractor']?.['count'] ?? 0) * (portal['attractor']?.['on'] ?? 1);
-  const threatIncrement = (Math.floor(Math.random() * 4) + 1) * timeMul + attractors * 0.5;
+  const threatIncrement = (Math.floor(random() * 4) + 1) * timeMul + attractors * 0.5;
   fort['threat'] = (fort['threat'] ?? 1000) + threatIncrement;
 
   // 威胁上限：基础 10000，每 corpse_pile 区域威胁衰减
@@ -297,6 +543,11 @@ export function fortressTick(state: GameState, timeMul: number = 1): void {
     const repair = repairDroids * 0.5 * timeMul;
     fort['walls'] = Math.min(fort['max_walls'] ?? 100, (fort['walls'] ?? 0) + repair);
   }
+
+  if (!options.runPatrols) {
+    return { encounters: 0, kills: 0, gems: 0, deaths: 0, wounded: 0, messages: [] };
+  }
+  return resolveFortressPatrols(state, random);
 }
 
 // ============================================================
@@ -407,7 +658,7 @@ export function getPortalBuildCost(state: GameState, buildingId: string): Record
   for (const [res, base] of Object.entries(building.baseCost)) {
     cost[res] = Math.round(base * mult);
   }
-  return cost;
+  return applyInflationToCosts(state, cost);
 }
 
 /** 判断是否可建造 */
@@ -432,6 +683,7 @@ export function buildPortalStructure(state: GameState, buildingId: string): bool
   const portal = state.portal as Record<string, Record<string, number>>;
   if (!portal[buildingId]) portal[buildingId] = { count: 0, on: 0 };
   portal[buildingId].count = (portal[buildingId].count ?? 0) + 1;
+  addInflationPoints(state, 1);
   return true;
 }
 

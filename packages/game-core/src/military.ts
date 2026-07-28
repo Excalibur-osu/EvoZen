@@ -11,6 +11,8 @@ import { applyDerivedStateInPlace } from './derived-state';
 import { getTrainingSpeedDivisor, getBruteTrainingBonus, getMercCostMultiplier } from './traits';
 import { hasPlanetTrait, rageVars } from './planet-traits';
 import { markChallengeTask } from './achievement-triggers';
+import { getInflationMultiplier } from './challenges';
+import { getBanquetHealingMultiplier } from './achievements';
 
 // ============================================================
 // 武器科技倍率
@@ -235,7 +237,7 @@ export function tickHealing(state: GameState, timeMul: number): void {
 
   if (hospitalCount > 0) {
     const healingRate = Math.max(1, state.tech['medic'] ?? 0) * 5;
-    const healPerTick = hospitalCount * (healingRate / 100) * timeMul;
+    const healPerTick = hospitalCount * (healingRate / 100) * getBanquetHealingMultiplier(state) * timeMul;
     garrison.heal_progress = (garrison.heal_progress ?? 0) + healPerTick;
 
     const healed = Math.min(
@@ -270,6 +272,7 @@ export function mercCost(state: GameState): number {
 
   // brute（兽人）：佣兵费用 ×0.5。legacy civics.js L1138: cost *= 1 - vars()[0]/100, vars()[0]=50
   cost *= getMercCostMultiplier(state);
+  cost *= getInflationMultiplier(state, 500);
 
   return Math.round(cost);
 }

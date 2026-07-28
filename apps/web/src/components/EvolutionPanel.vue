@@ -10,9 +10,18 @@
 -->
 <script setup lang="ts">
 import { useGameStore } from '../stores/game'
-import { BASIC_CHALLENGE_UNLOCK_LEVEL, SCENARIO_CHALLENGE_UNLOCK_LEVEL, type ChallengeStartOptions } from '../stores/game'
 import { computed, ref, onMounted, watch } from 'vue'
-import { getAchievementLevel, type EvoUpgrade } from '@evozen/game-core'
+import {
+  BASIC_CHALLENGE_UNLOCK_LEVEL,
+  SCENARIO_CHALLENGE_UNLOCK_LEVEL,
+  canUseScenarioMode,
+  canUseSpecialChallenge,
+  type ChallengeMode,
+  type ChallengeStartOptions,
+  type EvoUpgrade,
+  type SelectableChallengeFlag,
+  type SpecialChallengeFlag,
+} from '@evozen/game-core'
 import AppIcon from './ui/AppIcon.vue'
 import ProgressBar from './ui/ProgressBar.vue'
 
@@ -83,15 +92,12 @@ const selectedSpecies = ref('human')
 const selectedPtrait = ref('none')
 const selectedCustomSpecies = ref<'none' | 'custom' | 'hybrid'>('none')
 const selectedImitationTarget = ref('')
-type ChallengeMode = NonNullable<ChallengeStartOptions['mode']>
 const selectedChallengeMode = ref<ChallengeMode>('standard')
 const noPlasmidChallenge = ref(false)
 const weakMasteryChallenge = ref(false)
 const noTradeChallenge = ref(false)
 const noCraftChallenge = ref(false)
 const noCrisprChallenge = ref(false)
-const nerfedChallenge = ref(false)
-const badGenesChallenge = ref(false)
 const joylessChallenge = ref(false)
 const steelenChallenge = ref(false)
 const decayChallenge = ref(false)
@@ -176,23 +182,23 @@ const isChallengeUnlocked = computed(() => challengeLevel.value >= 1)
 const challengeModes = [
   { id: 'standard', name: '标准', desc: '正常文明开局。', minChallenge: 0 },
   { id: 'junker', name: '废物种', desc: '负面特质场景挑战。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.junker },
-  { id: 'cataclysm', name: '灾变', desc: '需要 Shaken 成就；自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.cataclysm },
-  { id: 'banana', name: '香蕉共和国', desc: '需要白洞或飞升；自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.banana },
+  { id: 'cataclysm', name: '灾变', desc: '需要震撼成就；自动套用基础场景限制。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.cataclysm },
+  { id: 'banana', name: '香蕉共和国', desc: '需要白洞或飞升；自动套用基础场景限制。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.banana },
   { id: 'truepath', name: '真相之路', desc: '需要飞升或腐化；自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.truepath },
   { id: 'fasting', name: '无尽饥饿', desc: '需要腐化；启用禁食挑战科技线。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.fasting },
   { id: 'lone_survivor', name: '孤独幸存者', desc: '需要退休；自动套用削弱、坏基因、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.lone_survivor },
-  { id: 'warlord', name: '战争之主', desc: '需要 evil 宇宙神杀者；启用 evil/warlord，并自动套用无质粒、禁 CRISPR、禁贸易、禁制造。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.warlord },
+  { id: 'warlord', name: '战争之主', desc: '需要邪恶宇宙的神杀者成就；自动套用基础场景限制。', minChallenge: SCENARIO_CHALLENGE_UNLOCK_LEVEL.warlord },
 ] as const
 
 const specialChallenges = [
-  { flag: 'joyless', name: '无欢', desc: '禁用快乐相关收益。', model: joylessChallenge },
-  { flag: 'steelen', name: '钢铁', desc: '限制材料路线。', model: steelenChallenge },
-  { flag: 'decay', name: '基因衰退', desc: '需要白洞。', model: decayChallenge },
-  { flag: 'emfield', name: '电磁场', desc: '需要飞升。', model: emfieldChallenge },
-  { flag: 'inflation', name: '通货膨胀', desc: '需要守财奴。', model: inflationChallenge },
+  { flag: 'joyless', name: '无趣', desc: '禁用娱乐；建造生物穹顶后完成。', model: joylessChallenge },
+  { flag: 'steelen', name: '无钢', desc: '禁止冶炼钢；生物播种后完成。', model: steelenChallenge },
+  { flag: 'decay', name: '衰变', desc: '库存资源持续衰变；需要白洞。', model: decayChallenge },
+  { flag: 'emfield', name: 'E.M. 磁场', desc: '用电成本增加 50%；需要飞升。', model: emfieldChallenge },
+  { flag: 'inflation', name: '通货膨胀', desc: '建筑越多，资金成本越高；需要守财奴。', model: inflationChallenge },
   { flag: 'orbitDecay', name: '轨道衰退', desc: '需要白洞或飞升。', model: orbitDecayChallenge },
-  { flag: 'gravityWell', name: '重力井', desc: '需要 heavy 宇宙播种者。', model: gravityWellChallenge },
-  { flag: 'witchHunter', name: '猎巫', desc: '需要 magic 宇宙飞升。', model: witchHunterChallenge },
+  { flag: 'gravityWell', name: '重力井', desc: '需要高重力宇宙播种者。', model: gravityWellChallenge },
+  { flag: 'witchHunter', name: '猎巫', desc: '需要魔法宇宙飞升。', model: witchHunterChallenge },
   { flag: 'sludge', name: '污泥族', desc: '需要飞升/腐化与废物种灭绝。', model: sludgeChallenge },
   { flag: 'ultraSludge', name: '超级污泥族', desc: '需要神杀者与污泥族灭绝。', model: ultraSludgeChallenge },
 ] as const
@@ -208,8 +214,6 @@ const challengeOptions = computed<ChallengeStartOptions>(() => {
     noTrade: noTradeChallenge.value,
     noCraft: noCraftChallenge.value,
     noCrispr: noCrisprChallenge.value,
-    nerfed: nerfedChallenge.value,
-    badGenes: badGenesChallenge.value,
     joyless: joylessChallenge.value,
     steelen: steelenChallenge.value,
     decay: decayChallenge.value,
@@ -234,7 +238,7 @@ const selectedChallengePreset = computed(() => {
     selectedChallengeMode.value === 'junker' ||
     selectedChallengeMode.value === 'fasting'
   ) {
-    return ['无质粒', '禁 CRISPR', '禁贸易', '禁制造']
+    return [usesWeakMasteryChallenge.value ? '弱化精通' : '无质粒', '禁 CRISPR', '禁贸易', '禁制造']
   }
   return []
 })
@@ -248,64 +252,28 @@ const finalSpeciesName = computed(() => {
   return game.getRaceDisplayName(selectedSpecies.value)
 })
 
-function hasAchievement(id: string, affix?: 'h' | 'mg' | 'e') {
-  return getAchievementLevel(game.state, id, affix) > 0
-}
-
 function canSelectChallengeMode(mode: typeof challengeModes[number]) {
   if (challengeLevel.value < mode.minChallenge) return false
-  switch (mode.id) {
-    case 'standard':
-      return true
-    case 'cataclysm':
-      return hasAchievement('shaken')
-    case 'banana':
-      return hasAchievement('whitehole') || hasAchievement('ascended')
-    case 'truepath':
-      return hasAchievement('ascended') || hasAchievement('corrupted')
-    case 'lone_survivor':
-      return hasAchievement('retired')
-    case 'warlord':
-      return game.state.race.universe === 'evil' && hasAchievement('godslayer', 'e')
-    case 'fasting':
-      return hasAchievement('corrupted')
-    case 'junker':
-      return true
-  }
+  return canUseScenarioMode(game.state, mode.id)
 }
 
-function isChallengeFlagUnlocked(flag: keyof Omit<ChallengeStartOptions, 'mode'>) {
+const visibleChallengeModes = computed(() => isChallengeUnlocked.value
+  ? challengeModes.filter(canSelectChallengeMode)
+  : [])
+
+function isChallengeFlagUnlocked(flag: SelectableChallengeFlag) {
   return challengeLevel.value >= BASIC_CHALLENGE_UNLOCK_LEVEL[flag]
 }
 
-function canSelectSpecialChallenge(flag: keyof Omit<ChallengeStartOptions, 'mode'>) {
+function canSelectSpecialChallenge(flag: SpecialChallengeFlag) {
   if (!isChallengeFlagUnlocked(flag)) return false
-  switch (flag) {
-    case 'joyless':
-    case 'steelen':
-      return true
-    case 'decay':
-      return hasAchievement('whitehole')
-    case 'emfield':
-      return hasAchievement('ascended')
-    case 'inflation':
-      return hasAchievement('scrooge')
-    case 'orbitDecay':
-      return hasAchievement('whitehole') || hasAchievement('ascended')
-    case 'gravityWell':
-      return game.state.race.universe === 'heavy' && hasAchievement('seeder', 'h')
-    case 'witchHunter':
-      return game.state.race.universe === 'magic' && hasAchievement('ascended', 'mg')
-    case 'sludge':
-      return (hasAchievement('ascended') || hasAchievement('corrupted')) && hasAchievement('extinct_junker')
-    case 'ultraSludge':
-      return hasAchievement('godslayer') && hasAchievement('extinct_sludge')
-    default:
-      return true
-  }
+  return canUseSpecialChallenge(game.state, flag)
 }
 
-function toggleSpecialChallenge(flag: keyof Omit<ChallengeStartOptions, 'mode'>, checked: boolean) {
+const availableSpecialChallenges = computed(() => specialChallenges.filter(challenge =>
+  canSelectSpecialChallenge(challenge.flag)))
+
+function toggleSpecialChallenge(flag: SpecialChallengeFlag, checked: boolean) {
   if (flag === 'sludge' && checked) ultraSludgeChallenge.value = false
   if (flag === 'ultraSludge' && checked) sludgeChallenge.value = false
 }
@@ -647,14 +615,14 @@ const stageDesc = computed(() => {
       <div class="challenge-section">
         <div class="challenge-head">
           <h4>⚑ 挑战开局</h4>
-          <span class="challenge-level">Challenge Lv. {{ challengeLevel }}/5</span>
+          <span class="challenge-level">挑战基因 {{ challengeLevel }}/5</span>
         </div>
         <div v-if="!isChallengeUnlocked" class="challenge-lock">
           在 CRISPR 中购买挑战基因后可选择挑战开局。
         </div>
-        <div class="challenge-grid">
+        <div v-if="isChallengeUnlocked" class="challenge-grid">
           <button
-            v-for="mode in challengeModes"
+            v-for="mode in visibleChallengeModes"
             :key="mode.id"
             class="challenge-card"
             :class="{ active: selectedChallengeMode === mode.id, locked: !canSelectChallengeMode(mode) }"
@@ -690,20 +658,12 @@ const stageDesc = computed(() => {
             <input v-model="noCrisprChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('noCrispr')">
             <span>禁 CRISPR</span>
           </label>
-          <label class="challenge-toggle">
-            <input v-model="nerfedChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('nerfed')">
-            <span>削弱</span>
-          </label>
-          <label class="challenge-toggle">
-            <input v-model="badGenesChallenge" type="checkbox" :disabled="!isChallengeFlagUnlocked('badGenes')">
-            <span>坏基因</span>
-          </label>
         </div>
         <div v-if="isChallengeUnlocked && selectedChallengeMode === 'standard'" class="special-challenges">
           <div class="challenge-subtitle">特殊挑战</div>
           <div class="challenge-flags">
             <label
-              v-for="challenge in specialChallenges"
+              v-for="challenge in availableSpecialChallenges"
               :key="challenge.flag"
               class="challenge-toggle"
               :class="{ locked: !canSelectSpecialChallenge(challenge.flag) }"

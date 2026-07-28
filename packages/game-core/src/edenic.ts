@@ -12,6 +12,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { addInflationPoints, applyInflationToCosts } from './challenges';
 
 // ============================================================
 // 区域定义
@@ -161,7 +162,7 @@ export function getEdenicBuildCost(state: GameState, buildingId: string): Record
   for (const [res, base] of Object.entries(building.baseCost)) {
     cost[res] = Math.round(base * mult);
   }
-  return cost;
+  return applyInflationToCosts(state, cost);
 }
 
 /** 判断 Edenic 建筑是否可建造 */
@@ -190,6 +191,7 @@ export function buildEdenicStructure(state: GameState, buildingId: string): bool
   const eden = state.eden as Record<string, Record<string, number>>;
   if (!eden[buildingId]) eden[buildingId] = { count: 0, on: 0 };
   eden[buildingId].count++;
+  addInflationPoints(state, 1);
   return true;
 }
 

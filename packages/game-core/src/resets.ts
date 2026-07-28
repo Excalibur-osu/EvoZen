@@ -904,7 +904,7 @@ export function canReset(state: GameState, type: ResetType): boolean {
       return Boolean(state.tech['syphon'] && (state.tech['syphon'] as number) >= 80)
         && state.race.universe === 'magic';
     case 'ascend':
-      return Boolean(state.tech['ascension'] && (state.tech['ascension'] as number) >= 1);
+      return Boolean(state.tech['ascension'] && (state.tech['ascension'] as number) >= 8);
     case 'descend':
       return Boolean(
         ((state.tech['waygate'] ?? 0) as number) >= 4 ||

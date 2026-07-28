@@ -126,6 +126,34 @@ export {
 } from './traits';
 export { gameTick, factoryTick } from './tick';
 export { saveGame, loadGame, exportSave, importSave } from './save';
+export {
+  STANDARD_CHALLENGE_FLAGS,
+  SPECIAL_CHALLENGE_FLAGS,
+  BASIC_CHALLENGE_UNLOCK_LEVEL,
+  SCENARIO_CHALLENGE_UNLOCK_LEVEL,
+  SPECIAL_CHALLENGE_RACE_FLAG,
+  canUseScenarioMode,
+  canUseSpecialChallenge,
+  normalizeChallengeStartOptions,
+  applyChallengeStartOptions,
+  resolveChallengeStartSpecies,
+  type ChallengeMode,
+  type ChallengeStartOptions,
+  type StandardChallengeFlag,
+  type SpecialChallengeFlag,
+  type SelectableChallengeFlag,
+} from './challenge-start';
+export {
+  advanceEmfieldChallenge,
+  getDischargePoweredBonus,
+  isChallengeTechBlocked,
+  getInflationMultiplier,
+  applyInflationToCosts,
+  addInflationPoints,
+  getDecayChallengeDeltas,
+  getChallengePowerCost,
+  type EmfieldTickState,
+} from './challenges';
 export * from './commerce';
 export * from './espionage';
 export {
@@ -321,6 +349,8 @@ export {
   loadCustomRace,
   clearCustomRace,
   calcCustomRaceBalance,
+  calcCustomRaceGenes,
+  getCustomRaceGeneBudget,
   validateCustomRace,
   applyCustomRace,
   type CustomRaceConfig,
@@ -502,6 +532,18 @@ export {
   unlockFeat,
   hasAchievement,
   getAchievementLevel,
+  getBanquetLevel,
+  getBanquetStrength,
+  getBanquetFoodConsumptionMultiplier,
+  getBanquetBirthMultiplier,
+  getBanquetHealingMultiplier,
+  getBanquetHuntingMultiplier,
+  getBanquetLuxuryMultiplier,
+  advanceBanquetStrength,
+  resetBanquetStrength,
+  setBanquetActive,
+  applyTechnophobeStartRewards,
+  getThermalCollectorPowerReduction,
   countAchievements,
   calcMastery,
   checkAchievementHunterFeats,
@@ -535,7 +577,12 @@ export {
   PORTAL_REGIONS,
   PORTAL_BUILDINGS,
   defaultFortressState,
+  getFortressState,
   fortressTick,
+  setFortressGarrison,
+  setFortressPatrols,
+  setFortressPatrolSize,
+  getSoulGemDropDenominator,
   portalProductionTick,
   tunePillar,
   getTunedPillarCount,
@@ -553,6 +600,8 @@ export {
   type PortalRegionDef,
   type PortalBuildingDef,
   type FortressState,
+  type FortressPatrolResult,
+  type FortressTickOptions,
   type SpireState,
 } from './portal';
 export {

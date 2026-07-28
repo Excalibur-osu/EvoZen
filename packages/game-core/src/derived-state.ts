@@ -352,7 +352,10 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
   const amphitheatres = getStructCount('amphitheatre');
   const casinoCount = getStructCount('casino');
-  setJobMax('entertainer', amphitheatres + casinoCount);
+  const joyless = Object.prototype.hasOwnProperty.call(s.race, 'joyless');
+  setJobMax('entertainer', joyless ? 0 : amphitheatres + casinoCount);
+  const entertainerJob = s.civic['entertainer'] as { display?: boolean } | undefined;
+  if (joyless && entertainerJob) entertainerJob.display = false;
 
   const temples = getStructCount('temple');
   setJobMax('priest', temples);
@@ -508,7 +511,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
     if (job.id === 'unemployed' || job.id === 'hunter') continue;
     if (!job.requiredTech) continue;
 
-    let unlocked = true;
+    let unlocked = !(joyless && job.id === 'entertainer');
     for (const [techId, lvl] of Object.entries(job.requiredTech)) {
       if ((s.tech[techId] ?? 0) < lvl) {
         unlocked = false;

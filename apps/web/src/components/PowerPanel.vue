@@ -31,7 +31,7 @@ const locationLabel: Record<'city' | 'space' | 'interstellar', string> = {
 
 /** 发电站列表 */
 const generators = computed(() => {
-  return listPowerGenerators()
+  return listPowerGenerators(game.state)
     .map((def) => {
       const bucket = def.location === 'space'
         ? game.state.space
@@ -53,7 +53,7 @@ const generators = computed(() => {
 
 /** 用电建筑列表 */
 const consumers = computed(() => {
-  return listPowerConsumers()
+  return listPowerConsumers(game.state)
     .map((def) => {
       const bucket = def.location === 'space'
         ? game.state.space

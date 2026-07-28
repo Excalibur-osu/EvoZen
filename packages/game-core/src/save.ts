@@ -5,9 +5,19 @@
 
 import type { GameState, SaveData } from '@evozen/shared-types';
 import { createNewGame } from './state';
+import { SAVE_VERSION } from './version';
 
 const SAVE_KEY = 'evozen_save';
 const BACKUP_KEY = 'evozen_backup';
+
+function createSaveData(state: GameState): SaveData {
+  state.version = SAVE_VERSION;
+  return {
+    gameState: state,
+    timestamp: Date.now(),
+    version: SAVE_VERSION,
+  };
+}
 
 /**
  * 存档字段迁移：旧存档读取时补全 Phase 2/3 新增的字段
@@ -53,6 +63,9 @@ function migrateState(state: GameState): GameState {
   if (!stats['feat']) stats['feat'] = {};
   if (!stats['synth']) stats['synth'] = {};
 
+  // 所有迁移成功后，将旧存档标记为当前统一版本。
+  state.version = SAVE_VERSION;
+
   return state;
 }
 
@@ -61,11 +74,7 @@ function migrateState(state: GameState): GameState {
  */
 export function saveGame(state: GameState): boolean {
   try {
-    const data: SaveData = {
-      gameState: state,
-      timestamp: Date.now(),
-      version: state.version,
-    };
+    const data = createSaveData(state);
     const json = JSON.stringify(data);
     const compressed = btoa(encodeURIComponent(json));
     localStorage.setItem(SAVE_KEY, compressed);
@@ -97,11 +106,7 @@ export function loadGame(): GameState | null {
  * 导出存档为字符串（用于复制粘贴）
  */
 export function exportSave(state: GameState): string {
-  const data: SaveData = {
-    gameState: state,
-    timestamp: Date.now(),
-    version: state.version,
-  };
+  const data = createSaveData(state);
   const json = JSON.stringify(data, null, 2);
   return json;
 }
@@ -130,11 +135,7 @@ export function importSave(rawJson: string): GameState | null {
  */
 export function backupSave(state: GameState): boolean {
   try {
-    const data: SaveData = {
-      gameState: state,
-      timestamp: Date.now(),
-      version: state.version,
-    };
+    const data = createSaveData(state);
     const json = JSON.stringify(data);
     const compressed = btoa(encodeURIComponent(json));
     localStorage.setItem(BACKUP_KEY, compressed);

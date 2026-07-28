@@ -19,6 +19,7 @@ const smeltersCount = computed(() => {
 const isUnlocked = computed(() => smeltersCount.value > 0)
 
 const smelterState = computed(() => game.state.city.smelter as SmelterState)
+const isSteelen = computed(() => Object.prototype.hasOwnProperty.call(game.state.race, 'steelen'))
 
 const totalFuelsAssigned = computed(() => {
   if (!smelterState.value) return 0
@@ -101,7 +102,7 @@ function removeOutput(id: SmelterOutputId) {
             <AllocationControl
               :value="assigned(o.id)"
               :decrement-disabled="assigned(o.id) <= 0"
-              :increment-disabled="totalOutputsAssigned >= totalFuelsAssigned"
+              :increment-disabled="totalOutputsAssigned >= totalFuelsAssigned || (o.id === 'Steel' && isSteelen)"
               decrement-label="减少产出分配"
               increment-label="增加产出分配"
               @decrement="removeOutput(o.id)"
@@ -109,6 +110,7 @@ function removeOutput(id: SmelterOutputId) {
             />
           </div>
         </template>
+        <p v-if="isSteelen" class="challenge-note">无钢挑战期间无法通过熔炉生产钢。</p>
       </div>
     </div>
   </div>
@@ -159,6 +161,13 @@ function removeOutput(id: SmelterOutputId) {
   font-size: 13px;
   color: var(--text-primary);
   font-weight: 500;
+}
+
+.challenge-note {
+  margin: 8px 0 0;
+  color: var(--warning);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .section-icon {

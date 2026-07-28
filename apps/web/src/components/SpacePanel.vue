@@ -45,6 +45,11 @@ const structureLabels: Record<string, string> = {
   starport: '星港',
   mining_droid: '采矿无人机',
   habitat: '定居点',
+  space_elevator: '太空电梯',
+  gravity_dome: '重力穹顶',
+  ascension_machine: '飞升装置（建造中）',
+  ascension_trigger: '飞升装置',
+  thermal_collector: '集热器',
 }
 
 const regionLabels: Record<string, string> = {
@@ -58,6 +63,11 @@ const regionLabels: Record<string, string> = {
   spc_belt: '小行星带',
   spc_dwarf: '矮行星',
   int_alpha: '半人马座 Alpha',
+  int_proxima: '比邻星',
+  int_nebula: '星云',
+  int_neutron: '中子星',
+  int_blackhole: '黑洞',
+  int_sirius: '天狼星',
 }
 
 const highTech = computed(() => game.state.tech['high_tech'] ?? 0)
@@ -90,7 +100,9 @@ const actionCards = computed(() => {
       (action.id === 'gas_moon_mission' && spaceLevel.value >= 6) ||
       (action.id === 'belt_mission' && (game.state.tech['asteroid'] ?? 0) >= 1) ||
       (action.id === 'dwarf_mission' && (game.state.tech['dwarf'] ?? 0) >= 1) ||
-      (action.id === 'alpha_mission' && (game.state.tech['alpha'] ?? 0) >= 1)
+      (action.id === 'alpha_mission' && (game.state.tech['alpha'] ?? 0) >= 1) ||
+      (action.id === 'sirius_mission' && (game.state.tech['ascension'] ?? 0) >= 3) ||
+      (action.id === 'sirius_b' && (game.state.tech['ascension'] ?? 0) >= 4)
 
     return {
       ...action,
@@ -203,7 +215,7 @@ const regionGroups = computed<RegionGroup[]>(() => {
       region: def.region,
       name: structureLabels[def.id] ?? def.name,
       description: def.description,
-      effect: def.effect,
+      effect: typeof def.effect === 'function' ? def.effect(game.state) : def.effect,
       reqText: reqParts.join(' / '),
       count: struct?.count ?? 0,
       on: struct?.on ?? 0,
@@ -221,7 +233,10 @@ const regionGroups = computed<RegionGroup[]>(() => {
     })
   }
 
-  const order = ['spc_home', 'spc_moon', 'spc_red', 'spc_hell', 'spc_sun', 'spc_gas', 'spc_gas_moon', 'spc_belt', 'spc_dwarf', 'int_alpha']
+  const order = [
+    'spc_home', 'spc_moon', 'spc_red', 'spc_hell', 'spc_sun', 'spc_gas', 'spc_gas_moon', 'spc_belt', 'spc_dwarf',
+    'int_alpha', 'int_proxima', 'int_nebula', 'int_neutron', 'int_blackhole', 'int_sirius',
+  ]
   return order.filter((r) => groups[r]).map((r) => groups[r])
 })
 

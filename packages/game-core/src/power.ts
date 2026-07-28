@@ -11,6 +11,8 @@ import type { GameState } from '@evozen/shared-types';
 import { BASIC_STRUCTURES } from './structures';
 import { SPACE_STRUCTURES } from './space';
 import { INTERSTELLAR_STRUCTURES } from './interstellar';
+import { getChallengePowerCost } from './challenges';
+import { getAchievementLevel, getThermalCollectorPowerReduction } from './achievements';
 
 const TIME_MULTIPLIER = 0.25;
 
@@ -69,6 +71,7 @@ const CITY_CONSUMER_PRIORITY = [
   'biolab',
   'factory',
   'casino',
+  'mass_driver',
 ] as const;
 
 const CITY_CONSUMERS: PowerConsumerDef[] = CITY_CONSUMER_PRIORITY.map((id) => {
@@ -132,12 +135,44 @@ const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
     powerCost: def.powerCost ?? 0,
   }));
 
-export function listPowerGenerators(): PowerGeneratorDef[] {
-  return [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS];
+export function listPowerGenerators(state?: GameState): PowerGeneratorDef[] {
+  const generators = [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS];
+  if (!state) return generators;
+
+  const dissipated = getAchievementLevel(state, 'dissipated');
+  return generators.map((generator) => {
+    let power = generator.power;
+    if (generator.id === 'coal_power' && dissipated >= 1) power += 1;
+    if (generator.id === 'oil_power' && dissipated >= 3) power += dissipated >= 5 ? 2 : 1;
+    if (generator.id === 'geothermal' && getAchievementLevel(state, 'failed_history') >= 5) power += 2;
+    return { ...generator, power };
+  });
 }
 
-export function listPowerConsumers(): PowerConsumerDef[] {
-  return [...CITY_CONSUMERS, ...SPACE_CONSUMERS, ...INTERSTELLAR_CONSUMERS];
+export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
+  const consumers = [...CITY_CONSUMERS, ...SPACE_CONSUMERS, ...INTERSTELLAR_CONSUMERS];
+  if (!state) return consumers;
+
+  const dissipated = getAchievementLevel(state, 'dissipated');
+  return consumers.map((consumer) => {
+    let powerCost = consumer.powerCost;
+    if ((consumer.id === 'casino' || consumer.id === 'spc_casino') && dissipated >= 2) {
+      powerCost = 2;
+    }
+    if (consumer.id === 'mass_driver') {
+      if (dissipated >= 4) powerCost--;
+      if ((state.tech['mass'] ?? 0) >= 2) powerCost--;
+    }
+    powerCost = getChallengePowerCost(state, Math.max(0, powerCost));
+    if (consumer.id === 'ascension_trigger') {
+      const collectors = (state.interstellar['thermal_collector'] as { count?: number } | undefined)?.count ?? 0;
+      powerCost = Math.max(0, powerCost - collectors * getThermalCollectorPowerReduction(state));
+    }
+    return {
+      ...consumer,
+      powerCost,
+    };
+  });
 }
 
 function getStructBucket(
@@ -220,7 +255,7 @@ export function powerTick(state: GameState): PowerTickResult {
   // ============================================================
   // 1. 发电阶段 — 逐座检查燃料是否充足
   // ============================================================
-  for (const generator of listPowerGenerators()) {
+  for (const generator of listPowerGenerators(state)) {
     const requestedOn = getRequestedOn(state, generator.id, generator.location);
     const actualOn = getFuelLimitedOn(requestedOn, state, generator.fuel);
 
@@ -243,6 +278,7 @@ export function powerTick(state: GameState): PowerTickResult {
     if (swarmTech >= 4) {
       solar += 0.15 * (swarmTech - 3);
     }
+    if (getAchievementLevel(state, 'iron_will') >= 1) solar += 0.15;
     solar = +solar.toFixed(2);
     const output = active * solar;
     activeGenerators['swarm_satellite'] = active;
@@ -256,17 +292,18 @@ export function powerTick(state: GameState): PowerTickResult {
   let remainingPower = totalGenerated;
   let totalConsumed = 0;
 
-  for (const consumer of listPowerConsumers()) {
+  for (const consumer of listPowerConsumers(state)) {
     const maxOn = getRequestedOn(state, consumer.id, consumer.location);
     if (maxOn <= 0) {
       activeConsumers[consumer.id] = 0;
       continue;
     }
 
+    const powerCost = consumer.powerCost;
     let powered = 0;
     for (let i = 0; i < maxOn; i++) {
-      if (remainingPower >= consumer.powerCost) {
-        remainingPower -= consumer.powerCost;
+      if (remainingPower >= powerCost) {
+        remainingPower -= powerCost;
         powered++;
       } else {
         break;
@@ -274,7 +311,7 @@ export function powerTick(state: GameState): PowerTickResult {
     }
 
     activeConsumers[consumer.id] = powered;
-    totalConsumed += powered * consumer.powerCost;
+    totalConsumed += powered * powerCost;
   }
 
   return {

@@ -29,6 +29,7 @@ import {
   getDemocracyEntertainmentMultiplier,
   getGovernmentMoraleOffset,
 } from './government';
+import { getAchievementLevel } from './achievements';
 
 // ============================================================
 // 结果类型
@@ -200,7 +201,8 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
   // ----------------------------------------------------------
   let entertainment = 0;
   const theatreLevel = state.tech['theatre'] ?? 0;
-  if (theatreLevel >= 1) {
+  const joyless = Object.prototype.hasOwnProperty.call(state.race, 'joyless');
+  if (!joyless && theatreLevel >= 1) {
     const entertainers = (state.civic['entertainer'] as { workers: number } | undefined)?.workers ?? 0;
     entertainment = entertainers * theatreLevel;
 
@@ -296,16 +298,17 @@ export function calculateMorale(state: GameState, options: MoraleOptions = {}): 
   // moraleCap = 100 + 赌场通电数 + 圆形剧场数 + vr_center×2 + 纪念碑×2 + 低税率奖励
   // ----------------------------------------------------------
   let moraleCap = 100;
+  moraleCap += getAchievementLevel(state, 'joyless') * 2;
 
   // 圆形剧场提高上限 — 对标 legacy main.js L3172-3174
   const amphitheatres = (state.city['amphitheatre'] as { count: number } | undefined)?.count ?? 0;
-  moraleCap += amphitheatres;
+  if (!joyless) moraleCap += amphitheatres;
 
   // 赌场提高士气上限 — 对标 legacy main.js L3167
-  moraleCap += options.activeCasinos ?? 0;
+  if (!joyless) moraleCap += options.activeCasinos ?? 0;
 
   // VR 中心提高士气上限 — 对标 legacy main.js L3176-3177
-  moraleCap += (options.supportedVrCenters ?? 0) * 2;
+  if (!joyless) moraleCap += (options.supportedVrCenters ?? 0) * 2;
 
   // 纪念碑士气上限加成 — 对标 legacy arpa.js L172-175: +2 per monument
   moraleCap += getMonumentMoraleBonus(state);

@@ -13,6 +13,7 @@ import type { GameState, TradeRoute } from '@evozen/shared-types';
 import { RESOURCE_VALUES, TRADE_RATIOS } from './resources';
 import { getTradeBuyPriceMultiplier, getTradeSellPriceMultiplier } from './traits';
 import { getGpsTradeRouteBonus } from './space';
+import { getInflationMultiplier } from './challenges';
 
 // ============================================================
 // 贸易路线数据结构
@@ -75,6 +76,8 @@ export function getBuyPrice(resourceId: string, state?: GameState): number {
     price *= Math.pow(0.99, wharfCount);
   }
 
+  if (state) price *= getInflationMultiplier(state, 500);
+
   return +price.toFixed(1);
 }
 
@@ -96,6 +99,8 @@ export function getSellPrice(resourceId: string, state?: GameState): number {
     const wharfCount = (state.city['wharf'] as { count: number }).count;
     price *= 1 + wharfCount * 0.01;
   }
+
+  if (state) price *= getInflationMultiplier(state, 300);
 
   return +price.toFixed(1);
 }

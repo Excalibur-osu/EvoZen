@@ -20,6 +20,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { addInflationPoints, applyInflationToCosts } from './challenges';
 
 // ============================================================
 // 类型
@@ -342,7 +343,7 @@ export function arpaCost(
   for (const [res, baseVal] of Object.entries(base)) {
     result[res] = Math.round(Math.pow(mult, rank) * baseVal);
   }
-  return result;
+  return applyInflationToCosts(state, result);
 }
 
 // ============================================================
@@ -448,6 +449,7 @@ export function arpaTick(state: GameState, _timeMul: number): string[] {
       // 授予 tech grant
       const currentGrant = techLevel(state, def.grantKey);
       state.tech[def.grantKey] = currentGrant + 1;
+      addInflationPoints(state, 10);
 
       if (def.id === 'launch_facility') {
         state.tech['space'] = Math.max(state.tech['space'] ?? 0, 1);

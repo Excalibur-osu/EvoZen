@@ -30,6 +30,11 @@ import {
 } from './galaxy';
 import { markChallengeTask } from './achievement-triggers';
 import { unlockAchievement } from './achievements';
+import {
+  addInflationPoints,
+  applyInflationToCosts,
+  isChallengeTechBlocked,
+} from './challenges';
 
 const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
 export type FactoryLineId = 'Lux' | 'Furs' | 'Alloy' | 'Polymer' | 'Nano' | 'Stanene';
@@ -130,7 +135,7 @@ export function getBuildCost(state: GameState, structureId: string): Record<stri
       costs[k] = Math.ceil(costs[k] * tunnelerDiscount);
     }
   }
-  return costs;
+  return applyInflationToCosts(state, costs);
 }
 
 export function canBuildStructure(state: GameState, structureId: string): boolean {
@@ -141,6 +146,11 @@ export function canBuildStructure(state: GameState, structureId: string): boolea
     if ((state.tech[techId] ?? 0) < lvl) return false;
   }
   if (def.condition && !def.condition(state)) return false;
+  if (def.maxCount) {
+    const count = (state.city[structureId] as { count?: number } | undefined)?.count ?? 0;
+    const queued = state.queue?.queue?.filter((item) => item.id === structureId).length ?? 0;
+    if (count + queued >= def.maxCount(state)) return false;
+  }
 
   const costs = getBuildCost(state, structureId);
   for (const [resId, cost] of Object.entries(costs)) {
@@ -169,12 +179,16 @@ export function buildStructure(state: GameState, structureId: string): GameState
     (next.city as Record<string, unknown>)[structureId] = { count: 0, on: 0 };
   }
 
-  const building = next.city[structureId] as { count: number; on?: number };
+  const building = next.city[structureId] as { count: number; on?: number; strength?: number };
   building.count++;
-  if (building.on !== undefined) {
+  if (structureId === 'banquet') {
+    building.on = 1;
+    building.strength ??= 0;
+  } else if (building.on !== undefined) {
     building.on++;
   }
 
+  addInflationPoints(next, 1);
   applyDerivedStateInPlace(next);
   return next;
 }
@@ -267,6 +281,9 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
     unlockAchievement(next, 'joyless');
     delete next.race['joyless'];
   }
+  if (structureId === 'ziggurat' && next.race['cataclysm']) {
+    unlockAchievement(next, 'iron_will', false, 1);
+  }
   if (structureId === 'world_collider') {
     const collider = next.space['world_collider'] as { count: number } | undefined;
     if (collider && collider.count >= 1859) {
@@ -282,12 +299,10 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       if (next.race['banana']) {
         markChallengeTask(next, 'banana', 'b2');
       }
-      if (next.race['emfield']) {
-        unlockAchievement(next, 'technophobe');
-      }
     }
   }
 
+  addInflationPoints(next, 1);
   applyDerivedStateInPlace(next);
   return next;
 }
@@ -344,7 +359,21 @@ export function buildInterstellarStructure(state: GameState, structureId: string
     building.alum = building.alum ?? 0;
     next.tech['droids'] = Math.max(next.tech['droids'] ?? 0, 1);
   }
+  if (structureId === 'space_elevator' && building.count >= 100) {
+    next.tech['ascension'] = Math.max(next.tech['ascension'] ?? 0, 5);
+    ensureInterstellarStructure(next, 'gravity_dome');
+  }
+  if (structureId === 'gravity_dome' && building.count >= 100) {
+    next.tech['ascension'] = Math.max(next.tech['ascension'] ?? 0, 6);
+    ensureInterstellarStructure(next, 'ascension_machine');
+    ensureInterstellarStructure(next, 'thermal_collector');
+  }
+  if (structureId === 'ascension_machine' && building.count >= 100) {
+    next.tech['ascension'] = Math.max(next.tech['ascension'] ?? 0, 7);
+    next.interstellar['ascension_trigger'] = { count: 1, on: 1 };
+  }
 
+  addInflationPoints(next, 1);
   applyDerivedStateInPlace(next);
   return next;
 }
@@ -386,6 +415,7 @@ export function buildGalaxyStructure(state: GameState, structureId: string): Gam
     }
   }
 
+  addInflationPoints(next, 1);
   applyDerivedStateInPlace(next);
   return next;
 }
@@ -449,6 +479,15 @@ export function enqueueStructure(state: GameState, structureId: string): GameSta
 
   const def = BASIC_STRUCTURES.find((structure) => structure.id === structureId);
   if (!def) return null;
+  for (const [techId, lvl] of Object.entries(def.reqs)) {
+    if ((state.tech[techId] ?? 0) < lvl) return null;
+  }
+  if (def.condition && !def.condition(state)) return null;
+  if (def.maxCount) {
+    const count = (state.city[structureId] as { count?: number } | undefined)?.count ?? 0;
+    const queued = state.queue?.queue?.filter((item) => item.id === structureId).length ?? 0;
+    if (count + queued >= def.maxCount(state)) return null;
+  }
 
   const next = cloneState(state);
   const cost = getBuildCost(next, structureId);
@@ -490,6 +529,7 @@ export function dequeueStructure(state: GameState, index: number): GameState | n
 export function isTechAvailable(state: GameState, techId: string): boolean {
   const def = BASIC_TECHS.find((tech) => tech.id === techId);
   if (!def) return false;
+  if (isChallengeTechBlocked(state, techId)) return false;
 
   const [grantKey, grantLvl] = def.grant;
   if ((state.tech[grantKey] ?? 0) >= grantLvl) return false;
@@ -537,6 +577,22 @@ export function researchTech(state: GameState, techId: string): GameState | null
 
   const [grantKey, grantLvl] = def.grant;
   next.tech[grantKey] = grantLvl;
+
+  if (next.race['cataclysm']) {
+    const ironWillMilestones: Partial<Record<string, number>> = {
+      elerium_mining: 2,
+      lasers: 3,
+      genesis_ship: 4,
+    };
+    const rank = ironWillMilestones[techId];
+    if (rank) unlockAchievement(next, 'iron_will', false, rank);
+  }
+
+  // 无钢挑战沿用原版科技跳级：保留熔炉和非钢系后续内容，但不暴露炼钢升级。
+  if (Object.prototype.hasOwnProperty.call(next.race, 'steelen')) {
+    if (techId === 'smelting') next.tech['smelting'] = 2;
+    if (techId === 'blast_furnace') next.tech['smelting'] = 6;
+  }
 
   // 太空入口骨架：研究关键科技时预注册对应的太空结构槽位，
   // 后续补建筑/产线时无需再迁移旧存档。
@@ -772,6 +828,7 @@ export function assignSmelter(
     if (totalFuelOptions >= smelter.count) return null;
     incrementSmelterAllocation(smelter, type);
   } else if (category === 'output') {
+    if (type === 'Steel' && Object.prototype.hasOwnProperty.call(next.race, 'steelen')) return null;
     const totalOutputs = (smelter.Iron ?? 0) + (smelter.Steel ?? 0) + (smelter.Iridium ?? 0);
     const totalFuelOptions = (smelter.Wood ?? 0) + (smelter.Coal ?? 0) + (smelter.Oil ?? 0) + (smelter.Inferno ?? 0);
     // Can't assign more output options than assigned fuel options

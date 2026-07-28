@@ -10,7 +10,8 @@ import {
   loadCustomRace,
   saveCustomRace,
   validateCustomRace,
-  calcCustomRaceBalance,
+  calcCustomRaceGenes,
+  getCustomRaceGeneBudget,
   type CustomRaceConfig,
   type GenusId,
   type RaceTraitDetail,
@@ -41,8 +42,6 @@ const availableTraits = computed(() =>
     .map(([id, def]) => ({ id, ...def })),
 )
 
-const balance = computed(() => calcCustomRaceBalance(selectedTraits.value))
-
 const selectedTraitRanks = computed(() => {
   const ranks: Record<string, number> = {}
   for (const traitId of selectedTraits.value) {
@@ -69,8 +68,11 @@ const hybridConfig = computed<CustomRaceConfig>(() => ({
   hybrid: [hybridParentA.value, hybridParentB.value],
 }))
 
-const customValidation = computed(() => validateCustomRace(customConfig.value))
-const hybridValidation = computed(() => validateCustomRace(hybridConfig.value))
+const geneBudget = computed(() => getCustomRaceGeneBudget(game.state))
+const customGenes = computed(() => calcCustomRaceGenes(game.state, customConfig.value))
+const hybridGenes = computed(() => calcCustomRaceGenes(game.state, hybridConfig.value))
+const customValidation = computed(() => validateCustomRace(customConfig.value, game.state))
+const hybridValidation = computed(() => validateCustomRace(hybridConfig.value, game.state))
 
 const savedCustom = computed(() => loadCustomRace(game.state, false))
 const savedHybrid = computed(() => loadCustomRace(game.state, true))
@@ -84,7 +86,7 @@ function toggleTrait(t: string) {
     selectedTraits.value.splice(idx, 1)
     delete traitRanks.value[t]
     if (fanaticism.value === t) fanaticism.value = selectedTraits.value[0] ?? ''
-  } else if (selectedTraits.value.length < 7) {
+  } else {
     selectedTraits.value.push(t)
     traitRanks.value[t] = 1
     if (!fanaticism.value) fanaticism.value = t
@@ -99,7 +101,7 @@ function save(hybrid: boolean = false) {
     hybrid: baseConfig.hybrid ? [...baseConfig.hybrid] : undefined,
     ranks: { ...(baseConfig.ranks ?? {}) },
   }
-  saveCustomRace(game.state, config, hybrid)
+  if (!saveCustomRace(game.state, config, hybrid)) return
   saveMessage.value = `已保存为${hybrid ? '混血自定义' : '自定义'}种族。`
   game.addMessage(saveMessage.value, 'success', 'progress')
 }
@@ -153,7 +155,7 @@ function buildTraitPreview(config: CustomRaceConfig): RaceTraitDetail[] {
 
 <template>
   <div class="custom-panel">
-    <PanelHeader icon="customRace" title="自定义种族编辑器" subtitle="设计你专属的种族，平衡分数应保持在 0 附近。" />
+    <PanelHeader icon="customRace" title="自定义种族编辑器" subtitle="基因序列与属类配置" />
 
     <div class="editor-card card">
     <div class="load-row">
@@ -200,10 +202,11 @@ function buildTraitPreview(config: CustomRaceConfig): RaceTraitDetail[] {
     </div>
     </div>
 
-    <h3 class="section-title">选择特质（{{ selectedTraits.length }}/7）</h3>
-    <div class="balance">
-      平衡分：<strong :class="balance > 5 ? 'bad' : (balance < -5 ? 'low' : 'good')">{{ balance }}</strong>
-      （越接近 0 越平衡）
+    <h3 class="section-title">选择特质（{{ selectedTraits.length }}）</h3>
+    <div class="gene-budget">
+      <span>可用基因点 {{ geneBudget }}</span>
+      <span>自定义剩余 <strong :class="customGenes < 0 ? 'bad' : 'good'">{{ customGenes }}</strong></span>
+      <span>混血剩余 <strong :class="hybridGenes < 0 ? 'bad' : 'good'">{{ hybridGenes }}</strong></span>
     </div>
 
     <div class="traits-grid">
@@ -293,10 +296,9 @@ function buildTraitPreview(config: CustomRaceConfig): RaceTraitDetail[] {
 .hybrid-plus { color: var(--text-muted); }
 
 .section-title { font-size: 13px; color: var(--text-primary); margin: 0; }
-.balance { font-size: 0.85rem; margin-bottom: 0.5rem; }
-.balance strong.good { color: var(--success); }
-.balance strong.bad { color: var(--danger); }
-.balance strong.low { color: var(--warning); }
+.gene-budget { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.gene-budget strong.good { color: var(--success); }
+.gene-budget strong.bad { color: var(--danger); }
 
 .traits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.3rem; margin-bottom: 1rem; }
 .trait-chip {

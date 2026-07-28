@@ -1,4 +1,6 @@
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel } from './achievements';
+import { getInflationMultiplier } from './challenges';
 
 function techLevel(state: GameState, id: string): number {
   return (state.tech[id] as number | undefined) ?? 0;
@@ -39,6 +41,13 @@ export function getBankVault(state: GameState): number {
     vault *= 1 + techLevel(state, 'stock_exchange') * 0.1;
   }
 
+  const wheelbarrowLevel = getAchievementLevel(state, 'wheelbarrow');
+  if (wheelbarrowLevel > 0) {
+    vault *= 1 + wheelbarrowLevel / 50;
+  }
+
+  vault *= getInflationMultiplier(state, 125);
+
   return vault;
 }
 
@@ -57,6 +66,8 @@ export function getCasinoVault(state: GameState): number {
     vault *= 1 + techLevel(state, 'stock_exchange') * 0.05;
   }
 
+  vault *= getInflationMultiplier(state, 100);
+
   return vault;
 }
 
@@ -74,6 +85,8 @@ export function getCasinoIncomePerActive(state: GameState): number {
   if (techLevel(state, 'stock_exchange') >= 1 && techLevel(state, 'gambling') >= 4) {
     cash *= 1 + techLevel(state, 'stock_exchange') * 0.01;
   }
+
+  cash *= getInflationMultiplier(state, 1250);
 
   return cash;
 }
