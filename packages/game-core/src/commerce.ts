@@ -92,11 +92,47 @@ export function getCasinoIncomePerActive(state: GameState): number {
 }
 
 /**
+ * 已获得 Alpha 支援的星际交易所提供的资金上限。
+ * 对标 legacy space.js exchange.effect / main.js 的 Money cap 分支。
+ */
+export function getInterstellarExchangeVault(state: GameState, activeExchanges: number): number {
+  if (activeExchanges <= 0) return 0;
+
+  const isDecayed = Boolean(state.race['cataclysm'] || state.race['orbit_decayed']);
+  let banks = isDecayed
+    ? ((state.space['spaceport'] as { on?: number; support_on?: number } | undefined)?.support_on
+      ?? (state.space['spaceport'] as { on?: number } | undefined)?.on
+      ?? 0)
+    : structCount(state, 'bank');
+  let bankVault = getBankVault(state);
+  if (isDecayed) bankVault *= 4;
+
+  const eternalBanks = (state.eden['eternal_bank'] as { count?: number } | undefined)?.count ?? 0;
+  banks += eternalBanks * 2;
+
+  let vault = activeExchanges * bankVault * banks / 18;
+  if (Object.prototype.hasOwnProperty.call(state.race, 'inflation')) {
+    vault *= 2;
+  }
+
+  if (techLevel(state, 'banking') >= 13) {
+    const galaxy = (state as unknown as { galaxy?: Record<string, { on?: number }> }).galaxy;
+    const freighters = galaxy?.['freighter']?.on ?? 0;
+    const superFreighters = galaxy?.['super_freighter']?.on ?? 0;
+    vault *= 1 + freighters * 0.03;
+    vault *= 1 + superFreighters * 0.08;
+  }
+
+  return Math.round(vault);
+}
+
+/**
  * 旅游中心的基础旅游收入。
  * 对标 legacy main.js L7687-7728，当前只保留已在 EvoZen 实装的贡献项：
  * - 露天剧场
  * - 赌场
  * - 纪念碑
+ * - Banana Lv4 解锁的贸易站收入
  */
 export function getTourismIncome(state: GameState, activeTouristCenters: number): number {
   if (activeTouristCenters <= 0) return 0;
@@ -105,6 +141,9 @@ export function getTourismIncome(state: GameState, activeTouristCenters: number)
   tourism += activeTouristCenters * structCount(state, 'amphitheatre');
   tourism += activeTouristCenters * structCount(state, 'casino') * 5;
   tourism += activeTouristCenters * techLevel(state, 'monuments') * 2;
+  if (getAchievementLevel(state, 'banana') >= 4) {
+    tourism += activeTouristCenters * structCount(state, 'trade_post') * 3;
+  }
 
   return tourism;
 }

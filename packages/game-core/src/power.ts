@@ -10,7 +10,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { BASIC_STRUCTURES } from './structures';
 import { SPACE_STRUCTURES } from './space';
-import { INTERSTELLAR_STRUCTURES } from './interstellar';
+import { getDysonPowerState, INTERSTELLAR_STRUCTURES } from './interstellar';
 import { getChallengePowerCost } from './challenges';
 import { getAchievementLevel, getThermalCollectorPowerReduction } from './achievements';
 
@@ -27,6 +27,8 @@ export interface PowerGeneratorDef {
   power: number;
   location: 'city' | 'space' | 'interstellar';
   fuel?: FuelDef;
+  /** 整个分段巨构作为一台不可手动开关的发电机。 */
+  aggregate?: boolean;
 }
 
 export interface PowerConsumerDef {
@@ -136,7 +138,19 @@ const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
   }));
 
 export function listPowerGenerators(state?: GameState): PowerGeneratorDef[] {
-  const generators = [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS];
+  const generators: PowerGeneratorDef[] = [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS];
+  if (state) {
+    const dyson = getDysonPowerState(state);
+    if (dyson) {
+      generators.push({
+        id: dyson.id,
+        name: dyson.name,
+        location: 'interstellar',
+        power: dyson.power,
+        aggregate: true,
+      });
+    }
+  }
   if (!state) return generators;
 
   const dissipated = getAchievementLevel(state, 'dissipated');
@@ -256,7 +270,7 @@ export function powerTick(state: GameState): PowerTickResult {
   // 1. 发电阶段 — 逐座检查燃料是否充足
   // ============================================================
   for (const generator of listPowerGenerators(state)) {
-    const requestedOn = getRequestedOn(state, generator.id, generator.location);
+    const requestedOn = generator.aggregate ? 1 : getRequestedOn(state, generator.id, generator.location);
     const actualOn = getFuelLimitedOn(requestedOn, state, generator.fuel);
 
     activeGenerators[generator.id] = actualOn;

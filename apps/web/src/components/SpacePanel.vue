@@ -132,6 +132,7 @@ interface BuildCard {
   spaceReqsOk: boolean
   traitOk: boolean
   canBuild: boolean
+  segmentCap?: number
 }
 
 interface RegionGroup {
@@ -230,6 +231,7 @@ const regionGroups = computed<RegionGroup[]>(() => {
       canBuild: def.scope === 'space'
         ? game.canBuildSpaceStructure(def.id)
         : game.canBuildInterstellarStructure(def.id),
+      segmentCap: 'segmentCap' in def ? def.segmentCap : undefined,
     })
   }
 
@@ -356,7 +358,8 @@ function resourceName(id: string): string {
           <div class="build-head">
             <span class="build-title">{{ item.name }}</span>
             <span class="build-meta">
-              <template v-if="item.count > 0">已建 {{ item.count }}</template>
+              <template v-if="item.segmentCap">进度 {{ item.count }}/{{ item.segmentCap }} 段</template>
+              <template v-else-if="item.count > 0">已建 {{ item.count }}</template>
               <template v-else>未建造</template>
               <template v-if="item.on > 0"> / on {{ item.on }}</template>
               <template v-if="item.sMax > 0 || item.support > 0"> / support {{ item.support }}/{{ item.sMax }}</template>
@@ -375,7 +378,7 @@ function resourceName(id: string): string {
             :disabled="!item.canBuild"
             @click="buildStructure(item)"
           >
-            {{ !item.techUnlocked ? '未解锁' : !item.spaceReqsOk ? '前置不足' : item.canBuild ? '建造一座' : '资源不足' }}
+            {{ !item.techUnlocked ? '未解锁' : !item.spaceReqsOk ? '前置不足' : item.canBuild ? (item.segmentCap ? '建造一段' : '建造一座') : '资源不足' }}
           </button>
         </article>
       </div>

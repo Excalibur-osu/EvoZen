@@ -117,7 +117,7 @@ const tabs = computed(() => {
       { id: 'magic', label: '魔法', icon: 'magic', visible: game.state.race.universe === 'magic' && (game.state.tech['magic'] ?? 0) >= 1 },
       { id: 'governor', label: '总督', icon: 'governor', visible: !!(game.state.genes as Record<string, number>)['governor'] && !!game.state.tech['governor'] },
       { id: 'prestige', label: '转生', icon: 'prestige', visible: (game.state.tech['mad'] ?? 0) >= 1 || (game.state.tech['genesis'] ?? 0) >= 7 || (game.state.tech['blackhole'] ?? 0) >= 5 || (game.state.tech['ascension'] ?? 0) >= 1 },
-      { id: 'crispr', label: 'CRISPR', icon: 'crispr', visible: (game.state.tech['genetics'] ?? 0) >= 1 && (((game.state.prestige as Record<string, { count?: number }>)?.['Plasmid']?.count ?? 0) > 0) },
+      { id: 'crispr', label: '基因工程', icon: 'crispr', visible: (game.state.tech['genetics'] ?? 0) >= 2 },
       { id: 'achievements', label: '成就', icon: 'achievement', visible: true },
       { id: 'stats', label: '统计', icon: 'stats', visible: true },
       { id: 'races', label: '种族', icon: 'races', visible: true },

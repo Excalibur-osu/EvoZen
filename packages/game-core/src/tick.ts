@@ -69,6 +69,7 @@ import {
 } from './planet-traits';
 import { evolutionTick } from './evolution';
 import { arpaTick } from './arpa';
+import { geneSequenceTick } from './genetics';
 import {
   addInflationPoints,
   advanceEmfieldChallenge,
@@ -1886,6 +1887,32 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     messages.push({
       text: `🏛️ ARPA 完成：${names[projId] ?? projId}！`,
       type: 'special',
+      category: 'progress',
+    });
+  }
+
+  const geneResult = geneSequenceTick(
+    newState,
+    powerResult.activeConsumers['biolab'] ?? 0,
+    TIME_MULTIPLIER,
+  );
+  if (geneResult.knowledgeCost > 0) {
+    deltas['Knowledge'] = (deltas['Knowledge'] ?? 0) - geneResult.knowledgeCost;
+    settledDeltas['Knowledge'] = (settledDeltas['Knowledge'] ?? 0) - geneResult.knowledgeCost;
+    addBreakdownEntry('Knowledge', '基因序列研究', -geneResult.knowledgeCost, 'consume', '基因工程');
+    lastBreakdownSnapshot['Knowledge'] = deltas['Knowledge'];
+  }
+  if (geneResult.completed === 'genome') {
+    messages.push({
+      text: '基因组测序已经完成。',
+      type: 'success',
+      category: 'progress',
+    });
+  } else if (geneResult.completed === 'mutation') {
+    const prestigeName = geneResult.prestigeType === 'AntiPlasmid' ? '反质粒' : '质粒';
+    messages.push({
+      text: `基因疗法完成：获得 ${geneResult.traitName} 特质、${geneResult.genes} 基因和 ${geneResult.prestige} ${prestigeName}。`,
+      type: 'success',
       category: 'progress',
     });
   }

@@ -9,6 +9,12 @@
 
 import type { GameState } from '@evozen/shared-types';
 import { totalMechRating, damageMechs, type MechWeapon } from './mech';
+import {
+  getChallengeLevel,
+  getUniverseAffix,
+  unlockAchievement,
+  type AchievementRecord,
+} from './achievements';
 
 // ============================================================
 // 100 层敌人详细表
@@ -44,6 +50,47 @@ export const SPIRE_ENEMIES: Record<SpireEnemyType, SpireEnemyDef> = {
   archfiend:  { type: 'archfiend',  name: '魔尊',     weakTo: ['laser', 'sonic'],     resistant: ['flame', 'plasma'], ratingMul: 2.5, isBoss: true },
   voidlord:   { type: 'voidlord',   name: '虚空主',   weakTo: ['plasma', 'sonic'],    resistant: ['kinetic', 'shotgun'], ratingMul: 3.5, isBoss: true },
 };
+
+const ACHIEVEMENT_AFFIXES = new Set<keyof AchievementRecord>(['l', 'e', 'a', 'h', 'm', 'mg']);
+
+function checkGladiatorAchievement(state: GameState): void {
+  const stats = (state.stats['spire'] as Record<string, Record<string, number>> | undefined) ?? {};
+  const enemyIds = Object.keys(SPIRE_ENEMIES) as SpireEnemyType[];
+  const highest: Partial<Record<SpireEnemyType, number>> = {};
+
+  for (const [key, records] of Object.entries(stats)) {
+    if (!ACHIEVEMENT_AFFIXES.has(key as keyof AchievementRecord)) continue;
+    const affix = key as keyof AchievementRecord;
+    const ranks = enemyIds.map((enemy) => records[enemy] ?? 0);
+    if (ranks.every((rank) => rank > 0)) {
+      unlockAchievement(state, 'gladiator', false, Math.min(...ranks), affix);
+    }
+    if (affix !== 'm') {
+      for (const enemy of enemyIds) {
+        highest[enemy] = Math.max(highest[enemy] ?? 0, records[enemy] ?? 0);
+      }
+    }
+  }
+
+  const globalRanks = enemyIds.map((enemy) => highest[enemy] ?? 0);
+  if (globalRanks.every((rank) => rank > 0)) {
+    unlockAchievement(state, 'gladiator', false, Math.min(...globalRanks), 'l');
+  }
+}
+
+/** 记录一次真实尖塔胜利，并结算依赖首领集合的成就。 */
+export function recordSpireVictory(state: GameState, enemy: SpireEnemyType): void {
+  const stats = state.stats as Record<string, unknown>;
+  const spire = (stats['spire'] ??= {}) as Record<string, Record<string, number>>;
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  spire[affix] ??= {};
+  spire[affix][enemy] = Math.max(spire[affix][enemy] ?? 0, getChallengeLevel(state));
+
+  if (enemy === state.race.species) {
+    unlockAchievement(state, 'doppelganger');
+  }
+  checkGladiatorAchievement(state);
+}
 
 /** 根据层数确定该层的敌人类型 */
 export function getFloorEnemy(floor: number): SpireEnemyDef {
@@ -156,6 +203,7 @@ export function attemptSpireFloor(state: GameState): SpireAscendResult {
     };
   }
 
+  const enemy = getFloorEnemy(nextFloor);
   const enemyRating = getSpireFloorRating(nextFloor);
   const playerRating = getEffectivePlayerRating(state, nextFloor);
 
@@ -182,6 +230,8 @@ export function attemptSpireFloor(state: GameState): SpireAscendResult {
         (state.prestige as Record<string, { count: number }>)[res].count += amt;
       }
     }
+
+    recordSpireVictory(state, enemy.type);
 
     // 第 100 层：触发 apotheosis 解锁
     if (nextFloor === 100) {

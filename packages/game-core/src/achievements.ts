@@ -11,6 +11,8 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getTraitVar } from './trait-ranks';
+import { ACHIEVEMENT_LOCALE, FEAT_LOCALE } from './achievement-localization';
 
 // ============================================================
 // 成就类型与列表
@@ -93,8 +95,7 @@ export const ACHIEVE_LIST: Record<AchievementCategory, string[]> = {
 };
 
 // ============================================================
-// 简明文本（中文）— 对标 legacy/strings/strings.zh-CN.json
-// 成就名称已覆盖为中文；描述与 flair 仍需继续按原版中文补齐。
+// 旧的简明中文回退；玩家可见文本优先使用 achievement-localization.ts 中的原版中文。
 // ============================================================
 
 const ACHIEVE_NAMES: Record<string, string> = {
@@ -209,11 +210,12 @@ export const ACHIEVEMENTS: Record<string, AchievementDefinition> = (() => {
   const out: Record<string, AchievementDefinition> = {};
   for (const [type, ids] of Object.entries(ACHIEVE_LIST) as [AchievementCategory, string[]][]) {
     for (const id of ids) {
+      const localized = ACHIEVEMENT_LOCALE[id];
       out[id] = {
         id,
-        name: ACHIEVE_NAMES[id] ?? id,
-        desc: ACHIEVE_DESCS[id] ?? '',
-        flair: ACHIEVE_FLAIR[id] ?? '',
+        name: localized?.name ?? ACHIEVE_NAMES[id] ?? id,
+        desc: localized?.desc ?? ACHIEVE_DESCS[id] ?? '',
+        flair: localized?.flair ?? ACHIEVE_FLAIR[id] ?? '',
         type,
       };
     }
@@ -233,7 +235,7 @@ export interface FeatDefinition {
   flair: string;
 }
 
-export const FEATS: Record<string, FeatDefinition> = {
+const FEAT_FALLBACKS: Record<string, FeatDefinition> = {
   utopia: { id: 'utopia', name: '乌托邦', desc: '建立完美社会。', flair: '理想之地。' },
   take_no_advice: { id: 'take_no_advice', name: '不听劝告', desc: '完全无视所有提示。', flair: '走自己的路。' },
   ill_advised: { id: 'ill_advised', name: '糟糕建议', desc: '采纳了糟糕的建议。', flair: '事后诸葛亮。' },
@@ -278,6 +280,13 @@ export const FEATS: Record<string, FeatDefinition> = {
   xmas: { id: 'xmas', name: '圣诞节', desc: '圣诞节获得。', flair: '圣诞快乐。' },
   fool: { id: 'fool', name: '愚人节', desc: '愚人节恶作剧。', flair: '哈哈被骗了。' },
 };
+
+export const FEATS: Record<string, FeatDefinition> = Object.fromEntries(
+  Object.entries(FEAT_FALLBACKS).map(([id, fallback]) => {
+    const localized = FEAT_LOCALE[id];
+    return [id, localized ? { id, ...localized } : fallback];
+  })
+);
 
 // ============================================================
 // 工具函数
@@ -328,7 +337,13 @@ export function calcUniverseLevel(state: GameState): { aLvl: number; uLvl: numbe
 
 /** 触发解锁某成就（小宇宙模式 small=true 时只算 micro 变体）
  *  对标 unlockAchieve L328-373 */
-export function unlockAchievement(state: GameState, id: string, small: boolean = false, rank?: number): boolean {
+export function unlockAchievement(
+  state: GameState,
+  id: string,
+  small: boolean = false,
+  rank?: number,
+  affixOverride?: keyof AchievementRecord
+): boolean {
   const universe = state.race.universe as string | undefined;
   if (universe !== 'micro' && small === true) return false;
   if (!ACHIEVEMENTS[id]) return false;
@@ -351,14 +366,12 @@ export function unlockAchievement(state: GameState, id: string, small: boolean =
     unlocked = true;
   }
 
-  if (universe !== 'standard') {
-    const affix = getUniverseAffix(universe);
-    if (affix !== 'l') {
-      const prev = (achieve[id][affix] as number | undefined) ?? 0;
-      if (prev < realRank) {
-        achieve[id][affix] = realRank;
-        if (!unlocked) unlocked = true;
-      }
+  const affix = affixOverride ?? getUniverseAffix(universe);
+  if (affix !== 'l') {
+    const prev = (achieve[id][affix] as number | undefined) ?? 0;
+    if (prev < realRank) {
+      achieve[id][affix] = realRank;
+      if (!unlocked) unlocked = true;
     }
   }
 
@@ -375,7 +388,7 @@ export function unlockFeat(state: GameState, id: string, small: boolean = false,
   const feat = (stats['feat'] ??= {}) as Record<string, number>;
 
   const aLevel = getChallengeLevel(state);
-  const realRank = rank ?? aLevel;
+  const realRank = Math.min(rank ?? aLevel, aLevel);
 
   const prev = feat[id] ?? 0;
   if (prev < realRank) {
@@ -518,20 +531,56 @@ export function countAchievements(state: GameState): { achievements: number; fea
   return { achievements, feats, total: achievements + feats };
 }
 
-/** 计算成就掌握度乘数（对标 calc_mastery）
- *  原版 mastery = aLvl * 0.001（每 1 level = 0.1% 全局加成），最高 0.25 (250 lvl) */
+/** 计算成就掌握度乘数（返回小数，如 0.25 = 25%）。 */
 export function calcMastery(state: GameState): number {
-  const { aLvl } = calcUniverseLevel(state);
-  const mastery = Math.min(0.25, aLvl * 0.001);
+  const challengeLevel = state.genes['challenge'] ?? 0;
+  if (challengeLevel < 2) return 0;
 
-  // weak_mastery 挑战：减半
-  if (state.race['weak_mastery']) return mastery * 0.5;
-  return mastery;
+  const universe = (state.race.universe as string | undefined) ?? 'standard';
+  const { aLvl, uLvl } = calcUniverseLevel(state);
+  let masteryRate = universe === 'standard' ? 0.25 : 0.15;
+  let universeRate = challengeLevel >= 3 ? 0.15 : 0.1;
+  if (challengeLevel >= 4 && universe !== 'standard') {
+    masteryRate += 0.05;
+    universeRate -= 0.05;
+  }
+
+  const feat = (state.stats['feat'] as Record<string, number> | undefined) ?? {};
+  const grandmasterRank = Math.min(feat['grandmaster'] ?? 0, getAchievementLevel(state, 'corrupted'));
+  if (grandmasterRank > 0) {
+    masteryRate *= 1 + grandmasterRank / 100;
+    universeRate *= 1 + grandmasterRank / 100;
+  }
+
+  if (state.race['weak_mastery'] && universe === 'antimatter') {
+    masteryRate /= 10;
+    universeRate /= 10;
+  }
+  if (state.race['nerfed']) {
+    const divisor = universe === 'antimatter' ? 5 : 2;
+    masteryRate /= divisor;
+    universeRate /= divisor;
+  }
+  const oozeRank = typeof state.race['ooze'] === 'number' ? state.race['ooze'] : 0;
+  if (oozeRank > 0) {
+    const penalty = getTraitVar('ooze', 2, oozeRank);
+    masteryRate *= 1 - penalty / 100;
+    universeRate *= 1 - penalty / 100;
+  }
+  const masteryTraitRank = typeof state.race['mastery'] === 'number' ? state.race['mastery'] : 0;
+  if (challengeLevel >= 5 && masteryTraitRank > 0) {
+    const bonus = masteryTraitRank / 100;
+    masteryRate *= 1 + bonus;
+    universeRate *= 1 + bonus;
+  }
+
+  const totalPercent = aLvl * masteryRate + (universe === 'standard' ? 0 : uLvl * universeRate);
+  return totalPercent / 100;
 }
 
 /** 检查并自动解锁基于阈值的 feat（成就数）—对标 novice/journeyman/.../god */
 export function checkAchievementHunterFeats(state: GameState): string[] {
-  const { achievements } = countAchievements(state);
+  const achieve = (state.stats?.['achieve'] as Record<string, AchievementRecord>) ?? {};
   const unlocked: string[] = [];
   const tiers: Array<{ id: string; threshold: number }> = [
     { id: 'novice', threshold: 10 },
@@ -541,9 +590,12 @@ export function checkAchievementHunterFeats(state: GameState): string[] {
     { id: 'grandmaster', threshold: 100 },
     { id: 'god', threshold: 150 },
   ];
-  for (const tier of tiers) {
-    if (achievements >= tier.threshold && unlockFeat(state, tier.id)) {
-      unlocked.push(tier.id);
+  for (let rank = getChallengeLevel(state); rank >= 1; rank--) {
+    const achievements = Object.values(achieve).filter((record) => record.l >= rank).length;
+    for (const tier of tiers) {
+      if (achievements >= tier.threshold && unlockFeat(state, tier.id, state.race.universe === 'micro', rank)) {
+        unlocked.push(tier.id);
+      }
     }
   }
   return unlocked;

@@ -30,6 +30,8 @@ import {
 } from './galaxy';
 import { markChallengeTask } from './achievement-triggers';
 import { unlockAchievement } from './achievements';
+import { getRaceMainType } from './races';
+import { getGeneSequenceState } from './genetics';
 import {
   addInflationPoints,
   applyInflationToCosts,
@@ -277,9 +279,12 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       next.tech['asteroid'] = 3;
     }
   }
-  if (structureId === 'biodome' && !next.race['cataclysm'] && next.race['joyless']) {
-    unlockAchievement(next, 'joyless');
-    delete next.race['joyless'];
+  if (structureId === 'biodome' && !next.race['cataclysm']) {
+    unlockAchievement(next, 'colonist');
+    if (next.race['joyless']) {
+      unlockAchievement(next, 'joyless');
+      delete next.race['joyless'];
+    }
   }
   if (structureId === 'ziggurat' && next.race['cataclysm']) {
     unlockAchievement(next, 'iron_will', false, 1);
@@ -371,6 +376,9 @@ export function buildInterstellarStructure(state: GameState, structureId: string
   if (structureId === 'ascension_machine' && building.count >= 100) {
     next.tech['ascension'] = Math.max(next.tech['ascension'] ?? 0, 7);
     next.interstellar['ascension_trigger'] = { count: 1, on: 1 };
+  }
+  if (structureId === 'orichalcum_sphere' && building.count >= 100) {
+    unlockAchievement(next, 'blacken_the_sun');
   }
 
   addInflationPoints(next, 1);
@@ -597,6 +605,22 @@ export function researchTech(state: GameState, techId: string): GameState | null
   // 太空入口骨架：研究关键科技时预注册对应的太空结构槽位，
   // 后续补建筑/产线时无需再迁移旧存档。
   switch (techId) {
+    case 'genetics':
+      getGeneSequenceState(next);
+      break;
+    case 'shotgun_sequencing': {
+      const sequence = getGeneSequenceState(next);
+      if (sequence) sequence.boost = true;
+      break;
+    }
+    case 'de_novo_sequencing':
+      next.resource['Genes'].display = true;
+      break;
+    case 'dna_sequencer': {
+      const sequence = getGeneSequenceState(next);
+      if (sequence) sequence.auto = true;
+      break;
+    }
     case 'rocketry':
       // 对齐到更接近 legacy 的阶段入口：
       // rocketry 只建立 space:1，真正推进到 space:2 由 test_launch 完成。
@@ -650,11 +674,17 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'fanaticism':
       // legacy tech.js L8392: choosing this branch also seeds the fanaticism tech line.
       next.tech['fanaticism'] = Math.max(next.tech['fanaticism'] ?? 0, 1);
+      if (next.race.gods === next.race.species) {
+        unlockAchievement(next, 'second_evolution');
+      }
       break;
     case 'alt_fanaticism':
       // legacy tech.js L8420: alt branch grants fanaticism directly and advances theology when needed.
       if ((next.tech['theology'] ?? 0) === 2) {
         next.tech['theology'] = 3;
+      }
+      if (next.race.gods === next.race.species) {
+        unlockAchievement(next, 'second_evolution');
       }
       break;
     case 'anthropology':
@@ -732,6 +762,27 @@ export function researchTech(state: GameState, techId: string): GameState | null
       if (!next.space['world_controller']) {
         next.space['world_controller'] = { count: 0, on: 0 };
       }
+      break;
+    case 'unification2':
+    case 'unite':
+      next.tech['world_control'] = 1;
+      break;
+    case 'laser_rifles':
+      if (next.race.species === 'sharkin') {
+        unlockAchievement(next, 'laser_shark');
+      }
+      break;
+    case 'fortifications':
+      unlockAchievement(next, getRaceMainType(next) === 'demonic' ? 'blood_war' : 'pandemonium');
+      break;
+    case 'dyson_sphere2':
+      ensureInterstellarStructure(next, 'dyson_sphere');
+      break;
+    case 'orichalcum_sphere':
+      ensureInterstellarStructure(next, 'orichalcum_sphere');
+      break;
+    case 'elysanite_sphere':
+      ensureInterstellarStructure(next, 'elysanite_sphere');
       break;
     case 'warp_drive':
       ensureInterstellarStructure(next, 'starport');

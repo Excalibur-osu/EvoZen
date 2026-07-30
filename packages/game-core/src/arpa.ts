@@ -208,7 +208,7 @@ export const ARPA_PROJECTS: ArpaProjectDef[] = [
     reqs: { high_tech: 6, trade: 3 },
     grantKey: 'railway',
     effectText:
-      '每次完成：贸易路线上限 +2（每 6 座仓库额外 +1）；贸易利润 +3/tick。cataclysm 路线：GPS 每 3 座贡献 +1 路线。',
+      '每次完成：每 6 座装运站提供 +1 贸易路线；买卖价格各改善 2%。灾变路线改由每 3 座 GPS 提供 +1 路线。',
     baseCost: () => ({
       Money:   2_500_000,
       Lumber:    750_000,
@@ -300,6 +300,7 @@ function getArpaState(state: GameState): ArpaState {
     state.arpa = { m_type: 'Obelisk' };
   }
   const arpa = state.arpa as ArpaState;
+  arpa.m_type ??= 'Obelisk';
   // 动态补全所有项目默认状态，兼容旧存档和新增项目
   for (const def of ARPA_PROJECTS) {
     if (!arpa[def.id]) {

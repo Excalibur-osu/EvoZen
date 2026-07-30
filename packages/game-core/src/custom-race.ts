@@ -6,7 +6,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { TRAITS } from './trait-data';
 import { getAchievementLevel } from './achievements';
-import { applyPathfinderGenusTraitRanks, GENUS_DEFS, RACES, type GenusId, type RaceId } from './races';
+import { applyPathfinderGenusTraitRanks, downgradeTraitRank, GENUS_DEFS, RACES, type GenusId, type RaceId } from './races';
 
 export interface CustomRaceConfig {
   /** 种族名（玩家定义） */
@@ -254,7 +254,7 @@ export function applyCustomRace(state: GameState, hybrid: boolean = false, mainT
   if (hybrid && config.hybrid) {
     for (const parentGenus of config.hybrid) {
       for (const [t, lvl] of Object.entries(GENUS_DEFS[parentGenus]?.traits ?? {})) {
-        state.race[t] = lvl;
+        state.race[t] = parentGenus === state.race['maintype'] ? lvl : downgradeTraitRank(lvl);
       }
     }
   }

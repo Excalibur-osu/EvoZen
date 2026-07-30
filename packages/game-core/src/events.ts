@@ -12,6 +12,7 @@
 
 import type { GameState, GameMessage, GarrisonState } from '@evozen/shared-types';
 import { armyRating, garrisonSize } from './military';
+import { unlockAchievement } from './achievements';
 
 // ============================================================
 // 类型定义
@@ -636,6 +637,7 @@ export const EVENTS: EventDefinition[] = [
       return !!(sb && (sb.on ?? 0) > 0);
     },
     effect(state) {
+      unlockAchievement(state, 'doomed');
       (state.stats as Record<string, number>).portals = ((state.stats as Record<string, number>).portals ?? 0) + 1;
       return `👹 地狱深渊裂开！恶魔从异世界涌出，地狱门已开启！`;
     },

@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import PanelHeader from './ui/PanelHeader.vue'
 import MetricCard from './ui/MetricCard.vue'
 import SegmentedTabs from './ui/SegmentedTabs.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const game = useGameStore()
 
@@ -20,20 +21,22 @@ type Cat = typeof categories[number]
 const activeCategory = ref<Cat>('all')
 
 const allAchievements = computed(() => Object.values(game.ACHIEVEMENTS))
+const unlockedAchievements = computed(() => allAchievements.value.filter((achievement) => getAchievementRank(achievement.id) > 0))
 const filteredAchievements = computed(() =>
   activeCategory.value === 'all'
-    ? allAchievements.value
-    : allAchievements.value.filter((a) => a.type === activeCategory.value)
+    ? unlockedAchievements.value
+    : unlockedAchievements.value.filter((a) => a.type === activeCategory.value)
 )
 
 const allFeats = computed(() => Object.values(game.FEATS))
+const unlockedFeats = computed(() => allFeats.value.filter((feat) => getFeatRecord(feat.id) > 0))
 const categoryItems = computed(() =>
   categories.map((id) => ({
     id,
     label: categoryLabel(id),
     count: id === 'all'
-      ? allAchievements.value.length
-      : allAchievements.value.filter((a) => a.type === id).length,
+      ? unlockedAchievements.value.length
+      : unlockedAchievements.value.filter((a) => a.type === id).length,
   })),
 )
 
@@ -41,6 +44,11 @@ function getAchievementRecord(id: string) {
   const stats = game.state.stats as Record<string, unknown>
   const achieve = (stats['achieve'] as Record<string, { l?: number }> | undefined) ?? {}
   return achieve[id]
+}
+
+function getAchievementRank(id: string): number {
+  const record = getAchievementRecord(id)
+  return record ? Math.max(...Object.values(record).filter((value): value is number => typeof value === 'number')) : 0
 }
 
 function getFeatRecord(id: string): number {
@@ -81,27 +89,29 @@ function rankStars(rank: number): string {
     <SegmentedTabs :items="categoryItems" :active="activeCategory" @select="activeCategory = $event" />
 
     <h3 class="section-title">成就</h3>
+    <EmptyState v-if="filteredAchievements.length === 0" text="这个分类还没有已解锁的成就。" icon="achievement" />
     <div class="achievements-grid">
       <div
         v-for="a in filteredAchievements"
         :key="a.id"
-        :class="['ach-card', { unlocked: getAchievementRecord(a.id) }]"
+        class="ach-card unlocked"
       >
         <div class="ach-header">
           <span class="ach-name">{{ a.name }}</span>
-          <span v-if="getAchievementRecord(a.id)" class="ach-rank">{{ rankStars(getAchievementRecord(a.id)?.l ?? 0) }}</span>
+          <span class="ach-rank">{{ rankStars(getAchievementRank(a.id)) }}</span>
         </div>
         <p class="ach-desc">{{ a.desc || '（条件保密）' }}</p>
-        <p v-if="getAchievementRecord(a.id) && a.flair" class="ach-flair">"{{ a.flair }}"</p>
+        <p v-if="a.flair" class="ach-flair">"{{ a.flair }}"</p>
       </div>
     </div>
 
     <h3 class="section-title">功绩</h3>
+    <EmptyState v-if="unlockedFeats.length === 0" text="还没有已解锁的功绩。" icon="achievement" />
     <div class="achievements-grid">
       <div
-        v-for="f in allFeats"
+        v-for="f in unlockedFeats"
         :key="f.id"
-        :class="['ach-card feat-card', { unlocked: getFeatRecord(f.id) > 0 }]"
+        class="ach-card feat-card unlocked"
       >
         <div class="ach-header">
           <span class="ach-name">{{ f.name }}</span>

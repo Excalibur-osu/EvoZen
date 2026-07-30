@@ -153,6 +153,7 @@ export function createNewGame(): GameState {
       // 容器
       Crates: { ...makeResource('板条箱', 0, 0) },
       Containers: { ...makeResource('集装箱', 0, 0) },
+      Genes: { ...makeResource('基因', -1, 0), value: 0 },
       // 魔法宇宙资源
       Mana: { ...makeResource('魔力', 0, 0), value: 0 },
       Crystal: { ...makeResource('水晶', 0, 0), value: 0 },
@@ -214,6 +215,7 @@ export function createNewGame(): GameState {
     portal: {},
     eden: {},
     tauceti: {},
+    pillars: {},
 
     civic: {
       taxes: { tax_rate: 20 },

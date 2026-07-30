@@ -17,6 +17,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { unlockAchievement } from './achievements';
 
 // ============================================================
 // 仪式（Rituals）
@@ -106,6 +107,11 @@ export const ALCHEMY_RESOURCES = [
 
 export type AlchemyResource = typeof ALCHEMY_RESOURCES[number];
 
+const ADVANCED_ALCHEMY_RESOURCES = new Set<AlchemyResource>([
+  'Deuterium', 'Neutronium', 'Adamantite', 'Infernite', 'Elerium',
+  'Nano_Tube', 'Graphene', 'Stanene', 'Bolognium', 'Vitreloy', 'Orichalcum',
+]);
+
 /** 初始化炼金状态（解锁炼金后） */
 export function setupAlchemy(state: GameState): void {
   if (!state.race['alchemy']) {
@@ -146,6 +152,14 @@ export function alchemyTick(state: GameState, timeMul: number = 1): void {
     const alchemyLevel = state.tech['alchemy'] ?? 1;
     const production = amount * (3 + alchemyLevel * 2) * timeMul;
     res.amount = res.max < 0 ? res.amount + production : Math.min(res.max, res.amount + production);
+    if (
+      production > 0 &&
+      state.race.universe === 'magic' &&
+      alchemyLevel >= 2 &&
+      ADVANCED_ALCHEMY_RESOURCES.has(resId as AlchemyResource)
+    ) {
+      unlockAchievement(state, 'fullmetal');
+    }
   }
 }
 

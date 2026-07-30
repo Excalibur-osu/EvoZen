@@ -14,6 +14,7 @@ import { RESOURCE_VALUES, TRADE_RATIOS } from './resources';
 import { getTradeBuyPriceMultiplier, getTradeSellPriceMultiplier } from './traits';
 import { getGpsTradeRouteBonus } from './space';
 import { getInflationMultiplier } from './challenges';
+import { getAchievementLevel } from './achievements';
 
 // ============================================================
 // 贸易路线数据结构
@@ -76,6 +77,11 @@ export function getBuyPrice(resourceId: string, state?: GameState): number {
     price *= Math.pow(0.99, wharfCount);
   }
 
+  if (state && (state.tech['railway'] ?? 0) > 0) {
+    const railwayDiscount = getAchievementLevel(state, 'banana') >= 1 ? 0.97 : 0.98;
+    price *= Math.pow(railwayDiscount, state.tech['railway'] ?? 0);
+  }
+
   if (state) price *= getInflationMultiplier(state, 500);
 
   return +price.toFixed(1);
@@ -98,6 +104,11 @@ export function getSellPrice(resourceId: string, state?: GameState): number {
   if (state && (state.city['wharf'] as { count?: number })?.count) {
     const wharfCount = (state.city['wharf'] as { count: number }).count;
     price *= 1 + wharfCount * 0.01;
+  }
+
+  if (state && (state.tech['railway'] ?? 0) > 0) {
+    const railwayProfit = getAchievementLevel(state, 'banana') >= 1 ? 0.03 : 0.02;
+    price *= 1 + (state.tech['railway'] ?? 0) * railwayProfit;
   }
 
   if (state) price *= getInflationMultiplier(state, 300);
@@ -278,9 +289,23 @@ export function getMaxTradeRoutes(state: GameState): number {
   // 对标 main.js L9885-9889: GPS >=4 座时每座 +2 贸易路线
   totalRoutes += getGpsTradeRouteBonus(state);
 
-  // ARPA: railway 每次完成 +2 路线
-  const railway = (state.arpa as Record<string, { rank?: number } | unknown>)?.['railway'] as { rank?: number } | undefined;
-  if (railway?.rank) totalRoutes += railway.rank * 2;
+  // 对标 legacy main.js：铁路每级提供的路线取决于当前路线分支。
+  // Banana Lv2 会让每级铁路额外提供 1 条路线。
+  const railwayLevel = state.tech['railway'] ?? 0;
+  if (railwayLevel > 0) {
+    let routesPerRailway: number;
+    if (state.race['cataclysm'] || state.race['orbit_decayed']) {
+      const gps = (state.space['gps'] as { count?: number } | undefined)?.count ?? 0;
+      routesPerRailway = Math.floor(gps / 3);
+    } else if (state.race['warlord']) {
+      routesPerRailway = 5;
+    } else {
+      const storageYards = (state.city['storage_yard'] as { count?: number } | undefined)?.count ?? 0;
+      routesPerRailway = Math.floor(storageYards / 6);
+    }
+    if (getAchievementLevel(state, 'banana') >= 2) routesPerRailway += 1;
+    totalRoutes += railwayLevel * routesPerRailway;
+  }
 
   // ARPA: tp_depot 每次完成 +5 路线（truepath 专属）
   const tpDepot = (state.arpa as Record<string, { rank?: number } | unknown>)?.['tp_depot'] as { rank?: number } | undefined;

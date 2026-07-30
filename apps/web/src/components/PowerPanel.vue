@@ -37,8 +37,9 @@ const generators = computed(() => {
         ? game.state.space
         : (def.location === 'interstellar' ? game.state.interstellar : game.state.city)
       const struct = bucket[def.id] as { count?: number; on?: number } | undefined
-      const count = struct?.count ?? 0
-      const configuredOn = struct?.on ?? count
+      const structureCount = struct?.count ?? 0
+      const count = def.aggregate ? Number(structureCount > 0) : structureCount
+      const configuredOn = def.aggregate ? count : (struct?.on ?? count)
       const activeOn = power.value.activeGenerators?.[def.id] ?? 0
 
       return {
@@ -131,7 +132,7 @@ function fuelText(generator: { fuel?: { resource: string; amountPerTick: number 
             {{ locationLabel[gen.location] }} · {{ gen.activeOn }}/{{ gen.configuredOn }} on · +{{ gen.activeOn * gen.power }}MW · {{ fuelText(gen) }}
           </span>
         </div>
-        <div class="power-row-controls">
+        <div v-if="!gen.aggregate" class="power-row-controls">
           <StepperButton label="−" aria-label="关闭一台" title="关闭一台" :disabled="gen.configuredOn <= 0" @click="adjustGeneratorOn(gen, -1)" />
           <StepperButton label="+" aria-label="开启一台" title="开启一台" :disabled="gen.configuredOn >= gen.count" @click="adjustGeneratorOn(gen, 1)" />
         </div>

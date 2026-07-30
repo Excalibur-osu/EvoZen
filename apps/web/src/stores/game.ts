@@ -131,6 +131,7 @@ import {
   setFortressPatrolSize as coreSetFortressPatrolSize,
   getFortressState as coreGetFortressState,
   isRegionUnlocked as coreIsRegionUnlocked,
+  isBuildingVisible as coreIsPortalBuildingVisible,
   getPortalBuildCost as coreGetPortalBuildCost,
   canBuildPortalStructure as coreCanBuildPortalStructure,
   buildPortalStructure as coreBuildPortalStructure,
@@ -183,6 +184,7 @@ import {
   applyChallengeGeneTraits,
   getRaceFullTraits,
   getRaceTraitDetails,
+  downgradeTraitRank,
   getRaceDisplayDefinition,
   getAltRaceView,
   applyAltRaceLock,
@@ -191,6 +193,7 @@ import {
   applyCustomRace,
   applyImitationTraits,
   TRAITS,
+  type GenusId,
   type RaceTraitDetail,
   // 转生
   triggerReset as coreTriggerReset,
@@ -811,11 +814,15 @@ export const useGameStore = defineStore('game', () => {
     if (speciesId === 'custom' || speciesId === 'hybrid') {
       const config = loadCustomRace(state.value, speciesId === 'hybrid')
       if (!config) return undefined
-      return config.genus === 'hybrid' ? config.hybrid?.[0] : config.genus
+      return config.genus === 'hybrid'
+        ? config.hybrid?.find(type => (state.value.tech[`evo_${type}`] ?? 0) >= 2) ?? config.hybrid?.[0]
+        : config.genus
     }
     const race = RACES[speciesId as keyof typeof RACES]
     if (!race) return undefined
-    return race.type === 'hybrid' ? race.hybrid?.[0] : race.type
+    return race.type === 'hybrid'
+      ? race.hybrid?.find(type => (state.value.tech[`evo_${type}`] ?? 0) >= 2) ?? race.hybrid?.[0]
+      : race.type
   }
 
   function isJunkLikeSpecies(speciesId: string): boolean {
@@ -888,11 +895,14 @@ export const useGameStore = defineStore('game', () => {
     if (speciesId === 'custom' || speciesId === 'hybrid') {
       const config = loadCustomRace(state.value, speciesId === 'hybrid')
       if (config) {
+        const mainType = getSpeciesMainType(speciesId)
         const traitRanks: Record<string, number> = {
           ...(GENUS_DEFS[config.genus]?.traits ?? {}),
         }
         for (const genusId of config.hybrid ?? []) {
-          Object.assign(traitRanks, GENUS_DEFS[genusId]?.traits ?? {})
+          for (const [traitId, rank] of Object.entries(GENUS_DEFS[genusId]?.traits ?? {})) {
+            traitRanks[traitId] = genusId === mainType ? rank : downgradeTraitRank(rank)
+          }
         }
         for (const traitId of config.traits) {
           traitRanks[traitId] = config.ranks?.[traitId] ?? 1
@@ -900,7 +910,9 @@ export const useGameStore = defineStore('game', () => {
         return Object.entries(traitRanks).map(([id, rank]) => makeRaceTraitDetail(id, rank, config.fanaticism))
       }
     }
-    if (speciesId in RACES) return getRaceTraitDetails(speciesId as keyof typeof RACES)
+    if (speciesId in RACES) {
+      return getRaceTraitDetails(speciesId as keyof typeof RACES, getSpeciesMainType(speciesId) as GenusId | undefined)
+    }
     return getSpeciesTraitDescriptors(speciesId).map(trait => makeRaceTraitDetail(trait.id, 1, undefined, trait.label))
   }
 
@@ -1509,6 +1521,7 @@ export const useGameStore = defineStore('game', () => {
     isPortalUnlocked: computed(() => (state.value.tech['portal'] ?? 0) >= 2),
     isRegionUnlocked: (r: PortalRegionId) => coreIsRegionUnlocked(state.value, r),
     getPortalBuildingsByRegion: (r: PortalRegionId) => coreGetPortalBuildingsByRegion(r),
+    isPortalBuildingVisible: (building: PortalBuildingDef) => coreIsPortalBuildingVisible(state.value, building),
     getPortalBuildCost: (id: string) => coreGetPortalBuildCost(state.value, id),
     canBuildPortalStructure: (id: string) => coreCanBuildPortalStructure(state.value, id),
     buildPortalStructure: (id: string) => {

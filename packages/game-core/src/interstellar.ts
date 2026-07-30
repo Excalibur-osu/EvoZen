@@ -19,6 +19,15 @@ export interface InterstellarStructureDefinition {
   support?: { pool: InterstellarSupportPool; amount: number };
   supportFuel?: { resource: string; amountPerTick: number };
   condition?: (state: GameState) => boolean;
+  segmentCap?: number;
+}
+
+export interface DysonPowerState {
+  id: 'dyson' | 'dyson_sphere' | 'orichalcum_sphere' | 'elysanite_sphere';
+  name: string;
+  segments: number;
+  requiredSegments: number;
+  power: number;
 }
 
 function interstellarCost(base: number, mult: number) {
@@ -195,9 +204,10 @@ export const INTERSTELLAR_STRUCTURES: InterstellarStructureDefinition[] = [
     name: '戴森球（建造中）',
     description: '在比邻星轨道建造戴森球能量收集网络，分 100 段完工。',
     reqs: { proxima: 3 },
+    segmentCap: 100,
     condition: (state) => {
       const d = state.interstellar['dyson'] as { count?: number } | undefined;
-      return (d?.count ?? 0) < 100 || !(state.tech['dyson'] as number | undefined);
+      return (d?.count ?? 0) < 100;
     },
     costs: {
       Money:       (_state, count) => count < 100 ? 250_000 : 0,
@@ -213,6 +223,7 @@ export const INTERSTELLAR_STRUCTURES: InterstellarStructureDefinition[] = [
     name: '戴森球（完整）',
     description: '戴森球完工后的扩展升级，分 100 段将产电量提升至 750MW。',
     reqs: { proxima: 3, dyson: 1 },
+    segmentCap: 100,
     condition: (state) => {
       const d = state.interstellar['dyson'] as { count?: number } | undefined;
       const ds = state.interstellar['dyson_sphere'] as { count?: number } | undefined;
@@ -225,6 +236,53 @@ export const INTERSTELLAR_STRUCTURES: InterstellarStructureDefinition[] = [
       Aerogel:   (_state, count) => count < 100 ? 75_000 : 0,
     },
     effect: '共需建造 100 段；完工后总产电 750MW。',
+  },
+  {
+    id: 'orichalcum_sphere',
+    region: 'int_proxima',
+    name: '奥利哈康戴森球',
+    description: '以奥利哈康覆盖完整戴森球，分 100 段将总产电提升至 1750MW。',
+    reqs: { proxima: 3, dyson: 2 },
+    segmentCap: 100,
+    condition: (state) => {
+      const sphere = state.interstellar['dyson_sphere'] as { count?: number } | undefined;
+      const upgrade = state.interstellar['orichalcum_sphere'] as { count?: number } | undefined;
+      return (sphere?.count ?? 0) >= 100 && (upgrade?.count ?? 0) < 100;
+    },
+    costs: {
+      Money:      (_state, count) => count < 100 ? 25_000_000 : 0,
+      Orichalcum: (_state, count) => count < 100 ? 75_000 : 0,
+    },
+    effect: (state) => {
+      const count = Math.min(100, (state.interstellar['orichalcum_sphere'] as { count?: number } | undefined)?.count ?? 0);
+      return count >= 100
+        ? '奥利哈康戴森球已完成，总产电 1750MW。'
+        : `已完成 ${count}/100 段；当前戴森球总产电 ${750 + count * 8}MW。`;
+    },
+  },
+  {
+    id: 'elysanite_sphere',
+    region: 'int_proxima',
+    name: '伊利桑奈特戴森球',
+    description: '以伊利桑奈特完成戴森球的终极强化，共需建造 1000 段。',
+    reqs: { proxima: 3, dyson: 3 },
+    segmentCap: 1000,
+    condition: (state) => {
+      const orichalcum = state.interstellar['orichalcum_sphere'] as { count?: number } | undefined;
+      const upgrade = state.interstellar['elysanite_sphere'] as { count?: number } | undefined;
+      return (orichalcum?.count ?? 0) >= 100 && (upgrade?.count ?? 0) < 1000;
+    },
+    costs: {
+      Money:           (_state, count) => count < 1000 ? 1_000_000_000 : 0,
+      Asphodel_Powder: (_state, count) => count < 1000 ? 25_000 : 0,
+      Elysanite:       (_state, count) => count < 1000 ? 100_000 : 0,
+    },
+    effect: (state) => {
+      const count = Math.min(1000, (state.interstellar['elysanite_sphere'] as { count?: number } | undefined)?.count ?? 0);
+      return count >= 1000
+        ? '伊利桑奈特戴森球已完成，总产电 22500MW。'
+        : `已完成 ${count}/1000 段；当前戴森球总产电 ${1750 + count * 18}MW。`;
+    },
   },
 
   // ==================== int_nebula: 星云 ====================
@@ -497,6 +555,33 @@ function getInterstellarCount(state: GameState, id: string): number {
   return (state.interstellar[id] as { count?: number } | undefined)?.count ?? 0;
 }
 
+/** 返回当前最高阶段戴森结构的整体发电状态。 */
+export function getDysonPowerState(state: GameState): DysonPowerState | null {
+  const stages = [
+    { id: 'elysanite_sphere' as const, name: '伊利桑奈特戴森球', cap: 1000, base: 1750, perSegment: 18, complete: 22500 },
+    { id: 'orichalcum_sphere' as const, name: '奥利哈康戴森球', cap: 100, base: 750, perSegment: 8, complete: 1750 },
+    { id: 'dyson_sphere' as const, name: '完整戴森球', cap: 100, base: 175, perSegment: 5, complete: 750 },
+    { id: 'dyson' as const, name: '戴森网', cap: 100, base: 0, perSegment: 1.25, complete: 175 },
+  ];
+
+  for (const stage of stages) {
+    const rawCount = getInterstellarCount(state, stage.id);
+    if (rawCount <= 0) continue;
+    const segments = Math.min(stage.cap, rawCount);
+    const power = segments >= stage.cap
+      ? stage.complete
+      : stage.base + segments * stage.perSegment;
+    return {
+      id: stage.id,
+      name: `${stage.name}（${segments}/${stage.cap} 段）`,
+      segments,
+      requiredSegments: stage.cap,
+      power,
+    };
+  }
+  return null;
+}
+
 export function getInterstellarBuildCost(state: GameState, id: string): Record<string, number> {
   const def = INTERSTELLAR_STRUCTURES.find((structure) => structure.id === id);
   if (!def) return {};
@@ -590,10 +675,11 @@ export function resolveInterstellarSupport(
   const consumers = INTERSTELLAR_STRUCTURES.filter(s => s.support?.pool === 'alpha' && s.support.amount < 0);
   for (const consumer of consumers) {
     const id = consumer.id;
-    const struct = state.interstellar[id] as { count?: number; on?: number } | undefined;
+    const struct = state.interstellar[id] as { count?: number; on?: number; support_on?: number } | undefined;
     const count = struct?.count ?? 0;
     if (count <= 0) {
       result.supportOn[id] = 0;
+      if (struct) struct.support_on = 0;
       continue;
     }
     
@@ -605,6 +691,7 @@ export function resolveInterstellarSupport(
     const supportable = Math.min(requested, Math.floor((totalSupport - usedSupport) / costPerUnit));
     
     result.supportOn[id] = supportable;
+    struct!.support_on = supportable;
     usedSupport += supportable * costPerUnit;
   }
 

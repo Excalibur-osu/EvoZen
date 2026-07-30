@@ -14,13 +14,14 @@
  *   - spc_belt: space_station / elerium_ship / iridium_ship / iron_ship
  *   - spc_dwarf: elerium_contain / e_reactor
  *
- * 所有成本与加成系数逐行对标 legacy；EvoZen 当前不执行 fuel_adjust / spatialReasoning
- * （truepath / world_control / 种族修饰尚未进入当前 scope）。
+ * 所有成本与加成系数逐行对标 legacy；当前已接入 Ancient Pillar 的 spatialReasoning
+ * 仓储乘区，fuel_adjust 及其余 truepath / world_control / 种族修饰仍未完整进入当前 scope。
  */
 
 import type { GameState } from '@evozen/shared-types';
 import { applyInflationToCosts } from './challenges';
 import { getAchievementLevel } from './achievements';
+import { applyPillarStorageBonus } from './pillars';
 
 export type SpaceCostFunction = (state: GameState, count: number) => number;
 
@@ -1114,7 +1115,7 @@ export function getPropellantDepotCount(state: GameState): number {
  *   Oil.max += 1250 * count
  */
 export function getPropellantDepotOilCapBonus(state: GameState): number {
-  return getPropellantDepotCount(state) * 1250;
+  return getPropellantDepotCount(state) * applyPillarStorageBonus(state, 1250);
 }
 
 /**
@@ -1123,7 +1124,7 @@ export function getPropellantDepotOilCapBonus(state: GameState): number {
  */
 export function getPropellantDepotHeliumCapBonus(state: GameState): number {
   if (!state.resource['Helium_3']?.display) return 0;
-  return getPropellantDepotCount(state) * 1000;
+  return getPropellantDepotCount(state) * applyPillarStorageBonus(state, 1000);
 }
 
 /**
@@ -1151,10 +1152,10 @@ export function getMoonBaseCount(state: GameState): number {
 
 /**
  * moon_base 对铱上限的贡献（对标 legacy space.js L262 + main.js 集成）：
- *   Iridium.max += moon_base.count * 500（baseline 0，无 spatialReasoning）
+ *   Iridium.max += moon_base.count * spatialReasoning(500)
  */
 export function getMoonBaseIridiumCapBonus(state: GameState): number {
-  return getMoonBaseCount(state) * 500;
+  return getMoonBaseCount(state) * applyPillarStorageBonus(state, 500);
 }
 
 /**
@@ -1162,7 +1163,7 @@ export function getMoonBaseIridiumCapBonus(state: GameState): number {
  *   Helium_3.max += helium_mine.count * 100
  */
 export function getHeliumMineHeliumCapBonus(state: GameState): number {
-  return getSpaceCount(state, 'helium_mine') * 100;
+  return getSpaceCount(state, 'helium_mine') * applyPillarStorageBonus(state, 100);
 }
 
 export function getObservatoryCount(state: GameState): number {
@@ -1294,10 +1295,9 @@ export const SPACE_BARRACKS_FOOD_PER_TICK = 10;
 /**
  * gas_storage 对 Oil 上限的加成（对标 legacy main.js L9195-9198）：
  *   Oil.max += count * spatialReasoning(3500)
- *   简化：不实现 spatialReasoning，直接返回 3500 * count
  */
 export function getGasStorageOilCapBonus(state: GameState): number {
-  return getSpaceCount(state, 'gas_storage') * 3500;
+  return getSpaceCount(state, 'gas_storage') * applyPillarStorageBonus(state, 3500);
 }
 
 /**
@@ -1305,7 +1305,7 @@ export function getGasStorageOilCapBonus(state: GameState): number {
  *   Helium_3.max += count * spatialReasoning(2500)
  */
 export function getGasStorageHeliumCapBonus(state: GameState): number {
-  return getSpaceCount(state, 'gas_storage') * 2500;
+  return getSpaceCount(state, 'gas_storage') * applyPillarStorageBonus(state, 2500);
 }
 
 /**
@@ -1313,7 +1313,7 @@ export function getGasStorageHeliumCapBonus(state: GameState): number {
  *   Uranium.max += count * spatialReasoning(1000)
  */
 export function getGasStorageUraniumCapBonus(state: GameState): number {
-  return getSpaceCount(state, 'gas_storage') * 1000;
+  return getSpaceCount(state, 'gas_storage') * applyPillarStorageBonus(state, 1000);
 }
 
 // --- elerium_contain 容量上限 ---
@@ -1327,5 +1327,5 @@ export function getEleriumContainCapBonus(state: GameState): number {
   const contain = state.space['elerium_contain'] as { count?: number; on?: number } | undefined;
   if (!contain) return 0;
   // 需要电力，使用 on（实际通电数）
-  return (contain.on ?? 0) * 100;
+  return (contain.on ?? 0) * applyPillarStorageBonus(state, 100);
 }

@@ -40,6 +40,14 @@ function scaleCost(base: number, mult: number): CostFunction {
   return (_state, count) => Math.round(base * Math.pow(mult, count));
 }
 
+// Banana Lv5 让装运站与集装箱港口的成本蠕变系数降低 0.01。
+function scaleBananaCost(base: number, mult: number): CostFunction {
+  return (state, count) => {
+    const effectiveMult = getAchievementLevel(state, 'banana') >= 5 ? mult - 0.01 : mult;
+    return Math.round(base * Math.pow(effectiveMult, count));
+  };
+}
+
 function hasCityTrait(state: GameState, trait: string): boolean {
   return state.city.ptrait === trait;
 }
@@ -105,6 +113,17 @@ function scaleHousingCost(base: number, mult: number): CostFunction {
 // cement >= 2 时建筑 Cement 成本 ×0.9，cement >= 3 时 ×0.8
 function scaleCementCost(base: number, mult: number): CostFunction {
   const rawCost = scaleCost(base, mult);
+  return (state, count) => {
+    const cost = rawCost(state, count);
+    const cementTech = state.tech['cement'] ?? 0;
+    if (cementTech >= 3) return Math.round(cost * 0.8);
+    if (cementTech >= 2) return Math.round(cost * 0.9);
+    return cost;
+  };
+}
+
+function scaleBananaCementCost(base: number, mult: number): CostFunction {
+  const rawCost = scaleBananaCost(base, mult);
   return (state, count) => {
     const cost = rawCost(state, count);
     const cementTech = state.tech['cement'] ?? 0;
@@ -529,9 +548,9 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'storage',
     reqs: { container: 1 },
     costs: {
-      Money: scaleCost(10, 1.36),
-      Brick: scaleCost(3, 1.35),
-      Wrought_Iron: scaleCost(5, 1.35),
+      Money: scaleBananaCost(10, 1.36),
+      Brick: scaleBananaCost(3, 1.35),
+      Wrought_Iron: scaleBananaCost(5, 1.35),
     },
     effect: '板条箱上限 +10（起重机后提升到 +20）；货运列车后每座额外 +1 贸易路线。',
   },
@@ -545,9 +564,9 @@ export const BASIC_STRUCTURES: StructureDefinition[] = [
     category: 'storage',
     reqs: { steel_container: 1 },
     costs: {
-      Money: scaleCost(400, 1.26),
-      Cement: scaleCementCost(75, 1.26),
-      Sheet_Metal: scaleCost(25, 1.25),
+      Money: scaleBananaCost(400, 1.26),
+      Cement: scaleBananaCementCost(75, 1.26),
+      Sheet_Metal: scaleBananaCost(25, 1.25),
     },
     effect: '集装箱上限 +10（门式起重机后提升到 +20）。',
   },

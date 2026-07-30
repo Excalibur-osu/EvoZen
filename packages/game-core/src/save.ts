@@ -30,6 +30,7 @@ function migrateState(state: GameState): GameState {
   if (!state.portal) state.portal = {};
   if (!state.eden) state.eden = {};
   if (!state.tauceti) state.tauceti = {};
+  if (!state.pillars) state.pillars = {};
   if (!state.blood) state.blood = {};
   if (!state.genes) state.genes = {};
 

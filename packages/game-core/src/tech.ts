@@ -3780,7 +3780,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   // ===== 特殊科技 (Special) =====
 
   { id: 'banquet', name: '餐馆', description: '学习建造能够烹饪食物并提供多种加成的设施。', category: 'special', era: '发现', reqs: { high_tech: 2 }, condition: (state) => getAchievementLevel(state, 'endless_hunger') >= 1 && !state.race['fasting'] && !state.race['cataclysm'] && !state.race['lone_survivor'] && !state.race['warlord'], grant: ['banquet', 1], costs: { Knowledge: 18500 }, effect: '解锁餐馆建筑。' },
-  { id: 'matter_replicator', name: '物质复制器', description: '建造物质复制器。', category: 'special', era: '发现', reqs: { high_tech: 2 }, condition: (state) => state.race.truepath === undefined, grant: ['replicator', 1], costs: { Knowledge: 25000 }, effect: '解锁物质复制器（需要亚当夏娃成就）。' },
+  { id: 'matter_replicator', name: '物质复制器', description: '研究如何使用外星装置将能量转化为物质。', category: 'special', era: '发现', reqs: { high_tech: 2 }, condition: (state) => getAchievementLevel(state, 'adam_eve') >= 5 && !state.race['lone_survivor'], grant: ['replicator', 1], costs: { Knowledge: 25000 }, effect: '解锁物质复制器。' },
   { id: 'incorporeal', name: '无形体', description: '研究无形体状态。', category: 'special', era: '星系际', reqs: { science: 19 }, grant: ['ascension', 1], costs: { Knowledge: 17500000, Phage: 25 }, effect: '解锁飞升路径。' },
   { id: 'tech_ascension', name: '技术飞升', description: '通过技术实现飞升。', category: 'special', era: '星系际', reqs: { ascension: 1 }, grant: ['ascension', 2], costs: { Knowledge: 18500000, Plasmid: 100 }, effect: '解锁天狼星区域。' },
   { id: 'terraforming', name: '地球化', description: '改造行星环境。', category: 'special', era: '星系际', reqs: { science: 19 }, condition: (state) => state.race.truepath === undefined && state.race.orbit_decay !== undefined, grant: ['terraforming', 1], costs: { Knowledge: 18000000 }, effect: '解锁地球化项目。' },
@@ -3928,8 +3928,8 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'orichalcum_panels', name: '奥利哈康面板', description: '使用奥利哈康的太阳能面板。', category: 'power_generation', era: '星系际', reqs: { high_tech: 17, swarm: 5 }, grant: ['swarm', 6], costs: { Knowledge: 14000000, Orichalcum: 125000 }, effect: '顶级太阳能效率。' },
   { id: 'dyson_net', name: '戴森网', description: '建造戴森网。', category: 'power_generation', era: '星际', reqs: { solar: 3, proxima: 2, stanene: 1 }, grant: ['proxima', 3], costs: { Knowledge: 800000 }, effect: '解锁戴森网建筑。' },
   { id: 'dyson_sphere2', name: '完整戴森球', description: '建造完整戴森球。', category: 'power_generation', era: '星系际', reqs: { proxima: 3, piracy: 1 }, grant: ['dyson', 1], costs: { Knowledge: 5000000 }, effect: '解锁完整戴森球。' },
-  { id: 'orichalcum_sphere', name: '奥利哈康球', description: '用奥利哈康强化戴森球。', category: 'power_generation', era: '星系际', reqs: { dyson: 1, science: 19 }, grant: ['dyson', 2], costs: { Knowledge: 17500000, Orichalcum: 250000 }, effect: '大幅提升戴森球效率。' },
-  { id: 'elysanite_sphere', name: '伊利桑奈特球', description: '用伊利桑奈特强化戴森球。', category: 'power_generation', era: '存在', reqs: { high_tech: 19, dyson: 2 }, grant: ['dyson', 3], costs: { Knowledge: 122500000, Omniscience: 36500 }, effect: '终极戴森球效率。' },
+  { id: 'orichalcum_sphere', name: '奥利哈康球', description: '用奥利哈康强化戴森球。', category: 'power_generation', era: '星系际', reqs: { dyson: 1, science: 19 }, condition: (state) => ((state.interstellar['dyson_sphere'] as { count?: number } | undefined)?.count ?? 0) >= 100, grant: ['dyson', 2], costs: { Knowledge: 17500000, Orichalcum: 250000 }, effect: '大幅提升戴森球效率。' },
+  { id: 'elysanite_sphere', name: '伊利桑奈特球', description: '用伊利桑奈特强化戴森球。', category: 'power_generation', era: '存在', reqs: { high_tech: 19, dyson: 2 }, condition: (state) => ((state.interstellar['orichalcum_sphere'] as { count?: number } | undefined)?.count ?? 0) >= 100, grant: ['dyson', 3], costs: { Knowledge: 122500000, Omniscience: 36500 }, effect: '终极戴森球效率。' },
 
   // ===== 氦-3/核聚变科技 =====
 

@@ -20,8 +20,10 @@
 
 import type { GameMessage, GameState } from '@evozen/shared-types';
 import { addInflationPoints, applyInflationToCosts } from './challenges';
-import { getAchievementLevel } from './achievements';
+import { getAchievementLevel, getChallengeLevel, unlockAchievement } from './achievements';
 import { armyRating } from './military';
+import { RACES } from './races';
+import { getPillarProductionMultiplier } from './pillars';
 
 // ============================================================
 // 区域定义
@@ -644,6 +646,11 @@ export function isBuildingVisible(state: GameState, building: PortalBuildingDef)
       if (!state.race[trait]) return false;
     }
   }
+  if (building.id === 'ancient_pillars') {
+    const species = state.race.species;
+    if (state.race.universe === 'micro' || (state.tech['pillars'] ?? 0) !== 1 || species === 'protoplasm' || !RACES[species as keyof typeof RACES]) return false;
+    if ((state.pillars[species] ?? 0) >= getChallengeLevel(state)) return false;
+  }
   return true;
 }
 
@@ -651,6 +658,14 @@ export function isBuildingVisible(state: GameState, building: PortalBuildingDef)
 export function getPortalBuildCost(state: GameState, buildingId: string): Record<string, number> | null {
   const building = PORTAL_BUILDINGS.find((b) => b.id === buildingId);
   if (!building) return null;
+  if (buildingId === 'ancient_pillars') {
+    const existing = state.pillars[state.race.species] ?? 0;
+    if (existing > 0) return {};
+    return {
+      Harmony: 1,
+      Scarletite: 1_000_000 + Object.keys(state.pillars).length * 125_000,
+    };
+  }
   const portal = state.portal as Record<string, Record<string, number>>;
   const count = portal[buildingId]?.['count'] ?? 0;
   const mult = Math.pow(building.costMult, count);
@@ -668,6 +683,11 @@ export function canBuildPortalStructure(state: GameState, buildingId: string): b
   const cost = getPortalBuildCost(state, buildingId);
   if (!cost) return false;
   for (const [res, amount] of Object.entries(cost)) {
+    if (res === 'Harmony') {
+      const harmony = (state.prestige['Harmony'] as { count?: number } | undefined)?.count ?? 0;
+      if (harmony < amount) return false;
+      continue;
+    }
     if ((state.resource[res]?.amount ?? 0) < amount) return false;
   }
   return true;
@@ -678,9 +698,21 @@ export function buildPortalStructure(state: GameState, buildingId: string): bool
   if (!canBuildPortalStructure(state, buildingId)) return false;
   const cost = getPortalBuildCost(state, buildingId)!;
   for (const [res, amount] of Object.entries(cost)) {
-    if (state.resource[res]) state.resource[res].amount -= amount;
+    if (res === 'Harmony') {
+      (state.prestige['Harmony'] as { count: number }).count -= amount;
+    } else if (state.resource[res]) {
+      state.resource[res].amount -= amount;
+    }
   }
   const portal = state.portal as Record<string, Record<string, number>>;
+  if (buildingId === 'ancient_pillars') {
+    state.pillars[state.race.species] = getChallengeLevel(state);
+    state.tech['pillars'] = 2;
+    const count = Object.keys(state.pillars).length;
+    portal['ancient_pillars'] = { count, on: count };
+    unlockAchievement(state, 'resonance');
+    return true;
+  }
   if (!portal[buildingId]) portal[buildingId] = { count: 0, on: 0 };
   portal[buildingId].count = (portal[buildingId].count ?? 0) + 1;
   addInflationPoints(state, 1);
@@ -688,34 +720,16 @@ export function buildPortalStructure(state: GameState, buildingId: string): bool
 }
 
 // ============================================================
-// Ancient Pillar 调谐机制
-// 对标 legacy/src/portal.js calcPillar()
-// 用 Harmony 激活每根柱子，激活后柱子提供 +5%/级 全球产出
+// Ancient Pillar 跨种族记录与加成
+// 对标 legacy/src/portal.js ancient_pillars / functions.js calcPillar()
 // ============================================================
 
-/** 调谐一根柱子（消耗 1 Harmony）*/
-export function tunePillar(state: GameState): boolean {
-  const portal = state.portal as Record<string, Record<string, number>>;
-  const pillars = portal['ancient_pillars']?.['count'] ?? 0;
-  const tuned = portal['ancient_pillars']?.['tuned'] ?? 0;
-  if (tuned >= pillars) return false;
-
-  const prestige = state.prestige as Record<string, { count?: number }>;
-  const harmony = prestige?.['Harmony']?.count ?? 0;
-  if (harmony < 1) return false;
-
-  prestige['Harmony']!.count = harmony - 1;
-  portal['ancient_pillars']!['tuned'] = tuned + 1;
-  return true;
-}
-
-/** 获取已调谐的柱子数 */
+/** 获取已完成的种族石柱数。 */
 export function getTunedPillarCount(state: GameState): number {
-  const portal = state.portal as Record<string, Record<string, number>>;
-  return portal['ancient_pillars']?.['tuned'] ?? 0;
+  return Object.keys(state.pillars).filter((species) => RACES[species as keyof typeof RACES]).length;
 }
 
-/** 柱子提供的全球加成乘数（每柱 +5%） */
+/** 每个其他种族石柱 +1%，当前物种的石柱共 +4%。 */
 export function getPillarBonus(state: GameState): number {
-  return 1 + getTunedPillarCount(state) * 0.05;
+  return getPillarProductionMultiplier(state);
 }

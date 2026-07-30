@@ -8,7 +8,7 @@
 import { useGameStore } from '../stores/game'
 import { computed, ref } from 'vue'
 import type { PortalRegionId } from '@evozen/game-core'
-import { tunePillar, getTunedPillarCount } from '@evozen/game-core'
+import { getTunedPillarCount } from '@evozen/game-core'
 import PanelHeader from './ui/PanelHeader.vue'
 import SegmentedTabs from './ui/SegmentedTabs.vue'
 import EmptyState from './ui/EmptyState.vue'
@@ -29,16 +29,7 @@ const regionTabs = computed(() => visibleRegions.value.map((r) => ({ id: r, labe
 
 const buildings = computed(() => {
   return game.getPortalBuildingsByRegion(activeRegion.value)
-    .filter((b) => {
-      // 简单可见性：检查 tech reqs（trait 检查在 isVisible 里完成）
-      for (const [tech, lvl] of Object.entries(b.reqs)) {
-        if ((game.state.tech[tech] ?? 0) < lvl) return false
-      }
-      // notTrait 检查
-      if (b.notTrait) for (const t of b.notTrait) if (game.state.race[t]) return false
-      if (b.trait) for (const t of b.trait) if (!game.state.race[t]) return false
-      return true
-    })
+    .filter((building) => game.isPortalBuildingVisible(building))
 })
 
 const fortress = computed(() => game.getFortressState())
@@ -60,6 +51,7 @@ function adjustPatrolSize(delta: number) {
 }
 
 function buildingCount(id: string) {
+  if (id === 'ancient_pillars') return getTunedPillarCount(game.state)
   const portal = game.state.portal as Record<string, Record<string, number>>
   return portal[id]?.count ?? 0
 }
@@ -97,18 +89,8 @@ function tryAscendSpire() {
   }
 }
 
-// Ancient Pillar 调谐
-const pillarCount = computed(() => {
-  const portal = game.state.portal as Record<string, Record<string, number>>
-  return portal['ancient_pillars']?.['count'] ?? 0
-})
-const tunedPillars = computed(() => getTunedPillarCount(game.state))
-const harmony = computed(() => (game.state.prestige as Record<string, { count?: number }>)?.['Harmony']?.count ?? 0)
-function doTunePillar() {
-  if (tunePillar(game.state)) {
-    game.state.portal = { ...game.state.portal } as typeof game.state.portal
-  }
-}
+const pillarCount = computed(() => getTunedPillarCount(game.state))
+const currentPillarRank = computed(() => game.state.pillars[game.state.race.species] ?? 0)
 
 function fmtNum(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'
@@ -161,21 +143,17 @@ function fmtNum(n: number): string {
     <!-- 区域切换 Tab -->
     <SegmentedTabs :items="regionTabs" :active="activeRegion" @select="activeRegion = $event" />
 
-    <!-- 远古石柱调谐 -->
+    <!-- 远古石柱记录 -->
     <section v-if="activeRegion === 'ruins' && pillarCount > 0" class="special-section">
       <h3 class="section-title">
         <AppIcon name="columns" :size="14" />
-        远古石柱调谐
+        远古石柱
       </h3>
       <div class="pillar-info">
-        <span>已调谐：{{ tunedPillars }} / {{ pillarCount }}</span>
-        <span>和谐：{{ harmony.toFixed(2) }}</span>
-        <button class="tune-btn btn primary sm" :disabled="tunedPillars >= pillarCount || harmony < 1" @click="doTunePillar">
-          <AppIcon name="sparkles" :size="14" />
-          调谐一根（消耗 1 和谐）
-        </button>
+        <span>已完成物种：{{ pillarCount }}</span>
+        <span>当前物种等级：{{ currentPillarRank || '未完成' }}</span>
       </div>
-      <p class="pillar-desc">每调谐一根柱子提供 +5% 全球产出。</p>
+      <p class="pillar-desc">每个已完成物种提供 +1% 全局产出；当前物种的石柱总计提供 +4%。</p>
     </section>
 
     <!-- 尖塔登顶 -->
@@ -329,7 +307,6 @@ function fmtNum(n: number): string {
   margin: 0 0 6px;
 }
 .pillar-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
-.tune-btn { margin-left: auto; }
 .pillar-desc { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
 
 .spire-progress {

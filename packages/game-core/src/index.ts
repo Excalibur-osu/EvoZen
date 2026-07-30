@@ -62,8 +62,10 @@ export {
   INTERSTELLAR_STRUCTURES,
   getInterstellarBuildCost,
   canBuildInterstellarStructure,
+  getDysonPowerState,
   resolveInterstellarSupport,
   type InterstellarStructureDefinition,
+  type DysonPowerState,
   type InterstellarSupportPool,
   type InterstellarSupportResult,
 } from './interstellar';
@@ -411,6 +413,7 @@ export {
   getRaceMainType,
   getRaceFullTraits,
   getRaceTraitDetails,
+  downgradeTraitRank,
   applyRaceTraits,
   isGenusId,
   applyChallengeGeneTraits,
@@ -476,6 +479,7 @@ export {
   getSpireFloorRating,
   getSpireFloorReward,
   attemptSpireFloor,
+  recordSpireVictory,
   getCurrentSpireInfo,
   getFloorEnemy,
   getEffectivePlayerRating,
@@ -521,6 +525,14 @@ export {
   rollMinorTrait,
   type CrisprUpgrade,
 } from './crispr';
+export {
+  getGeneSequenceState,
+  setGeneSequenceActive,
+  geneSequenceTick,
+  GENE_MINOR_TRAIT_NAMES,
+  type GeneSequenceState,
+  type GeneSequenceTickResult,
+} from './genetics';
 export {
   ACHIEVEMENTS,
   ACHIEVE_LIST,
@@ -584,7 +596,6 @@ export {
   setFortressPatrolSize,
   getSoulGemDropDenominator,
   portalProductionTick,
-  tunePillar,
   getTunedPillarCount,
   getPillarBonus,
   calcSoulGemProgress,
@@ -604,6 +615,12 @@ export {
   type FortressTickOptions,
   type SpireState,
 } from './portal';
+export {
+  getPillarStrength,
+  getPillarProductionMultiplier,
+  getPillarStorageMultiplier,
+  applyPillarStorageBonus,
+} from './pillars';
 export {
   EDENIC_REGIONS,
   EDENIC_BUILDINGS,

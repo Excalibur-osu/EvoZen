@@ -14,6 +14,7 @@
 import type { GameState } from '@evozen/shared-types';
 import { getRaceMainType } from './races';
 import { hireMerc, mercCost } from './military';
+import { getInflationMultiplier } from './challenges';
 
 // ============================================================
 // 总督背景（10 种）— 对标 gmen L14-105
@@ -146,8 +147,14 @@ export const GOVERNOR_TASKS: Record<GovernorTaskId, GovernorTaskDef> = {
     isAvailable: (state) => (state.tech['spy'] ?? 0) >= 2,
   },
   slave: {
-    id: 'slave', name: '补充奴隶', desc: '自动俘获奴隶填满奴隶围栏。',
-    isAvailable: (state) => !!state.race['slaver'],
+    id: 'slave', name: '补充奴隶', desc: '资金满足储备条件时自动购买奴隶，填满奴隶围栏。',
+    isAvailable: (state) =>
+      Boolean(state.race['slaver'])
+      && !state.race['cataclysm']
+      && !state.race['lone_survivor']
+      && !state.race['orbit_decayed']
+      && (state.tech['slaves'] ?? 0) >= 2
+      && ((state.city['slave_pen'] as { count?: number } | undefined)?.count ?? 0) > 0,
   },
   sacrifice: {
     id: 'sacrifice', name: '献祭', desc: '自动献祭以维持生育率。',
@@ -261,6 +268,7 @@ export function appointGovernor(state: GameState, candidate: GovernorCandidate):
       bal_storage: { adv: false },
       merc: { buffer: 1, reserve: 100 },
       spy: { reserve: 100 },
+      slave: { reserve: 100 },
       tax: { min: 20 },
     },
   } as GovernorState as unknown as GameState['race']['governor'];
@@ -343,6 +351,9 @@ function executeGovernorTask(state: GameState, taskId: GovernorTaskId): void {
     case 'spy':
       runSpyTask(state);
       break;
+    case 'slave':
+      runSlaveTask(state);
+      break;
     // 其他任务待实装（依赖目标系统）
   }
 }
@@ -399,6 +410,29 @@ function runMercTask(state: GameState): void {
   const reserveAmount = (money.max * reserve) / 100;
   const cost = mercCost(state);
   if (money.amount > reserveAmount + cost) hireMerc(state);
+}
+
+/** 自动购买奴隶；通胀只提高总督触发阈值，市场实际价格仍为固定 25,000。 */
+function runSlaveTask(state: GameState): void {
+  const pen = state.city['slave_pen'] as { count?: number; slaves?: number } | undefined;
+  const money = state.resource['Money'];
+  if (!pen || !money) return;
+
+  const capacity = (pen.count ?? 0) * 4;
+  const slaves = Math.max(0, pen.slaves ?? 0);
+  if (capacity <= slaves) return;
+
+  const config = (state.race['governor'] as GovernorState | undefined)?.config?.['slave'] as { reserve?: number } | undefined;
+  const cashCap = money.max * ((config?.reserve ?? 100) / 100);
+  let triggerCost = 25_000 * getInflationMultiplier(state, 100);
+  triggerCost *= 1 + govActive(state, 'extravagant', 0) / 100;
+
+  const income = money.diff ?? 0;
+  if (money.amount < triggerCost || (income < triggerCost && money.amount + income < cashCap)) return;
+  if (money.amount < 25_000) return;
+
+  money.amount -= 25_000;
+  pen.slaves = slaves + 1;
 }
 
 /** 自动招募间谍 — 简化版 */

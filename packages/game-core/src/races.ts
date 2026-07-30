@@ -306,17 +306,19 @@ export function getRaceMainType(state: GameState, speciesId: string = state.race
 }
 
 /** 给定种族 ID 返回其完整特质列表（包括 genus 默认特质 + 种族特质） */
-export function getRaceFullTraits(raceId: RaceId): Record<string, number> {
+export function getRaceFullTraits(raceId: RaceId, mainType?: GenusId): Record<string, number> {
   const race = RACES[raceId];
   if (!race) return {};
 
   const genus = GENUS_DEFS[race.type];
   const traits: Record<string, number> = { ...genus.traits };
 
-  // 混血种族：附加 hybrid 父属性
+  // 原版混血：本轮完成的父属保持原 rank，另一父属降低一级。
   if (race.hybrid) {
     for (const parentGenus of race.hybrid) {
-      Object.assign(traits, GENUS_DEFS[parentGenus].traits);
+      for (const [trait, rank] of Object.entries(GENUS_DEFS[parentGenus].traits)) {
+        traits[trait] = mainType && parentGenus !== mainType ? downgradeTraitRank(rank) : rank;
+      }
     }
   }
 
@@ -327,10 +329,10 @@ export function getRaceFullTraits(raceId: RaceId): Record<string, number> {
 }
 
 /** 给定种族 ID 返回用于 UI/日志展示的完整 trait 明细 */
-export function getRaceTraitDetails(raceId: RaceId): RaceTraitDetail[] {
+export function getRaceTraitDetails(raceId: RaceId, mainType?: GenusId): RaceTraitDetail[] {
   const race = RACES[raceId];
   if (!race) return [];
-  return Object.entries(getRaceFullTraits(raceId)).map(([id, rank]) => {
+  return Object.entries(getRaceFullTraits(raceId, mainType)).map(([id, rank]) => {
     const def = TRAITS[id];
     return {
       id,
@@ -352,7 +354,7 @@ export function applyRaceTraits(state: GameState, raceId: RaceId, mainType?: Gen
   delete state.race['fanaticism'];
   delete state.race['maintype'];
 
-  const traits = getRaceFullTraits(raceId);
+  const traits = getRaceFullTraits(raceId, mainType);
   for (const [trait, level] of Object.entries(traits)) {
     state.race[trait] = level;
   }
@@ -433,7 +435,7 @@ export function applyChallengeGeneTraits(
   return changed;
 }
 
-function downgradeTraitRank(rank: number): number {
+export function downgradeTraitRank(rank: number): number {
   switch (rank) {
     case 0.1:
       return 0.1;

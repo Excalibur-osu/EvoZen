@@ -11,6 +11,8 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
+import { getAchievementLevel } from './achievements';
+import { applyPillarStorageBonus } from './pillars';
 
 // ============================================================
 // 常量
@@ -83,7 +85,10 @@ export function getCrateValue(state: GameState): number {
   if (tech >= 8) {
     value += tech >= 9 ? 7800 : 4000;
   }
-  return value;
+  if (getAchievementLevel(state, 'banana') >= 3) {
+    value *= 1.1;
+  }
+  return applyPillarStorageBonus(state, value);
 }
 
 /** 获取当前单个集装箱提供的上限值 */
@@ -99,7 +104,7 @@ export function getContainerValue(state: GameState): number {
   if (tech >= 8) {
     value += tech >= 9 ? 15300 : 8000;
   }
-  return value;
+  return applyPillarStorageBonus(state, value);
 }
 
 // ============================================================

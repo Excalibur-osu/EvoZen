@@ -10,12 +10,14 @@ import {
   getChallengeLevel,
   getAchievementLevel,
   getUniverseAffix,
+  checkAchievementHunterFeats,
   unlockAchievement,
   unlockFeat,
   type AchievementRecord,
 } from './achievements';
-import { getRaceMainType } from './races';
+import { getRaceMainType, RACES, type RaceId } from './races';
 import { galaxyPiracy } from './syndicate';
+import { isAltRaceActive } from './alt-races';
 
 type ChallengeTaskId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5';
 type ChallengeTaskStats = Record<ChallengeTaskId, Partial<Record<keyof AchievementRecord, boolean>>>;
@@ -113,6 +115,11 @@ function hasBadGeology(state: GameState, minCount: number): boolean {
   const geo = (state.city as { geology?: Record<string, number> }).geology;
   if (!geo) return false;
   return Object.values(geo).filter((value) => value < 0).length >= minCount;
+}
+
+function hasGoodGeology(state: GameState, minCount: number): boolean {
+  const geo = (state.city as { geology?: Record<string, number> }).geology;
+  return Boolean(geo) && Object.values(geo ?? {}).filter((value) => value > 0).length >= minCount;
 }
 
 function unlockJunkerResetFeats(state: GameState): void {
@@ -270,63 +277,95 @@ function updateAggregateAchievements(state: GameState): void {
   }
 }
 
+/** 根据跨转生保存的种族石柱记录结算复合成就。 */
+export function checkPillarAchievements(state: GameState): void {
+  const eligibleRaces = Object.values(RACES).filter((race) => race.id !== 'protoplasm');
+  const eligibleGenera = new Set(
+    eligibleRaces.filter((race) => race.type !== 'hybrid').map((race) => race.type)
+  );
+  const genusRanks = new Map<string, number>();
+  const pillarRanks: number[] = [];
+
+  for (const [species, rawRank] of Object.entries(state.pillars)) {
+    const race = RACES[species as RaceId];
+    if (!race || race.id === 'protoplasm') continue;
+    const rank = Math.max(0, Math.min(5, Math.floor(rawRank)));
+    if (rank < 1) continue;
+    pillarRanks.push(rank);
+    if (race.type !== 'hybrid') {
+      genusRanks.set(race.type, Math.max(genusRanks.get(race.type) ?? 0, rank));
+    }
+  }
+
+  if (genusRanks.size >= eligibleGenera.size) {
+    unlockAchievement(state, 'enlightenment', false, Math.min(...genusRanks.values()));
+  }
+  if (pillarRanks.length >= eligibleRaces.length) {
+    unlockAchievement(state, 'resonance');
+  }
+  if (pillarRanks.length >= 50) {
+    const rank = pillarRanks.sort((a, b) => b - a)[49];
+    unlockFeat(state, 'equilibrium', false, rank);
+  }
+}
+
+function countEventFinds(state: GameState, group: 'egg' | 'trick', year: number, prefixes: string[]): number {
+  const special = state['special'] as Record<string, Record<string, Record<string, boolean>>> | undefined;
+  const finds = special?.[group]?.[String(year)] ?? {};
+  return Object.entries(finds).filter(([id, found]) => found && prefixes.some((prefix) => id.startsWith(prefix))).length;
+}
+
 /**
  * 主成就触发器 — 每 tick 调用一次
  */
-export function checkAchievements(state: GameState): void {
+export function checkAchievements(state: GameState, date: Date = new Date()): void {
   updateAggregateAchievements(state);
+  checkPillarAchievements(state);
 
   // ----- 物种灭绝（每个种族对应一个 extinct_X 成就，在转生时触发） -----
   // 由 resets.ts 在转生时调用 unlockAchievement('extinct_X')
 
   // ----- 通用解锁条件 -----
 
-  // colonist: 进入太空殖民
-  if ((state.tech['space'] ?? 0) >= 5) {
-    unlockAchievement(state, 'colonist');
+  if ((state.tech['supercollider'] ?? 0) >= 99) {
+    unlockAchievement(state, 'blackhole');
   }
 
-  // explorer: 发现 5+ 个不同星球（简化：拥有 space:3+ 即认为完成）
-  if ((state.tech['space'] ?? 0) >= 7) {
-    unlockAchievement(state, 'explorer');
+  if (Number(state.stats['starved'] ?? 0) >= 100) {
+    unlockAchievement(state, 'mass_starvation');
   }
 
-  // landfill: 仓储满满
-  const crates = state.resource['Crates'];
-  if (crates && crates.amount >= crates.max && crates.max >= 1000) {
+  const unrest = (state.civic.garrison.protest ?? 0) + (state.civic.garrison.fatigue ?? 0);
+  if (unrest > 0 && Math.round(Math.log2(unrest)) >= 8) {
+    unlockAchievement(state, 'warmonger');
+  }
+
+  if ((state.stats.died ?? 0) >= 250) {
+    unlockAchievement(state, 'red_tactics');
+  }
+
+  const stellar = state.interstellar['stellar_engine'] as { mass?: number } | undefined;
+  if ((stellar?.mass ?? 0) >= 12) {
     unlockAchievement(state, 'landfill');
   }
+  if ((stellar?.mass ?? 0) >= 100) {
+    unlockFeat(state, 'supermassive');
+  }
 
-  // miners_dream: 4+ 个地质矿物为正
-  const geo = (state.city as { geology?: Record<string, number> }).geology;
-  if (geo) {
-    const goodRocks = Object.values(geo).filter((v) => v > 0).length;
-    if (goodRocks >= 4) {
-      unlockAchievement(state, 'miners_dream');
+  if ((state.tech['piracy'] ?? 0) > 0 && (state.tech['chthonian'] ?? 0) >= 2) {
+    const regions = ['gxy_stargate', 'gxy_gateway', 'gxy_gorddon', 'gxy_alien1', 'gxy_alien2', 'gxy_chthonian'] as const;
+    if (regions.every((region) => galaxyPiracy(state, region) === 1)) {
+      unlockAchievement(state, 'neutralized');
     }
   }
 
-  // shaken: ptrait includes unstable + 触发过 quake
-  if (state.tech['quaked']) {
-    unlockAchievement(state, 'shaken');
-  }
-
-  // trade: 750 贸易路线总值（简化：trade_post >= 50 即触发）
-  const tradePost = (state.city['trade_post'] as { count?: number })?.count ?? 0;
-  if (tradePost >= 50) {
-    unlockAchievement(state, 'trade');
-  }
-
-  // world_domination: 占领或兼并所有 3 个邦国
+  // 这些成就只在完成全球统一后，根据统一方式结算。
   const foreign = state.civic.foreign;
-  if (foreign) {
-    const allOwned =
-      (foreign.gov0.occ || foreign.gov0.anx || foreign.gov0.buy) &&
-      (foreign.gov1.occ || foreign.gov1.anx || foreign.gov1.buy) &&
-      (foreign.gov2.occ || foreign.gov2.anx || foreign.gov2.buy);
-    if (allOwned) {
-      unlockAchievement(state, 'world_domination');
-    }
+  if (foreign && (state.tech['unify'] ?? 0) >= 2) {
+    if (foreign.gov0.occ && foreign.gov1.occ && foreign.gov2.occ) unlockAchievement(state, 'world_domination');
+    if (foreign.gov0.anx && foreign.gov1.anx && foreign.gov2.anx) unlockAchievement(state, 'illuminati');
+    if (foreign.gov0.buy && foreign.gov1.buy && foreign.gov2.buy) unlockAchievement(state, 'syndicate');
+    if ((state.stats.attacks ?? 0) === 0) unlockAchievement(state, 'pacifist');
   }
 
   // anarchist: 政体切换为无政府主义
@@ -334,32 +373,11 @@ export function checkAchievements(state: GameState): void {
     unlockAchievement(state, 'anarchist');
   }
 
-  // illuminati: 拥有 spy >= 10 总数
-  if (foreign) {
-    const totalSpies = (foreign.gov0.spy ?? 0) + (foreign.gov1.spy ?? 0) + (foreign.gov2.spy ?? 0);
-    if (totalSpies >= 10) {
-      unlockAchievement(state, 'illuminati');
-    }
-  }
-
-  // pacifist: 完成游戏（达到 ascend）而无战争（attacks === 0）
-  if ((state.tech['ascension'] ?? 0) >= 1 && (state.stats.attacks ?? 0) === 0) {
-    unlockAchievement(state, 'pacifist');
-  }
-
-  // warmonger: 大量战役 (attacks >= 100)
-  if ((state.stats.attacks ?? 0) >= 100) {
-    unlockAchievement(state, 'warmonger');
-  }
-
-  // mass_starvation: 大量市民饿死 (died >= 1000)
-  if ((state.stats.died ?? 0) >= 1000) {
-    unlockAchievement(state, 'mass_starvation');
-  }
-
-  // paradise: 拥有伊甸 + 高士气
   if ((state.city.morale?.current ?? 0) >= 200) {
     unlockAchievement(state, 'paradise');
+    if ((state.city.morale?.current ?? 0) >= 500) {
+      unlockFeat(state, 'utopia');
+    }
   }
 
   // scrooge: 银行家政府 + 1B Money
@@ -371,59 +389,57 @@ export function checkAchievements(state: GameState): void {
     unlockAchievement(state, 'wheelbarrow');
   }
 
+  const galaxy = (state as unknown as { galaxy?: Record<string, { cur?: number }> }).galaxy;
+  const market = state.city.market as ({ trade?: number } | undefined);
+  if (state.civic.govern?.type === 'federation' && (galaxy?.['trade']?.cur ?? 0) >= 50 && (market?.trade ?? 0) >= 750) {
+    unlockAchievement(state, 'trade');
+  }
+
+  if (Object.keys(state.stats.synth ?? {}).length >= 32) {
+    unlockFeat(state, 'planned_obsolescence', false, 5);
+  }
+
+  if (Number(state.stats.dkills ?? 0) >= 666_000_000) {
+    unlockFeat(state, 'demon_slayer');
+  }
+
   checkBananaChallengeTasks(state);
   checkEndlessHungerChallengeTasks(state);
-
-  // godwin: 完成神化转生（在 resets.ts 中触发，这里冗余检查）
-  if ((state.tech['apotheosis'] ?? 0) >= 1) {
-    unlockAchievement(state, 'godwin');
-  }
 
   // ----- biome / genus / universe 类型成就（在转生 / 选择种族时触发） -----
   // 这些由 resets.ts / evolution.ts 在相应时机调用
 
   // ----- challenge 成就（在挑战完成转生时触发，由 resets.ts 调用） -----
 
-  // ----- 特定 trait 触发的成就 -----
-  if (state.race['cataclysm'] && (state.tech['quaked'] ?? 0) >= 1) {
-    unlockAchievement(state, 'red_dead');
-  }
-
-  if (state.race['warlord']) {
-    unlockAchievement(state, 'corrupted');
-  }
-
-  // ----- 累积 feats（基于成就总数） -----
-  const achieve = state.stats?.['achieve'] as Record<string, { l?: number }> | undefined;
-  if (achieve) {
-    const count = Object.values(achieve).filter((a) => (a.l ?? 0) > 0).length;
-    if (count >= 10) unlockFeat(state, 'novice');
-    if (count >= 25) unlockFeat(state, 'journeyman');
-    if (count >= 50) unlockFeat(state, 'adept');
-    if (count >= 75) unlockFeat(state, 'master');
-    if (count >= 100) unlockFeat(state, 'grandmaster');
-    if (count >= 150) unlockFeat(state, 'god');
-  }
+  checkAchievementHunterFeats(state);
 
   // ----- 节日 feats -----
-  const date = new Date();
-  if (date.getDay() === 5 && date.getDate() === 13) {
-    unlockFeat(state, 'friday');
-  }
-  if (date.getMonth() === 1 && date.getDate() === 14) {
-    unlockFeat(state, 'valentine');
-  }
-  if (date.getMonth() === 2 && date.getDate() === 17) {
-    unlockFeat(state, 'leprechaun');
-  }
-  if (date.getMonth() === 9 && date.getDate() === 31) {
-    unlockFeat(state, 'halloween');
-  }
-  if (date.getMonth() === 11 && date.getDate() === 25) {
-    unlockFeat(state, 'xmas');
-  }
-  if (date.getMonth() === 3 && date.getDate() === 1) {
-    unlockFeat(state, 'fool');
+  if (!state.settings.boring) {
+    const small = state.race.universe === 'micro';
+    const year = date.getFullYear();
+    const easterActive = isAltRaceActive('wolven', date);
+    const halloweenActive = isAltRaceActive('human', date);
+    if (date.getDay() === 5 && date.getDate() === 13 && (state.resource[state.race.species]?.amount ?? 0) >= 1) {
+      if (unlockFeat(state, 'friday', small)) state.resource[state.race.species].amount--;
+    } else if (date.getMonth() === 1 && date.getDate() === 14) {
+      unlockFeat(state, 'valentine', small);
+    } else if (date.getMonth() === 2 && date.getDate() === 17) {
+      unlockFeat(state, 'leprechaun', small);
+    } else if (easterActive) {
+      unlockFeat(state, 'easter', small);
+      if (countEventFinds(state, 'egg', year, ['egg']) >= 12) unlockFeat(state, 'egghunt', small);
+    } else if (halloweenActive) {
+      if (countEventFinds(state, 'trick', year, ['trick', 'treat']) >= 12) unlockFeat(state, 'trickortreat', small);
+      if (date.getMonth() === 9 && date.getDate() === 31) unlockFeat(state, 'halloween', small);
+    } else if (date.getMonth() === 10 && date.getDate() >= 22 && date.getDate() <= 28) {
+      unlockFeat(state, 'thanksgiving', small);
+    } else if (date.getMonth() === 11 && date.getDate() === 25) {
+      unlockFeat(state, 'xmas', small);
+    }
+    const feats = (state.stats['feat'] as Record<string, number> | undefined) ?? {};
+    if (date.getMonth() === 3 && date.getDate() >= 1 && date.getDate() <= 3 && (feats['fool'] ?? 0) > 0) {
+      unlockFeat(state, 'fool', small);
+    }
   }
 }
 
@@ -454,13 +470,13 @@ function updateTaskAchievement(state: GameState, key: 'banana' | 'endless_hunger
   const tasks = ['b1', 'b2', 'b3', 'b4', 'b5'] as ChallengeTaskId[];
   const standardRank = tasks.filter((task) => stats[task]?.l).length;
   if (standardRank > 0) {
-    unlockAchievement(state, key, false, standardRank);
+    unlockAchievement(state, key, false, standardRank, 'l');
   }
 
   if (affix !== 'l') {
     const universeRank = tasks.filter((task) => stats[task]?.[affix]).length;
     if (universeRank > 0) {
-      unlockAchievement(state, key, false, universeRank);
+      unlockAchievement(state, key, false, universeRank, affix);
     }
   }
 }
@@ -527,7 +543,21 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       }
       break;
     case 'ascend':
-      unlockAchievement(state, 'ascended');
+      if (state.race['witch_hunter'] && state.race.universe === 'magic') {
+        unlockAchievement(state, 'soul_sponge');
+      } else {
+        unlockAchievement(state, 'ascended');
+        if ((state.interstellar['thermal_collector']?.count ?? 0) === 0) {
+          unlockFeat(state, 'energetic');
+        }
+      }
+      if ((((state as unknown as { galaxy?: Record<string, { count?: number }> }).galaxy?.['dreadnought']?.count) ?? 0) === 0) {
+        unlockAchievement(state, 'dreaded');
+      }
+      if (state.tech['world_control'] === undefined) {
+        unlockAchievement(state, 'cult_of_personality');
+      }
+      if (hasGoodGeology(state, 4)) unlockAchievement(state, 'miners_dream');
       if (state.race['emfield']) {
         unlockAchievement(state, 'technophobe');
       }
@@ -543,6 +573,10 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       break;
     case 'bioseed':
       unlockAchievement(state, 'seeder');
+      if (state.tech['world_control'] === undefined) {
+        unlockAchievement(state, 'cult_of_personality');
+      }
+      if (hasGoodGeology(state, 4)) unlockAchievement(state, 'miners_dream');
       unlockPlanetAndGenusAchievements(state);
       if (state.race['cataclysm']) {
         unlockAchievement(state, 'iron_will', false, 5);
@@ -632,6 +666,7 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
         unlockFeat(state, 'take_no_advice');
       }
       unlockAchievement(state, 'red_dead');
+      unlockAchievement(state, 'shaken');
       if (state.race['cataclysm']) {
         unlockAchievement(state, 'failed_history');
       }
@@ -663,6 +698,10 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       break;
     case 'apotheosis':
       unlockAchievement(state, 'godwin');
+      if (state.tech['world_control'] === undefined) {
+        unlockAchievement(state, 'cult_of_personality');
+      }
+      if (hasGoodGeology(state, 4)) unlockAchievement(state, 'miners_dream');
       break;
     case 'aiApoc':
       unlockAchievement(state, 'squished', true);
@@ -679,12 +718,15 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       break;
     case 'eden':
       unlockPlanetAndGenusAchievements(state);
-      unlockAchievement(state, 'paradise');
       unlockAchievement(state, 'adam_eve');
       break;
     case 'terraform': {
       unlockPlanetAndGenusAchievements(state);
       unlockAchievement(state, 'lamentis');
+      if (state.tech['world_control'] === undefined) {
+        unlockAchievement(state, 'cult_of_personality');
+      }
+      if (hasGoodGeology(state, 4)) unlockAchievement(state, 'miners_dream');
       break;
     }
   }
@@ -713,20 +755,17 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
 
 function updatePathfinderAchievement(state: GameState): void {
   const pathfinderParts = ['ashanddust', 'exodus', 'obsolete', 'bluepill', 'retired'];
-  const rank = pathfinderParts.filter((id) => getAchievementLevel(state, id) >= 5).length;
-  if (rank > 0) {
-    unlockAchievement(state, 'pathfinder', false, rank);
+  const affix = getUniverseAffix(state.race.universe as string | undefined);
+  for (const target of new Set<keyof AchievementRecord>(['l', affix])) {
+    const rank = pathfinderParts.filter((id) => getAchievementLevel(state, id, target) >= 5).length;
+    if (rank > 0) {
+      unlockAchievement(state, 'pathfinder', false, rank, target);
+    }
   }
 }
 
 function updateBananaAchievement(state: GameState): void {
-  const bananaStats = (state.stats as Record<string, unknown>)['banana'] as Partial<ChallengeTaskStats> | undefined;
-  if (!bananaStats) return;
-
-  const rank = (['b1', 'b2', 'b3', 'b4', 'b5'] as ChallengeTaskId[]).filter((key) => bananaStats[key]?.l).length;
-  if (rank > 0) {
-    unlockAchievement(state, 'banana', false, rank);
-  }
+  updateTaskAchievement(state, 'banana');
 }
 
 function updateWarlordAchievement(state: GameState): void {

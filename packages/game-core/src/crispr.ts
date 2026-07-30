@@ -204,10 +204,9 @@ export function purchaseCrispr(state: GameState, upgradeId: string): boolean {
   return true;
 }
 
-/** 是否解锁 CRISPR（需 dna_repair 或 genetics 科技 + 拥有 Plasmid） */
+/** 是否解锁 CRISPR 编辑面板（legacy: 研究 CRISPR 后 genetics=4）。 */
 export function isCrisprUnlocked(state: GameState): boolean {
-  const plasmid = (state.prestige as Record<string, { count?: number }>)?.['Plasmid']?.count ?? 0;
-  return plasmid > 0 && (state.tech['genetics'] ?? 0) >= 1;
+  return (state.tech['genetics'] ?? 0) >= 4;
 }
 
 /** 获取所有可用升级（已解锁的） */

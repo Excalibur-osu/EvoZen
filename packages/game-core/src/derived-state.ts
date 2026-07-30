@@ -9,9 +9,10 @@ import {
 } from './storage';
 import { getLibraryKnowledgeCapMultiplier } from './traits';
 import { getMaxTradeRoutes } from './trade';
-import { getBankVault, getCasinoVault } from './commerce';
+import { getBankVault, getCasinoVault, getInterstellarExchangeVault } from './commerce';
 import { getAchievementLevel } from './achievements';
 import { hasPlanetTrait, magneticVars, permafrostVars } from './planet-traits';
+import { applyPillarStorageBonus, getPillarProductionMultiplier } from './pillars';
 import {
   getSatelliteKnowledgeCapBonus,
   getSatelliteWardenclyffeMultiplier,
@@ -55,6 +56,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
   const s = state;
   const species = s.race.species;
+  const spatialStorage = (value: number): number => applyPillarStorageBonus(s, value);
 
   // 自动 display：已有数量的资源标记 display=true。
   // 不根据 max 解锁，否则文明开局会把所有默认容量资源直接亮出来。
@@ -98,9 +100,9 @@ export function applyDerivedStateInPlace(state: GameState): void {
   let foodMax = 250;
   const silos = getStructCount('silo');
   const smokehouses = getStructCount('smokehouse');
-  foodMax += farms * 50;
-  foodMax += silos * 500;
-  foodMax += smokehouses * 100;
+  foodMax += farms * spatialStorage(50);
+  foodMax += silos * spatialStorage(500);
+  foodMax += smokehouses * spatialStorage(100);
   s.resource['Food'].max = foodMax;
 
   const sheds = getStructCount('shed');
@@ -109,61 +111,61 @@ export function applyDerivedStateInPlace(state: GameState): void {
   let lumberMax = 200;
   const lumberYards = getStructCount('lumber_yard');
   const sawmills = getStructCount('sawmill');
-  lumberMax += lumberYards * 100;
-  lumberMax += sawmills * 200;
-  lumberMax += Math.round(sheds * (SHED_BASE_VALUES['Lumber'] ?? 0) * storageMult);
+  lumberMax += lumberYards * spatialStorage(100);
+  lumberMax += sawmills * spatialStorage(200);
+  lumberMax += sheds * spatialStorage((SHED_BASE_VALUES['Lumber'] ?? 0) * storageMult);
   lumberMax += getStorageBonus(s, 'Lumber');
   s.resource['Lumber'].max = lumberMax;
 
   let stoneMax = 200;
   const quarries = getStructCount('rock_quarry');
-  stoneMax += quarries * 100;
-  stoneMax += Math.round(sheds * (SHED_BASE_VALUES['Stone'] ?? 0) * storageMult);
+  stoneMax += quarries * spatialStorage(100);
+  stoneMax += sheds * spatialStorage((SHED_BASE_VALUES['Stone'] ?? 0) * storageMult);
   stoneMax += getStorageBonus(s, 'Stone');
   s.resource['Stone'].max = stoneMax;
 
   let copperMax = 100;
-  copperMax += Math.round(sheds * (SHED_BASE_VALUES['Copper'] ?? 0) * storageMult);
+  copperMax += sheds * spatialStorage((SHED_BASE_VALUES['Copper'] ?? 0) * storageMult);
   copperMax += getStorageBonus(s, 'Copper');
   s.resource['Copper'].max = copperMax;
 
   let ironMax = 100;
-  ironMax += Math.round(sheds * (SHED_BASE_VALUES['Iron'] ?? 0) * storageMult);
+  ironMax += sheds * spatialStorage((SHED_BASE_VALUES['Iron'] ?? 0) * storageMult);
   ironMax += getStorageBonus(s, 'Iron');
   s.resource['Iron'].max = ironMax;
 
   let cementMax = 100;
-  cementMax += Math.round(sheds * (SHED_BASE_VALUES['Cement'] ?? 0) * storageMult);
+  cementMax += sheds * spatialStorage((SHED_BASE_VALUES['Cement'] ?? 0) * storageMult);
   cementMax += getStorageBonus(s, 'Cement');
   s.resource['Cement'].max = cementMax;
 
   let coalMax = 50;
-  coalMax += Math.round(sheds * (SHED_BASE_VALUES['Coal'] ?? 0) * storageMult);
+  coalMax += sheds * spatialStorage((SHED_BASE_VALUES['Coal'] ?? 0) * storageMult);
   coalMax += getStorageBonus(s, 'Coal');
   s.resource['Coal'].max = coalMax;
 
   let fursMax = 100;
-  fursMax += Math.round(sheds * (SHED_BASE_VALUES['Furs'] ?? 0) * storageMult);
+  fursMax += sheds * spatialStorage((SHED_BASE_VALUES['Furs'] ?? 0) * storageMult);
   fursMax += getStorageBonus(s, 'Furs');
   s.resource['Furs'].max = fursMax;
 
   let steelMax = 50;
   if ((s.tech['storage'] ?? 0) >= 3) {
-    steelMax += Math.round(sheds * (SHED_BASE_VALUES['Steel'] ?? 0) * storageMult);
+    steelMax += sheds * spatialStorage((SHED_BASE_VALUES['Steel'] ?? 0) * storageMult);
   }
   steelMax += getStorageBonus(s, 'Steel');
   s.resource['Steel'].max = steelMax;
 
   let aluminiumMax = 50;
-  aluminiumMax += Math.round(sheds * (SHED_BASE_VALUES['Aluminium'] ?? 0) * storageMult);
+  aluminiumMax += sheds * spatialStorage((SHED_BASE_VALUES['Aluminium'] ?? 0) * storageMult);
   aluminiumMax += getStorageBonus(s, 'Aluminium');
   s.resource['Aluminium'].max = aluminiumMax;
 
   const oilWells = getStructCount('oil_well');
   const oilDepots = getStructCount('oil_depot');
   let oilMax = 0;
-  oilMax += oilWells * 500;
-  oilMax += oilDepots * 1000;
+  oilMax += oilWells * spatialStorage(500);
+  oilMax += oilDepots * spatialStorage(1000);
   // 对标 legacy space.js L159：推进剂储备站 Oil.max +1250/座
   oilMax += getPropellantDepotOilCapBonus(s);
   s.resource['Oil'].max = oilMax;
@@ -176,7 +178,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
   // derived-state 会被重复调用，必须直接赋值而非 +=。
   if (s.resource['Helium_3']) {
     const heliumMineBonus = getHeliumMineHeliumCapBonus(s);
-    const oilDepotHeliumBonus = s.resource['Helium_3'].display ? oilDepots * 400 : 0;
+    const oilDepotHeliumBonus = s.resource['Helium_3'].display ? oilDepots * spatialStorage(400) : 0;
     s.resource['Helium_3'].max = oilDepotHeliumBonus + getPropellantDepotHeliumCapBonus(s) + heliumMineBonus;
     // 建成首座 helium_mine 后解锁 Helium_3（legacy space.js L392）
     if (heliumMineBonus > 0) {
@@ -187,7 +189,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
   // 对标 legacy actions.js L3118-3135：
   //   Uranium.max = baseline 250 + oil_depot * 250（需 uranium >= 2）
   if (s.resource['Uranium']) {
-    s.resource['Uranium'].max = 250 + ((s.tech['uranium'] ?? 0) >= 2 ? oilDepots * 250 : 0);
+    s.resource['Uranium'].max = 250 + ((s.tech['uranium'] ?? 0) >= 2 ? oilDepots * spatialStorage(250) : 0);
   }
 
   // 对标 legacy space.js L262：moon_base 每座 Iridium.max +500（baseline 0）
@@ -217,12 +219,12 @@ export function applyDerivedStateInPlace(state: GameState): void {
 
   // 对标 legacy main.js L9746-9749：elerium_contain 容量上限
   if (s.resource['Elerium']) {
-    s.resource['Elerium'].max += getEleriumContainCapBonus(s);
+    s.resource['Elerium'].max = getEleriumContainCapBonus(s);
   }
 
   let titaniumMax = 50;
   if ((s.tech['storage'] ?? 0) >= 4) {
-    titaniumMax += Math.round(sheds * (SHED_BASE_VALUES['Titanium'] ?? 0) * storageMult);
+    titaniumMax += sheds * spatialStorage((SHED_BASE_VALUES['Titanium'] ?? 0) * storageMult);
   }
   titaniumMax += getStorageBonus(s, 'Titanium');
   s.resource['Titanium'].max = titaniumMax;
@@ -242,7 +244,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
     for (const [resId, perBuilding] of Object.entries(GARAGE_STORAGE_PER_BUILDING)) {
       const res = s.resource[resId];
       if (!res) continue;
-      res.max += garageCount * perBuilding;
+      res.max += garageCount * spatialStorage(perBuilding);
     }
   }
 
@@ -293,8 +295,13 @@ export function applyDerivedStateInPlace(state: GameState): void {
   let moneyMax = 1000;
   const banks = getStructCount('bank');
   const casinos = getStructCount('casino');
-  moneyMax += banks * getBankVault(s);
-  moneyMax += casinos * getCasinoVault(s);
+  moneyMax += banks * spatialStorage(getBankVault(s));
+  moneyMax += casinos * spatialStorage(getCasinoVault(s));
+  const exchange = s.interstellar['exchange'] as
+    | { count?: number; support_on?: number }
+    | undefined;
+  const activeExchanges = Math.min(exchange?.count ?? 0, exchange?.support_on ?? 0);
+  moneyMax += spatialStorage(getInterstellarExchangeVault(s, activeExchanges));
   s.resource['Money'].max = moneyMax;
 
   setJobMax('farmer', -1);
@@ -538,39 +545,18 @@ export function applyDerivedStateInPlace(state: GameState): void {
     s.settings.showResources = true;
   }
 
-  // ============================================================
-  // ARPA 完成效果（持续加成）
-  // ============================================================
-
-  const arpa = s.arpa as Record<string, { rank?: number } | unknown> | undefined;
-
-  // stock_exchange: 银行容量 +10% / rank
-  if (arpa) {
-    const seRank = ((arpa['stock_exchange'] as { rank?: number } | undefined)?.rank) ?? 0;
-    if (seRank > 0 && s.resource['Money']) {
-      s.resource['Money'].max = Math.floor(s.resource['Money'].max * (1 + seRank * 0.1));
-    }
-  }
-
   // tp_depot: +5 贸易路线 / rank（在 trade.ts getMaxTradeRoutes 中应用）— 此处仅启用 settings
-  // railway: +2 贸易路线 / rank — 同上
+  // railway 路线按当前挑战分支与装运站/GPS 数量计算 — 同上
   // 这两项在 trade 模块查询时实时读取 arpa.rank，无需 derived-state 修改
 
   // roid_eject: 累积质量影响 Dark Energy 产出（小行星弹射器，需要 blackhole 阶段）
   // 实际产出在 stellar_engine / interstellar 中处理（接入点已存在）
 
   // ============================================================
-  // Ancient Pillar 调谐加成（Harmony 调谐过的柱子持续提供全球加成）
+  // Ancient Pillar 跨种族加成
   // ============================================================
 
-  const portal = s.portal as Record<string, Record<string, number>> | undefined;
-  const tunedPillars = portal?.['ancient_pillars']?.['tuned'] ?? 0;
-  if (tunedPillars > 0) {
-    // 每柱 +5% 全球产出，存在 race._pillar_bonus 供 tick.ts 读取
-    (s.race as Record<string, unknown>)['_pillar_bonus'] = 1 + 0.05 * tunedPillars;
-  } else {
-    (s.race as Record<string, unknown>)['_pillar_bonus'] = 1;
-  }
+  (s.race as Record<string, unknown>)['_pillar_bonus'] = getPillarProductionMultiplier(s);
 
   // ============================================================
   // 自动 display：基于科技/建筑解锁

@@ -536,6 +536,8 @@ export interface GameState {
   portal: Record<string, StructureState>;
   eden: Record<string, StructureState>;
   tauceti: Record<string, StructureState>;
+  /** 已完成的种族石柱及其挑战等级。 */
+  pillars: Record<string, number>;
   civic: CivicState;
   race: RaceState;
   genes: Record<string, number>;

@@ -141,7 +141,7 @@ const selectedCustomConfig = computed(() => {
   return customRaceState.value?.[key] as { traits?: string[] } | undefined
 })
 const needsImitationTarget = computed(() => {
-  if (synthImitationTargets.value.length === 0) return false
+  if (Object.keys(game.state.stats.synth ?? {}).length <= 1) return false
   if (selectedFinalSpecies.value === 'synth') return true
   if (selectedFinalSpecies.value === 'custom' || selectedFinalSpecies.value === 'hybrid') {
     return Boolean(selectedCustomConfig.value?.traits?.includes('imitation'))

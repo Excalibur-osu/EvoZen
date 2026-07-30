@@ -63,6 +63,10 @@ export interface EvoStep {
   grants?: Record<string, number>;
   /** 额外显示/执行条件（用于 biome、OR 前置等分支） */
   condition?: (state: GameState) => boolean;
+  /** Grandmaster 属类直选模式下是否可直接执行 */
+  genusSelect?: boolean;
+  /** Grandmaster 属类直选模式下使用的原版标题 */
+  genusSelectName?: string;
   /** 完成步骤后的额外状态写入 */
   apply?: (state: GameState) => void;
   effectText: string;
@@ -247,7 +251,15 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 175,
     reqEvo: 2,
     grantEvo: 3,
+    genusSelect: true,
+    genusSelectName: '植物',
     grants: { evo_plant: 1 },
+    apply: (state) => {
+      if (state.evolution['gselect']) {
+        state.tech['evo'] = 7;
+        state.tech['evo_plant'] = 2;
+      }
+    },
     effectText: '选择植物路线，后续可进化为植物属类。',
   },
 
@@ -258,7 +270,15 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 175,
     reqEvo: 2,
     grantEvo: 3,
+    genusSelect: true,
+    genusSelectName: '真菌',
     grants: { evo_fungi: 1 },
+    apply: (state) => {
+      if (state.evolution['gselect']) {
+        state.tech['evo'] = 7;
+        state.tech['evo_fungi'] = 2;
+      }
+    },
     effectText: '选择真菌路线，后续可进化为真菌属类。',
   },
 
@@ -269,6 +289,8 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 200,
     reqEvo: 2,
     grantEvo: 7,
+    genusSelect: true,
+    genusSelectName: '机械生物',
     condition: (state) => getAchievementLevel(state, 'obsolete') >= 5,
     grants: { evo_synthetic: 2 },
     effectText: '完成合成体进化，解锁合成体种族选择。',
@@ -338,6 +360,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     condition: (state) => techLevel(state, 'evo_plant') >= 1 || techLevel(state, 'evo_fungi') >= 1,
     apply: (state) => {
       if (techLevel(state, 'evo_plant') >= 1) state.tech['evo_plant'] = 2;
@@ -353,6 +376,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_insectoid: 1 },
     grants: { evo_insectoid: 2 },
     effectText: '完成昆虫类进化，解锁昆虫类种族选择。',
@@ -388,6 +412,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_humanoid: 1 },
     grants: { evo_humanoid: 2 },
     effectText: '解锁种族选择，即将踏上文明之路！',
@@ -400,6 +425,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_giant: 1 },
     grants: { evo_giant: 2 },
     effectText: '完成巨型属类进化，解锁巨型种族选择。',
@@ -412,6 +438,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_small: 1 },
     grants: { evo_small: 2 },
     effectText: '完成小型属类进化，解锁小型种族选择。',
@@ -436,8 +463,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_angelic: 1 },
-    condition: (state) => state.city.biome === 'eden',
+    condition: (state) => state.city.biome === 'eden' || bloodLevel(state, 'unbound') >= 3,
     grants: { evo_angelic: 2 },
     effectText: '完成天使属类进化，解锁天使种族选择。',
   },
@@ -449,8 +477,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_demonic: 1 },
-    condition: (state) => state.city.biome === 'hellscape',
+    condition: (state) => state.city.biome === 'hellscape' || bloodLevel(state, 'unbound') >= 3,
     grants: { evo_demonic: 2 },
     effectText: '完成恶魔属类进化，解锁恶魔种族选择。',
   },
@@ -462,6 +491,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_eldritch: 1 },
     condition: (state) => getAchievementLevel(state, 'nightmare', 'mg') > 0,
     grants: { evo_eldritch: 2 },
@@ -487,6 +517,8 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
+    genusSelectName: '飞行生物',
     reqs: { evo_eggshell: 2 },
     grants: { evo_avian: 2 },
     effectText: '完成鸟类进化，解锁鸟类种族选择。',
@@ -499,6 +531,8 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 6,
     grantEvo: 7,
+    genusSelect: true,
+    genusSelectName: '爬行生物',
     reqs: { evo_eggshell: 2 },
     grants: { evo_reptilian: 2 },
     effectText: '完成爬行类进化，解锁爬行类种族选择。',
@@ -511,8 +545,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_aquatic: 1 },
-    condition: (state) => ['oceanic', 'swamp'].includes(state.city.biome),
+    condition: (state) => ['oceanic', 'swamp'].includes(state.city.biome) || bloodLevel(state, 'unbound') > 0,
     grants: { evo_aquatic: 2 },
     effectText: '完成水生进化，解锁水生种族选择。',
   },
@@ -524,8 +559,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_fey: 1 },
-    condition: (state) => ['forest', 'swamp', 'taiga'].includes(state.city.biome),
+    condition: (state) => ['forest', 'swamp', 'taiga'].includes(state.city.biome) || bloodLevel(state, 'unbound') > 0,
     grants: { evo_fey: 2 },
     effectText: '完成精灵族进化，解锁精灵族种族选择。',
   },
@@ -537,8 +573,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_heat: 1 },
-    condition: (state) => ['volcanic', 'ashland'].includes(state.city.biome),
+    condition: (state) => ['volcanic', 'ashland'].includes(state.city.biome) || bloodLevel(state, 'unbound') > 0,
     grants: { evo_heat: 2 },
     effectText: '完成热寒族进化，解锁耐热种族选择。',
   },
@@ -550,8 +587,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_polar: 1 },
-    condition: (state) => ['tundra', 'taiga'].includes(state.city.biome),
+    condition: (state) => ['tundra', 'taiga'].includes(state.city.biome) || bloodLevel(state, 'unbound') > 0,
     grants: { evo_polar: 2 },
     effectText: '完成极地族进化，解锁极地种族选择。',
   },
@@ -563,8 +601,9 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 260,
     reqEvo: 5,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_sand: 1 },
-    condition: (state) => ['desert', 'ashland'].includes(state.city.biome),
+    condition: (state) => ['desert', 'ashland'].includes(state.city.biome) || bloodLevel(state, 'unbound') > 0,
     grants: { evo_sand: 2 },
     effectText: '完成沙漠族进化，解锁沙漠种族选择。',
   },
@@ -576,6 +615,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 255,
     reqEvo: 7,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_animalism: 2 },
     grants: { evo_carnivore: 2, evo_animalism: 3 },
     effectText: '完成食肉动物进化，解锁食肉种族选择。',
@@ -588,6 +628,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 255,
     reqEvo: 7,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_animalism: 2 },
     grants: { evo_herbivore: 2, evo_animalism: 3 },
     effectText: '完成食草动物进化，解锁食草种族选择。',
@@ -600,6 +641,7 @@ export const EVO_STEPS: EvoStep[] = [
     dnaCost: 255,
     reqEvo: 7,
     grantEvo: 7,
+    genusSelect: true,
     reqs: { evo_animalism: 2 },
     grants: { evo_omnivore: 2, evo_animalism: 3 },
     effectText: '完成杂食动物进化，解锁杂食种族选择。',
@@ -645,6 +687,15 @@ function techLevel(state: GameState, id: string): number {
   return (state.tech[id] as number | undefined) ?? 0;
 }
 
+function bloodLevel(state: GameState, id: string): number {
+  return state.blood[id] ?? 0;
+}
+
+function featLevel(state: GameState, id: string): number {
+  const feat = (state.stats['feat'] as Record<string, number> | undefined) ?? {};
+  return feat[id] ?? 0;
+}
+
 // ============================================================
 // 进化 Tick（在 species === 'protoplasm' 时调用）
 // 对标 legacy/src/main.js L1216-1282
@@ -662,6 +713,58 @@ export function evolutionTick(state: GameState, timeMul: number): boolean {
   const rna = state.resource['RNA'];
   const dna = state.resource['DNA'];
   if (!rna) return false;
+
+  // Master / Grandmaster perks preload evolution progress at the start of a new run.
+  // legacy/src/main.js L773-816
+  const masterRank = Math.min(
+    featLevel(state, 'master'),
+    getAchievementLevel(state, 'ascended')
+  );
+  if (masterRank > 0 && !state.evolution['mloaded']) {
+    for (const id of ['membrane', 'organelles', 'nucleus', 'eukaryotic_cell', 'mitochondria']) {
+      if (!evoHas(state, id)) evoSetCount(state, id, 0);
+    }
+    state.evolution['dna'] = 1;
+    if (dna) dna.display = true;
+    evoSetCount(state, 'membrane', masterRank * 2);
+    evoSetCount(state, 'eukaryotic_cell', masterRank);
+    evoSetCount(state, 'mitochondria', masterRank);
+    evoSetCount(state, 'organelles', masterRank * 2);
+    evoSetCount(state, 'nucleus', masterRank * 2);
+    rna.max = Math.max(rna.max, 100 + masterRank * 2 * (masterRank * 5 + 5));
+    if (dna) dna.max = Math.max(dna.max, 100 + masterRank * (masterRank * 10 + 10));
+    state.tech['evo'] = 2;
+    state.evolution['mloaded'] = 1;
+    newUnlock = true;
+  }
+
+  const grandmasterRank = Math.min(
+    featLevel(state, 'grandmaster'),
+    getAchievementLevel(state, 'corrupted')
+  );
+  if (grandmasterRank >= 5 && !state.evolution['gmloaded']) {
+    state.tech['evo'] = 6;
+    state.evolution['gselect'] = true;
+    state.evolution['gmloaded'] = 1;
+    state.evolution['final'] = 80;
+    Object.assign(state.tech, {
+      evo_humanoid: 1,
+      evo_giant: 1,
+      evo_small: 1,
+      evo_animalism: 2,
+      evo_demonic: 1,
+      evo_angelic: 1,
+      evo_insectoid: 1,
+      evo_eggshell: 2,
+      evo_eldritch: 1,
+      evo_sand: 1,
+      evo_polar: 1,
+      evo_heat: 1,
+      evo_fey: 1,
+      evo_aquatic: 1,
+    });
+    newUnlock = true;
+  }
 
   // ----------------------------------------------------------
   // 1. nucleus 自动将 RNA → DNA
@@ -864,8 +967,8 @@ export function advanceEvoStep(
   const finalMap: Record<string, number> = {
     sexual_reproduction: 20,
     phagocytosis: 40,
-    chloroplasts: 40,
-    chitin: 40,
+    chloroplasts: newState.evolution['gselect'] ? 100 : 40,
+    chitin: newState.evolution['gselect'] ? 100 : 40,
     exterminate: 100,
     multicellular: 60,
     bilateral_symmetry: 80,
@@ -1005,12 +1108,8 @@ function resolveSentienceMainType(state: GameState, speciesId: string): GenusId 
 }
 
 function requiresImitationTarget(state: GameState, speciesId: string): boolean {
-  if (speciesId === 'synth') return getSynthImitationTargets(state).length > 0;
-  if (speciesId === 'custom' || speciesId === 'hybrid') {
-    const config = loadCustomRace(state, speciesId === 'hybrid');
-    return Boolean(config?.traits.includes('imitation') && getSynthImitationTargets(state).length > 0);
-  }
-  return false;
+  return speciesUsesImitation(state, speciesId)
+    && Object.keys(state.stats.synth ?? {}).length > 1;
 }
 
 function resolveImitationTarget(
@@ -1018,9 +1117,20 @@ function resolveImitationTarget(
   speciesId: string,
   target?: string
 ): RaceId | undefined {
-  if (!requiresImitationTarget(state, speciesId)) return undefined;
+  if (!speciesUsesImitation(state, speciesId)) return undefined;
   const targets = getSynthImitationTargets(state);
-  return targets.find((race) => race.id === target)?.id;
+  const selected = targets.find((race) => race.id === target)?.id;
+  if (selected) return selected;
+  if (requiresImitationTarget(state, speciesId)) return undefined;
+
+  const savedTarget = typeof state.race['srace'] === 'string' ? state.race['srace'] : undefined;
+  return targets.find((race) => race.id === savedTarget)?.id ?? targets[0]?.id;
+}
+
+function speciesUsesImitation(state: GameState, speciesId: string): boolean {
+  if (speciesId === 'synth') return true;
+  if (speciesId !== 'custom' && speciesId !== 'hybrid') return false;
+  return Boolean(loadCustomRace(state, speciesId === 'hybrid')?.traits.includes('imitation'));
 }
 
 // ============================================================
@@ -1038,7 +1148,12 @@ export function getAvailableUpgrades(state: GameState): EvoUpgrade[] {
 
 /** 获取当前可触发的进化步骤（reqEvo 匹配） */
 export function getAvailableSteps(state: GameState): EvoStep[] {
-  return EVO_STEPS.filter((s) => isEvoStepAvailable(state, s));
+  const genusSelect = Boolean(state.evolution['gselect']);
+  return EVO_STEPS
+    .filter((s) => isEvoStepAvailable(state, s))
+    .map((step) => genusSelect && step.genusSelectName
+      ? { ...step, name: step.genusSelectName }
+      : step);
 }
 
 /** 获取当前可选的种族（evo=7 且 final=100 后） */
@@ -1091,7 +1206,10 @@ export function getUpgradeCost(
 }
 
 function isEvoStepAvailable(state: GameState, step: EvoStep): boolean {
-  if (techLevel(state, 'evo') !== step.reqEvo) return false;
+  const final = typeof state.evolution['final'] === 'number' ? state.evolution['final'] : 0;
+  if (final >= 100) return false;
+  const genusSelect = Boolean(state.evolution['gselect']);
+  if (genusSelect ? !step.genusSelect : techLevel(state, 'evo') !== step.reqEvo) return false;
   if (step.reqs) {
     for (const [techId, lvl] of Object.entries(step.reqs)) {
       if (techLevel(state, techId) < lvl) return false;
@@ -1111,7 +1229,7 @@ function getEvoRaceDef(state: GameState, speciesId: string): EvoRace | null {
 function chooseRandomSentienceSpecies(state: GameState): string | null {
   const genus = getCompletedGenus(state);
   if (!genus) return null;
-  const candidates = getRandomSentienceCandidates(state, genus);
+  const candidates = getRandomSentienceCandidates(genus);
   if (candidates.length === 0) return null;
 
   const freshCandidates = candidates.filter((race) => getAchievementLevel(state, `extinct_${race.id}`) <= 0);
@@ -1119,14 +1237,10 @@ function chooseRandomSentienceSpecies(state: GameState): string | null {
   return pool[Math.floor(Math.random() * pool.length)]?.id ?? null;
 }
 
-function getRandomSentienceCandidates(state: GameState, genus: GenusId): RaceDefinition[] {
+function getRandomSentienceCandidates(genus: GenusId): RaceDefinition[] {
   return EVO_RACE_IDS
     .map((raceId) => RACES[raceId])
-    .filter((race) => race.type === genus && (race.basic(state) || isRandomOnlyGenusRace(race)));
-}
-
-function isRandomOnlyGenusRace(race: RaceDefinition): boolean {
-  return ['synthetic', 'eldritch'].includes(race.type) && !['custom', 'hybrid'].includes(race.id);
+    .filter((race) => race.type === genus);
 }
 
 function getCompletedGenus(state: GameState): GenusId | null {
