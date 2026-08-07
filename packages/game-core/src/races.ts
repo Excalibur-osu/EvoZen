@@ -13,7 +13,7 @@
  */
 
 import type { GameState } from '@evozen/shared-types';
-import { getAchievementLevel } from './achievements';
+import { getAchievementLevel, getChallengeLevel } from './achievements';
 import { TRAITS } from './trait-data';
 
 // ============================================================
@@ -376,6 +376,15 @@ export function applyPathfinderGenusTraitRanks(state: GameState, mainType?: Genu
   }
 }
 
+/** 原版反物质文明在当前挑战等级尚未完成 annihilation 时武装物质复制器。 */
+export function applyAnnihilationRunMarker(state: GameState): boolean {
+  const feat = (state.stats['feat'] as Record<string, number> | undefined)?.['annihilation'] ?? 0;
+  const armed = state.race.universe === 'antimatter' && feat < getChallengeLevel(state);
+  if (armed) state.race['amexplode'] = 1;
+  else delete state.race['amexplode'];
+  return armed;
+}
+
 /** 判断某 trait 是否为负面特质 */
 export const NEGATIVE_ROLL_TRAITS = [
   'angry', 'arrogant', 'atrophy', 'diverse', 'dumb', 'fragrant', 'frail', 'freespirit',
@@ -456,7 +465,7 @@ export function downgradeTraitRank(rank: number): number {
   }
 }
 
-function upgradeTraitRank(rank: number): number {
+export function upgradeTraitRank(rank: number): number {
   switch (rank) {
     case 0.1:
       return 0.25;

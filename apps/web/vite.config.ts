@@ -4,7 +4,7 @@ import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
 // 从 root package.json 读取版本号，通过 define 注入为全局常量 __APP_VERSION__
-const rootPkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8'))
+const rootPkg = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../package.json'), 'utf-8'))
 
 // https://vite.dev/config/
 export default defineConfig({

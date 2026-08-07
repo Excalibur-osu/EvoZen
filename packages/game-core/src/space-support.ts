@@ -2,7 +2,7 @@
  * 太空支援池解算（Phase 1C MVP: spc_moon / spc_red）
  *
  * 对标 legacy/src/main.js L2256-2381 的 "Moon Bases, Spaceports, Etc" 循环块，
- * 当前实装 `moon` / `red` 两个池。其他池（belt/alpha/...）留给后续 sprint。
+ * 当前实装 `moon` / `red` / `belt` / `swarm` 四个池。
  *
  * 支援池的语义：
  *   1. 某一池有一个 "区域供给者"（legacy: info.support 指向的建筑；此处为 moon_base）。
@@ -180,7 +180,7 @@ function resolvePool(
 
 /**
  * 一次性解算所有支援池。tick.ts 在电力分配之后调用。
- * 当前处理 `moon` / `red` 两个池。
+ * 当前处理 `moon` / `red` / `belt` / `swarm` 四个池。
  *
  * @param state - 当前游戏状态（主供给者的 s_max / support 会被直接回写）
  * @param powerOn - powerTick 产出的 activeConsumers（太空建筑仅当 powerCost>0 时读这里）

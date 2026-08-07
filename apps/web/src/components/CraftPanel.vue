@@ -24,6 +24,7 @@ const craftNames: Record<string, string> = {
   Wrought_Iron: '锻铁',
   Sheet_Metal: '金属板',
   Mythril: '秘银',
+  Thermite: '铝热剂',
 }
 
 /** 合成品描述 */
@@ -33,6 +34,7 @@ const craftDesc: Record<string, string> = {
   Wrought_Iron: '由铁锭锻造而成的高强度材料。',
   Sheet_Metal: '由铝材压制成板，用于更先进的工业与太空建材。',
   Mythril: '以铱和合金锻造的稀有材料，是火星前线扩张的关键资源。',
+  Thermite: '夏至篝火使用的高温燃烧剂。',
 }
 
 const isUnlocked = computed(() => (game.state.tech['foundry'] ?? 0) >= 1)

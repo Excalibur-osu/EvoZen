@@ -23,19 +23,25 @@ const power = computed(() => game.state.city.power ?? {
   activeConsumers: {},
 })
 const hasPower = computed(() => power.value.generated > 0 || power.value.consumed > 0)
-const locationLabel: Record<'city' | 'space' | 'interstellar', string> = {
+const locationLabel: Record<'city' | 'space' | 'interstellar' | 'eden', string> = {
   city: '城市',
   space: '太空',
   interstellar: '星际',
+  eden: '伊甸园',
+}
+
+function structureBucket(location: PowerGeneratorDef['location']) {
+  if (location === 'space') return game.state.space
+  if (location === 'interstellar') return game.state.interstellar
+  if (location === 'eden') return game.state.eden
+  return game.state.city
 }
 
 /** 发电站列表 */
 const generators = computed(() => {
   return listPowerGenerators(game.state)
     .map((def) => {
-      const bucket = def.location === 'space'
-        ? game.state.space
-        : (def.location === 'interstellar' ? game.state.interstellar : game.state.city)
+      const bucket = structureBucket(def.location)
       const struct = bucket[def.id] as { count?: number; on?: number } | undefined
       const structureCount = struct?.count ?? 0
       const count = def.aggregate ? Number(structureCount > 0) : structureCount
@@ -56,9 +62,7 @@ const generators = computed(() => {
 const consumers = computed(() => {
   return listPowerConsumers(game.state)
     .map((def) => {
-      const bucket = def.location === 'space'
-        ? game.state.space
-        : (def.location === 'interstellar' ? game.state.interstellar : game.state.city)
+      const bucket = structureBucket(def.location)
       const struct = bucket[def.id] as { count?: number; on?: number } | undefined
       const count = struct?.count ?? 0
       const configuredOn = struct?.on ?? count
@@ -76,9 +80,7 @@ const consumers = computed(() => {
 
 
 function adjustGeneratorOn(generator: PowerGeneratorDef, delta: number) {
-  const bucket = generator.location === 'space'
-    ? game.state.space
-    : (generator.location === 'interstellar' ? game.state.interstellar : game.state.city)
+  const bucket = structureBucket(generator.location)
   const struct = bucket[generator.id] as { count: number; on?: number } | undefined
   if (!struct) return
   const current = struct.on ?? struct.count

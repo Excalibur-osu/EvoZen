@@ -31,12 +31,20 @@ const totalOutputsAssigned = computed(() => {
   return (smelterState.value.Iron ?? 0) + (smelterState.value.Steel ?? 0) + (smelterState.value.Iridium ?? 0)
 })
 
-const fuels: Array<{ id: SmelterFuelId; name: string }> = [
-  { id: 'Wood', name: '木材' },
+const woodFuelName = computed(() => {
+  const race = game.state.race
+  if ((race['kindling_kindred'] || race['smoldering']) && !race['evil']) return '煤炭（替代木材）'
+  if (!race['evil']) return '木材'
+  if (race['soul_eater'] && race.species !== 'wendigo' && !race['artificial']) return '食物'
+  return '毛皮'
+})
+
+const fuels = computed<Array<{ id: SmelterFuelId; name: string }>>(() => [
+  { id: 'Wood', name: woodFuelName.value },
   { id: 'Coal', name: '煤炭' },
-  { id: 'Oil', name: '石油' },
+  { id: 'Oil', name: game.state.race['forge'] ? '石油（免费）' : '石油' },
   // { id: 'Inferno', name: '地狱风暴' },
-]
+])
 
 const outputs: Array<{ id: SmelterOutputId; name: string; reqTech: number }> = [
   { id: 'Iron', name: '铁', reqTech: 0 },

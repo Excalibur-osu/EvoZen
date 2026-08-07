@@ -14,7 +14,7 @@ import { getAchievementLevel, getUniverseAffix } from './achievements';
 import { checkResetAchievements, markChallengeTask } from './achievement-triggers';
 import { applyUniverse, UNIVERSES, type UniverseType } from './bigbang';
 import { createNewGame } from './state';
-import { applyCustomRace, loadCustomRace } from './custom-race';
+import { applyCustomRace, loadCustomRace, validateCustomRace } from './custom-race';
 import { applyRaceTraits, getRaceMainType, isGenusId, RACES, type GenusId, type RaceId } from './races';
 import { applySpecialRaceTraits } from './special-races';
 
@@ -830,7 +830,7 @@ export function resetApotheosis(state: GameState): GameState {
     universe: newState.race.universe,
     seeded: false,
     seed: Math.floor(Math.random() * 10000),
-    ascended: newState.race['ascended'] ?? false,
+    ascended: true,
   };
   if (corruption > 0) newState.race['corruption'] = corruption;
   if (srace) newState.race['srace'] = srace;
@@ -911,7 +911,12 @@ export function canReset(state: GameState, type: ResetType): boolean {
         (state.race['witch_hunter'] && state.race.universe === 'magic' && ((state.tech['forbidden'] ?? 0) as number) >= 5)
       );
     case 'apotheosis':
-      return Boolean(state.tech['apotheosis'] && (state.tech['apotheosis'] as number) >= 1);
+      {
+        const hybrid = loadCustomRace(state, true);
+        const apotheosis = state.eden['apotheosis'] as { count?: number } | undefined;
+        return (state.tech['palace'] ?? 0) >= 7 && apotheosis?.count === 0 &&
+          Boolean(hybrid && validateCustomRace(hybrid, state).valid);
+      }
     case 'terraform':
       return Boolean(state.tech['terraform'] && (state.tech['terraform'] as number) >= 5);
     case 'aiApoc':

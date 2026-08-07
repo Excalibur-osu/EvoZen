@@ -654,6 +654,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     // space_station 是 spc_belt 的支援池提供者（support: 'belt'）。
     // 但它自身也是消费者（电力 + 燃料 + 食物），与 moon_base/spaceport 类似。
     support: { pool: 'belt', amount: 3 },
+    supportFuel: { resource: 'Helium_3', amountPerTick: 2.5 },
   },
   {
     id: 'elerium_ship',

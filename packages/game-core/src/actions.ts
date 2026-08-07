@@ -29,9 +29,12 @@ import {
   getGalaxyBuildCost,
 } from './galaxy';
 import { markChallengeTask } from './achievement-triggers';
-import { unlockAchievement } from './achievements';
+import { unlockAchievement, unlockFeat } from './achievements';
+import { initializeWishStats } from './wishes';
 import { getRaceMainType } from './races';
 import { getGeneSequenceState } from './genetics';
+import { applyFanaticism } from './fanaticism';
+import { ensureEdenicStructure } from './edenic';
 import {
   addInflationPoints,
   applyInflationToCosts,
@@ -605,6 +608,9 @@ export function researchTech(state: GameState, techId: string): GameState | null
   // 太空入口骨架：研究关键科技时预注册对应的太空结构槽位，
   // 后续补建筑/产线时无需再迁移旧存档。
   switch (techId) {
+    case 'minor_wish':
+      initializeWishStats(next);
+      break;
     case 'genetics':
       getGeneSequenceState(next);
       break;
@@ -615,6 +621,25 @@ export function researchTech(state: GameState, techId: string): GameState | null
     }
     case 'de_novo_sequencing':
       next.resource['Genes'].display = true;
+      break;
+    case 'spirit_syphon':
+      ensureEdenicStructure(next, 'spirit_vacuum');
+      next.eden['palace'] = { count: 1, energy: 1_000_000_000_000, rate: 0 };
+      break;
+    case 'spirit_capacitor':
+      ensureEdenicStructure(next, 'spirit_battery');
+      break;
+    case 'soul_compactor':
+      ensureEdenicStructure(next, 'soul_compactor');
+      break;
+    case 'tomb':
+      ensureEdenicStructure(next, 'tomb');
+      break;
+    case 'energy_drain':
+      ensureEdenicStructure(next, 'conduit');
+      break;
+    case 'divine_infuser':
+      ensureEdenicStructure(next, 'infuser');
       break;
     case 'dna_sequencer': {
       const sequence = getGeneSequenceState(next);
@@ -677,6 +702,7 @@ export function researchTech(state: GameState, techId: string): GameState | null
       if (next.race.gods === next.race.species) {
         unlockAchievement(next, 'second_evolution');
       }
+      applyFanaticism(next, next.race.gods);
       break;
     case 'alt_fanaticism':
       // legacy tech.js L8420: alt branch grants fanaticism directly and advances theology when needed.
@@ -686,6 +712,7 @@ export function researchTech(state: GameState, techId: string): GameState | null
       if (next.race.gods === next.race.species) {
         unlockAchievement(next, 'second_evolution');
       }
+      applyFanaticism(next, next.race.gods);
       break;
     case 'anthropology':
       // legacy tech.js L8686: choosing this branch also seeds the anthropology tech line.
@@ -700,6 +727,15 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'deify':
       // legacy tech.js L8547: deify seeds the ancient_deify branch.
       next.tech['ancient_deify'] = Math.max(next.tech['ancient_deify'] ?? 0, 1);
+      applyFanaticism(next, next.race.old_gods);
+      break;
+    case 'deify_alt':
+      applyFanaticism(next, next.race.old_gods);
+      break;
+    case 'internet':
+      if (next.race.species === 'troll' && next.race['toxic']) {
+        unlockAchievement(next, 'godwin');
+      }
       break;
     case 'isolation_protocol':
       // legacy tech.js L13764: selecting isolation writes the branch key used by Tau Ceti follow-up techs.
@@ -712,6 +748,9 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'matter_replicator':
       // legacy tech.js L4872: standard replicator starts by copying Stone.
       next.race['replicator'] = { res: 'Stone', pow: 1 };
+      if (next.race.universe === 'antimatter' && next.race['amexplode']) {
+        unlockFeat(next, 'annihilation');
+      }
       break;
     case 'replicator_tp':
       // legacy tech.js L14349: lone-survivor truepath replicator starts on Unobtainium.

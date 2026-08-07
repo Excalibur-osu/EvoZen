@@ -19,6 +19,7 @@ import TradePanel from './components/TradePanel.vue'
 import GovernmentPanel from './components/GovernmentPanel.vue'
 import StoragePanel from './components/StoragePanel.vue'
 import PowerPanel from './components/PowerPanel.vue'
+import SeasonalEventPanel from './components/SeasonalEventPanel.vue'
 import MilitaryPanel from './components/MilitaryPanel.vue'
 import ArpaPanel from './components/ArpaPanel.vue'
 import SpacePanel from './components/SpacePanel.vue'
@@ -41,6 +42,7 @@ import MechPanel from './components/MechPanel.vue'
 import WomlingPanel from './components/WomlingPanel.vue'
 import CrisprPanel from './components/CrisprPanel.vue'
 import CustomRacePanel from './components/CustomRacePanel.vue'
+import WishPanel from './components/WishPanel.vue'
 import AppIcon from './components/ui/AppIcon.vue'
 import { type IconName } from './components/ui/app-icons'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
@@ -50,6 +52,7 @@ const game = useGameStore()
 type TabId = 'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'
   | 'portal' | 'governor' | 'magic' | 'achievements' | 'races' | 'truepath' | 'edenic' | 'prestige'
   | 'galaxy' | 'mech' | 'womling' | 'crispr' | 'custom_race' | 'stats'
+  | 'wish'
 
 const activeTab = ref<TabId>('evolution')
 /** 市政 Tab 下的子 Tab */
@@ -118,6 +121,7 @@ const tabs = computed(() => {
       { id: 'governor', label: '总督', icon: 'governor', visible: !!(game.state.genes as Record<string, number>)['governor'] && !!game.state.tech['governor'] },
       { id: 'prestige', label: '转生', icon: 'prestige', visible: (game.state.tech['mad'] ?? 0) >= 1 || (game.state.tech['genesis'] ?? 0) >= 7 || (game.state.tech['blackhole'] ?? 0) >= 5 || (game.state.tech['ascension'] ?? 0) >= 1 },
       { id: 'crispr', label: '基因工程', icon: 'crispr', visible: (game.state.tech['genetics'] ?? 0) >= 2 },
+      { id: 'wish', label: '愿望', icon: 'magic', visible: !!game.state.race['wish'] && (game.state.tech['wish'] ?? 0) >= 1 },
       { id: 'achievements', label: '成就', icon: 'achievement', visible: true },
       { id: 'stats', label: '统计', icon: 'stats', visible: true },
       { id: 'races', label: '种族', icon: 'races', visible: true },
@@ -183,6 +187,7 @@ const cityTabLabel = computed(() => {
           
           <template v-else>
             <PowerPanel v-if="activeTab === 'city'" />
+            <SeasonalEventPanel v-if="activeTab === 'city'" />
             <BuildPanel v-if="activeTab === 'city'" />
             <TechPanel v-if="activeTab === 'city'" />
             <!-- 市政：内部分 jobs / government / military 子 Tab -->
@@ -224,12 +229,13 @@ const cityTabLabel = computed(() => {
             <PortalPanel v-if="activeTab === 'portal'" />
             <MechPanel v-if="activeTab === 'mech'" />
             <TruepathPanel v-if="activeTab === 'truepath'" />
-            <EdenicPanel v-if="activeTab === 'edenic'" />
+            <EdenicPanel v-if="activeTab === 'edenic'" @open-custom-race="activeTab = 'custom_race'" />
             <WomlingPanel v-if="activeTab === 'womling'" />
             <MagicPanel v-if="activeTab === 'magic'" />
             <GovernorPanel v-if="activeTab === 'governor'" />
             <PrestigePanel v-if="activeTab === 'prestige'" />
             <CrisprPanel v-if="activeTab === 'crispr'" />
+            <WishPanel v-if="activeTab === 'wish'" />
             <CustomRacePanel v-if="activeTab === 'custom_race'" />
             <AchievementsPanel v-if="activeTab === 'achievements'" />
             <StatsPanel v-if="activeTab === 'stats'" />

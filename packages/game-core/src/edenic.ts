@@ -41,12 +41,12 @@ export const EDENIC_REGIONS: Record<EdenicRegionId, EdenicRegionDef> = {
   isle: {
     id: 'isle', name: '天空岛',
     desc: '漂浮在云端的精灵据点。',
-    reqs: { elysium: 8 },
+    reqs: { isle: 1 },
   },
   palace: {
     id: 'palace', name: '天界宫殿',
     desc: '神王居所，最终战场。',
-    reqs: { eden: 1 },
+    reqs: { palace: 1 },
   },
 };
 
@@ -64,6 +64,8 @@ export interface EdenicBuildingDef {
   costMult: number;
   power: number;
   effectDesc: string;
+  segmentCap?: number;
+  actionOnly?: boolean;
 }
 
 export const EDENIC_BUILDINGS: EdenicBuildingDef[] = [
@@ -106,21 +108,21 @@ export const EDENIC_BUILDINGS: EdenicBuildingDef[] = [
   { id: 'eden_cement',       region: 'elysium', name: '伊甸水泥厂',     desc: '伊甸园专用水泥生产。',                       reqs: { elysium: 6 },                           baseCost: { Money: 8e9, Cement: 5e8 }, costMult: 1.235, power: 5, effectDesc: '+ Cement 产出。' },
 
   // ----- Isle (天空岛) -----
-  { id: 'south_pier',     region: 'isle', name: '南码头',     desc: '天空岛上的码头。',                           reqs: { eden_isle: 1 },                       baseCost: { Money: 5e10 }, costMult: 1.0, power: 0, effectDesc: '稳定空岛通道。' },
-  { id: 'west_tower',     region: 'isle', name: '西塔',       desc: '天空岛防御塔。',                             reqs: { eden_isle: 2 },                       baseCost: { Money: 8e10, Adamantite: 5e8 }, costMult: 1.235, power: 8, effectDesc: '+ 防御评分。' },
-  { id: 'east_tower',     region: 'isle', name: '东塔',       desc: '天空岛防御塔。',                             reqs: { eden_isle: 2 },                       baseCost: { Money: 8e10, Adamantite: 5e8 }, costMult: 1.235, power: 8, effectDesc: '+ 防御评分。' },
-  { id: 'isle_garrison',  region: 'isle', name: '空岛驻军',   desc: '驻扎在天空岛的士兵。',                       reqs: { eden_isle: 3 },                       baseCost: { Money: 1e11, Stanene: 3e8 }, costMult: 1.235, power: 5, effectDesc: '+ 士兵容量。' },
-  { id: 'spirit_vacuum',  region: 'isle', name: '灵魂真空',   desc: '抽取空岛中的灵魂。',                         reqs: { eden_isle: 4 },                       baseCost: { Money: 1.5e11, Asphodel_Powder: 500000 }, costMult: 1.235, power: 15, effectDesc: '+ Soul_Gem 产出。' },
-  { id: 'spirit_battery', region: 'isle', name: '灵魂电池',   desc: '储存抽取的灵魂能量。',                       reqs: { eden_isle: 5 },                       baseCost: { Money: 2e11, Soul_Gem: 1000 }, costMult: 1.235, power: -30, effectDesc: '发电 30 MW。' },
-  { id: 'soul_compactor', region: 'isle', name: '灵魂压缩器', desc: '压缩多个灵魂成宝石。',                       reqs: { eden_isle: 6 },                       baseCost: { Money: 3e11, Quantium: 1e8 }, costMult: 1.235, power: 12, effectDesc: '加速 Soul_Gem 生产。' },
+  { id: 'south_pier',     region: 'isle', name: '南码头',     desc: '天空岛上的码头。',                           reqs: { isle: 2 }, baseCost: { Money: 5e10 }, costMult: 1.0, power: 0, effectDesc: '稳定空岛通道。' },
+  { id: 'west_tower',     region: 'isle', name: '西塔',       desc: '天空岛防御塔。',                             reqs: { isle: 2 }, baseCost: { Money: 8e10, Adamantite: 5e8 }, costMult: 1.235, power: 8, effectDesc: '+ 防御评分。' },
+  { id: 'east_tower',     region: 'isle', name: '东塔',       desc: '天空岛防御塔。',                             reqs: { isle: 2 }, baseCost: { Money: 8e10, Adamantite: 5e8 }, costMult: 1.235, power: 8, effectDesc: '+ 防御评分。' },
+  { id: 'isle_garrison',  region: 'isle', name: '空岛驻军',   desc: '驻扎在天空岛的士兵。',                       reqs: { isle: 3 }, baseCost: { Money: 1e11, Stanene: 3e8 }, costMult: 1.235, power: 5, effectDesc: '+ 士兵容量。' },
+  { id: 'spirit_vacuum',  region: 'isle', name: '灵魂真空',   desc: '抽取永恒宫殿的灵魂能量。',                   reqs: { isle: 4 }, baseCost: { Money: 3e10, Neutronium: 1.75e8, Stanene: 1e9, Elerium: 240000, Soul_Gem: 1000 }, costMult: 1.1, power: 18000, effectDesc: '每座通电设备持续抽取宫殿能量。' },
+  { id: 'spirit_battery', region: 'isle', name: '灵魂电池',   desc: '稳定灵魂真空并提升能量抽取效率。',             reqs: { isle: 5 }, baseCost: { Money: 1.8e10, Copper: 5e9, Vitreloy: 5e7, Elysanite: 1e8 }, costMult: 1.2, power: 500, effectDesc: '每座使灵魂真空耗电降低 10%，抽取速度提高 8%。' },
+  { id: 'soul_compactor', region: 'isle', name: '灵魂压缩器', desc: '将抽取的灵魂能量压缩为灵魂宝石。',             reqs: { isle: 7 }, baseCost: { Money: 5e10, Iron: 2.25e10, Uranium: 4e6, Scarletite: 3e8 }, costMult: 1.0, power: 0, effectDesc: '将部分宫殿能量压缩为灵魂宝石。', segmentCap: 1 },
 
   // ----- Palace (天界宫殿) -----
-  { id: 'scout_palace', region: 'palace', name: '侦察宫殿', desc: '侦察天界宫殿。',                             reqs: { eden: 1 },                            baseCost: { Money: 1e12 }, costMult: 1.0, power: 0, effectDesc: '解锁宫殿。' },
-  { id: 'throne',       region: 'palace', name: '王座',     desc: '神王的宝座。',                               reqs: { eden: 2 },                            baseCost: { Money: 5e11, Soul_Gem: 100000 }, costMult: 1.0, power: 0, effectDesc: '挑战神王。' },
-  { id: 'infuser',      region: 'palace', name: '灌注器',   desc: '将力量灌注到飞升者。',                       reqs: { eden: 3 },                            baseCost: { Money: 1e12, Quantium: 5e8 }, costMult: 1.0, power: 0, effectDesc: '+ 飞升力量。' },
-  { id: 'apotheosis',   region: 'palace', name: '神化',     desc: '触发神化转生 — 终极胜利。',                  reqs: { eden: 5 },                            baseCost: { Money: 1e13, Soul_Gem: 1000000 }, costMult: 1.0, power: 0, effectDesc: '触发 Apotheosis 转生。' },
-  { id: 'conduit',      region: 'palace', name: '导管',     desc: '神圣能量导管。',                             reqs: { eden: 3 },                            baseCost: { Money: 5e11, Vitreloy: 1e9 }, costMult: 1.235, power: 25, effectDesc: '+ 神圣能量。' },
-  { id: 'tomb',         region: 'palace', name: '陵墓',     desc: '神王的最终安息之地。',                       reqs: { eden: 6 },                            baseCost: { Money: 1e13, Demonic_Essence: 1000 }, costMult: 1.0, power: 0, effectDesc: '收割古老灵魂。' },
+  { id: 'scout_palace', region: 'palace', name: '侦察永恒宫殿', desc: '确认永恒宫殿与废弃王座的现状。',           reqs: { palace: 1 }, baseCost: { Money: 5e10, Deuterium: 5e6 }, costMult: 1.0, power: 0, effectDesc: '完成后开放宫殿研究。', segmentCap: 1 },
+  { id: 'throne',       region: 'palace', name: '废弃王座', desc: '曾经统治天堂的雄伟生物只剩下神圣残骸。',       reqs: { palace: 2 }, baseCost: {}, costMult: 1.0, power: 0, effectDesc: '神圣残骸仍在释放庞大能量。', actionOnly: true },
+  { id: 'tomb',         region: 'palace', name: '神圣陵墓', desc: '封存神明残骸并控制其能量。',                   reqs: { palace: 3 }, baseCost: { Money: 2.5e10, Cement: 1e10, Neutronium: 1e8 }, costMult: 1.0, power: 0, effectDesc: '共需建造 10 段。', segmentCap: 10 },
+  { id: 'conduit',      region: 'palace', name: '能量管道', desc: '在陵墓和王座之间输送神圣能量。',               reqs: { palace: 5 }, baseCost: { Money: 2.5e10, Stanene: 2.5e8, Orichalcum: 1.25e8 }, costMult: 1.0, power: 0, effectDesc: '共需建造 25 段。', segmentCap: 25 },
+  { id: 'infuser',      region: 'palace', name: '神灵灌注器', desc: '把神圣能量灌注给坐上王座的飞升者。',         reqs: { palace: 6 }, baseCost: { Money: 1.2e10, Copper: 1e10, Graphene: 1e9, Elysanite: 1.25e8 }, costMult: 1.0, power: 0, effectDesc: '共需建造 25 段。', segmentCap: 25 },
+  { id: 'apotheosis',   region: 'palace', name: '进行神灵灌注', desc: '以合法混血基因组承载完整神圣能量。',       reqs: { palace: 7 }, baseCost: {}, costMult: 1.0, power: 0, effectDesc: '触发神化转生。', actionOnly: true },
 ];
 
 // ============================================================
@@ -151,16 +153,27 @@ export function getEdenicBuildingsByRegion(region: EdenicRegionId): EdenicBuildi
   return EDENIC_BUILDINGS.filter((b) => b.region === region);
 }
 
+export function ensureEdenicStructure(state: GameState, buildingId: string): Record<string, number> {
+  const eden = state.eden as Record<string, Record<string, number>>;
+  eden[buildingId] ??= { count: 0, on: 0 };
+  return eden[buildingId];
+}
+
 /** 计算 Edenic 建筑成本 */
 export function getEdenicBuildCost(state: GameState, buildingId: string): Record<string, number> | null {
   const building = EDENIC_BUILDINGS.find((b) => b.id === buildingId);
   if (!building) return null;
   const eden = state.eden as Record<string, Record<string, number>>;
   const count = eden[buildingId]?.['count'] ?? 0;
+  if (building.segmentCap !== undefined && count >= building.segmentCap) return {};
   const mult = Math.pow(building.costMult, count);
   const cost: Record<string, number> = {};
   for (const [res, base] of Object.entries(building.baseCost)) {
     cost[res] = Math.round(base * mult);
+  }
+  if (buildingId === 'scout_palace' && state.race['warlord']) {
+    delete cost['Deuterium'];
+    cost['Helium_3'] = 5_000_000;
   }
   return applyInflationToCosts(state, cost);
 }
@@ -170,6 +183,9 @@ export function canBuildEdenic(state: GameState, buildingId: string): boolean {
   if (!isEdenicUnlocked(state)) return false;
   const building = EDENIC_BUILDINGS.find((b) => b.id === buildingId);
   if (!building) return false;
+  if (building.actionOnly) return false;
+  const current = (state.eden[buildingId] as { count?: number } | undefined)?.count ?? 0;
+  if (building.segmentCap !== undefined && current >= building.segmentCap) return false;
   for (const [tech, lvl] of Object.entries(building.reqs)) {
     if ((state.tech[tech] ?? 0) < lvl) return false;
   }
@@ -189,43 +205,57 @@ export function buildEdenicStructure(state: GameState, buildingId: string): bool
     if (state.resource[res]) state.resource[res].amount -= amt;
   }
   const eden = state.eden as Record<string, Record<string, number>>;
-  if (!eden[buildingId]) eden[buildingId] = { count: 0, on: 0 };
-  eden[buildingId].count++;
+  const structure = ensureEdenicStructure(state, buildingId);
+  structure.count++;
+  const def = EDENIC_BUILDINGS.find((entry) => entry.id === buildingId)!;
+  if (def.power !== 0) structure.on = structure.count;
+
+  if (buildingId === 'scout_palace') state.tech['palace'] = Math.max(state.tech['palace'] ?? 0, 2);
+  if (buildingId === 'tomb' && structure.count >= 10) state.tech['palace'] = Math.max(state.tech['palace'] ?? 0, 4);
+  if ((eden['conduit']?.count ?? 0) >= 25 && (eden['infuser']?.count ?? 0) >= 25) {
+    state.tech['palace'] = Math.max(state.tech['palace'] ?? 0, 7);
+    eden['apotheosis'] ??= { count: 0 };
+  }
   addInflationPoints(state, 1);
   return true;
 }
 
 /** Edenic 建筑产出 tick */
-export function edenicProductionTick(state: GameState, timeMul: number, deltas: Record<string, number>): void {
+export function edenicProductionTick(
+  state: GameState,
+  timeMul: number,
+  deltas: Record<string, number>,
+  activeConsumers: Record<string, number> = {},
+): void {
   if (!isEdenicUnlocked(state)) return;
   const eden = state.eden as Record<string, Record<string, number>>;
 
   // Asphodel / asphodel_harvester 产出 Asphodel Powder
-  const harvOn = eden['asphodel_harvester']?.['on'] ?? 0;
+  const harvOn = activeConsumers['asphodel_harvester'] ?? 0;
   if (harvOn > 0) {
     deltas['Asphodel_Powder'] = (deltas['Asphodel_Powder'] ?? 0) + harvOn * 3 * timeMul;
   }
 
   // Asphodel / ectoplasm_processor 产出 Ectoplasm
-  const ectoOn = eden['ectoplasm_processor']?.['on'] ?? 0;
+  const ectoOn = activeConsumers['ectoplasm_processor'] ?? 0;
   if (ectoOn > 0) {
     deltas['Ectoplasm'] = (deltas['Ectoplasm'] ?? 0) + ectoOn * 1 * timeMul;
   }
 
   // Elysium / elysanite_mine 产出 Elysanite
-  const elysOn = eden['elysanite_mine']?.['on'] ?? 0;
+  const elysOn = activeConsumers['elysanite_mine'] ?? 0;
   if (elysOn > 0) {
     deltas['Elysanite'] = (deltas['Elysanite'] ?? 0) + elysOn * 0.5 * timeMul;
   }
 
   // Elysium / sacred_smelter 产出 Mythril 加成
-  const sacOn = eden['sacred_smelter']?.['on'] ?? 0;
+  const sacOn = activeConsumers['sacred_smelter'] ?? 0;
   if (sacOn > 0) {
     deltas['Mythril'] = (deltas['Mythril'] ?? 0) + sacOn * 0.3 * timeMul;
   }
 
   // Isle / spirit_vacuum 产出 Soul Gem
-  const vacOn = eden['spirit_vacuum']?.['on'] ?? 0;
+  const vacOn = activeConsumers['spirit_vacuum'] ?? 0;
   if (vacOn > 0) {
     deltas['Soul_Gem'] = (deltas['Soul_Gem'] ?? 0) + vacOn * 0.05 * timeMul;
   }
@@ -238,7 +268,11 @@ export function edenicProductionTick(state: GameState, timeMul: number, deltas: 
 }
 
 /** Edenic tick — 推进神圣腐化进度 */
-export function edenicTick(state: GameState, timeMul: number = 1): void {
+export function edenicTick(
+  state: GameState,
+  timeMul: number = 1,
+  activeConsumers: Record<string, number> = {},
+): void {
   if (!isEdenicUnlocked(state)) return;
 
   // 在阿斯福德尔，stabilizer 减缓向敌对阶段的过渡
@@ -252,5 +286,16 @@ export function edenicTick(state: GameState, timeMul: number = 1): void {
     eden['asphodel_progress'].count = progress;
     // 当进度达到 10000 时，阿斯福德尔进入敌对阶段
     if (progress >= 10000) state.tech['asphodel'] = 5;
+  }
+
+  const palace = eden['palace'];
+  const activeVacuums = activeConsumers['spirit_vacuum'] ?? 0;
+  if (palace) palace.rate = 0;
+  if (palace && activeVacuums > 0 && (state.tech['isle'] ?? 0) >= 4 && palace.energy > 0) {
+    const activeBatteries = activeConsumers['spirit_battery'] ?? 0;
+    const drain = 1_653_439 * activeVacuums * (1 + activeBatteries * 0.08);
+    palace.rate = drain;
+    palace.energy = Math.max(0, Math.round(palace.energy - drain * timeMul));
+    if (palace.energy === 0) state.tech['palace'] = Math.max(state.tech['palace'] ?? 0, 1);
   }
 }

@@ -62,6 +62,7 @@ export const RESOURCE_NAMES: Record<string, string> = {
   Chrysotile: '温石棉',
   Blood_Stone: '血石',
   Corrupt_Gem: '腐败宝石',
+  Thermite: '铝热剂',
 }
 
 /** 获取资源中文名 */

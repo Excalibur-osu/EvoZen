@@ -11,6 +11,7 @@ import type { GameState } from '@evozen/shared-types';
 import { BASIC_STRUCTURES } from './structures';
 import { SPACE_STRUCTURES } from './space';
 import { getDysonPowerState, INTERSTELLAR_STRUCTURES } from './interstellar';
+import { EDENIC_BUILDINGS } from './edenic';
 import { getChallengePowerCost } from './challenges';
 import { getAchievementLevel, getThermalCollectorPowerReduction } from './achievements';
 
@@ -25,7 +26,7 @@ export interface PowerGeneratorDef {
   id: string;
   name: string;
   power: number;
-  location: 'city' | 'space' | 'interstellar';
+  location: 'city' | 'space' | 'interstellar' | 'eden';
   fuel?: FuelDef;
   /** 整个分段巨构作为一台不可手动开关的发电机。 */
   aggregate?: boolean;
@@ -35,7 +36,7 @@ export interface PowerConsumerDef {
   id: string;
   name: string;
   powerCost: number;
-  location: 'city' | 'space' | 'interstellar';
+  location: 'city' | 'space' | 'interstellar' | 'eden';
 }
 
 const CITY_GENERATORS: PowerGeneratorDef[] = [
@@ -137,8 +138,33 @@ const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
     powerCost: def.powerCost ?? 0,
   }));
 
+const EDEN_GENERATORS: PowerGeneratorDef[] = EDENIC_BUILDINGS
+  .filter((def) => def.power < 0)
+  .map((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'eden',
+    power: Math.abs(def.power),
+  }));
+
+const EDEN_CONSUMERS: PowerConsumerDef[] = EDENIC_BUILDINGS
+  .filter((def) => def.power > 0)
+  .map<PowerConsumerDef>((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'eden',
+    powerCost: def.power,
+  }))
+  .sort((a, b) => {
+    if (a.id === 'spirit_battery') return -1;
+    if (b.id === 'spirit_battery') return 1;
+    if (a.id === 'spirit_vacuum') return 1;
+    if (b.id === 'spirit_vacuum') return -1;
+    return 0;
+  });
+
 export function listPowerGenerators(state?: GameState): PowerGeneratorDef[] {
-  const generators: PowerGeneratorDef[] = [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS];
+  const generators: PowerGeneratorDef[] = [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS, ...EDEN_GENERATORS];
   if (state) {
     const dyson = getDysonPowerState(state);
     if (dyson) {
@@ -164,7 +190,7 @@ export function listPowerGenerators(state?: GameState): PowerGeneratorDef[] {
 }
 
 export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
-  const consumers = [...CITY_CONSUMERS, ...SPACE_CONSUMERS, ...INTERSTELLAR_CONSUMERS];
+  const consumers = [...CITY_CONSUMERS, ...SPACE_CONSUMERS, ...INTERSTELLAR_CONSUMERS, ...EDEN_CONSUMERS];
   if (!state) return consumers;
 
   const dissipated = getAchievementLevel(state, 'dissipated');
@@ -182,6 +208,12 @@ export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
       const collectors = (state.interstellar['thermal_collector'] as { count?: number } | undefined)?.count ?? 0;
       powerCost = Math.max(0, powerCost - collectors * getThermalCollectorPowerReduction(state));
     }
+    if (consumer.id === 'spirit_vacuum') {
+      const battery = state.eden['spirit_battery'] as { count?: number; on?: number } | undefined;
+      const batteries = battery?.on ?? battery?.count ?? 0;
+      powerCost = Math.round(18000 * Math.pow(0.9, batteries));
+      powerCost = getChallengePowerCost(state, powerCost);
+    }
     return {
       ...consumer,
       powerCost,
@@ -191,17 +223,18 @@ export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
 
 function getStructBucket(
   state: GameState,
-  location: 'city' | 'space' | 'interstellar',
+  location: 'city' | 'space' | 'interstellar' | 'eden',
 ): Record<string, unknown> {
   if (location === 'space') return state.space;
   if (location === 'interstellar') return state.interstellar;
+  if (location === 'eden') return state.eden;
   return state.city;
 }
 
 function getRequestedOn(
   state: GameState,
   id: string,
-  location: 'city' | 'space' | 'interstellar',
+  location: 'city' | 'space' | 'interstellar' | 'eden',
 ): number {
   const bucket = getStructBucket(state, location);
   const struct = bucket[id] as { count?: number; on?: number } | undefined;

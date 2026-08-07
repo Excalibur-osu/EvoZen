@@ -55,4 +55,5 @@ export const CRAFT_COSTS: Record<string, CraftRecipe[]> = {
   Wrought_Iron: [{ resource: 'Iron', amount: 80 }],
   Sheet_Metal: [{ resource: 'Aluminium', amount: 120 }],
   Mythril: [{ resource: 'Iridium', amount: 100 }, { resource: 'Alloy', amount: 250 }],
+  Thermite: [{ resource: 'Iron', amount: 180 }, { resource: 'Aluminium', amount: 60 }],
 };

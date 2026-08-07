@@ -18,6 +18,7 @@ import {
 import { getRaceMainType, RACES, type RaceId } from './races';
 import { galaxyPiracy } from './syndicate';
 import { isAltRaceActive } from './alt-races';
+import { getFireworkRegion, getSolsticeThermiteGoal, isSeasonalEventActive } from './seasonal-events';
 
 type ChallengeTaskId = 'b1' | 'b2' | 'b3' | 'b4' | 'b5';
 type ChallengeTaskStats = Record<ChallengeTaskId, Partial<Record<keyof AchievementRecord, boolean>>>;
@@ -419,6 +420,14 @@ export function checkAchievements(state: GameState, date: Date = new Date()): vo
     const year = date.getFullYear();
     const easterActive = isAltRaceActive('wolven', date);
     const halloweenActive = isAltRaceActive('human', date);
+    if (isSeasonalEventActive(state, 'summer', date)
+      && (state.resource['Thermite']?.amount ?? 0) > getSolsticeThermiteGoal(state)) {
+      unlockFeat(state, 'solstice', small);
+    }
+    if (isSeasonalEventActive(state, 'firework', date)) {
+      const bucket = getFireworkRegion(state) === 'space' ? state.space : state.city;
+      if (((bucket['firework'] as { on?: number } | undefined)?.on ?? 0) > 0) unlockFeat(state, 'firework', small);
+    }
     if (date.getDay() === 5 && date.getDate() === 13 && (state.resource[state.race.species]?.amount ?? 0) >= 1) {
       if (unlockFeat(state, 'friday', small)) state.resource[state.race.species].amount--;
     } else if (date.getMonth() === 1 && date.getDate() === 14) {
@@ -428,6 +437,8 @@ export function checkAchievements(state: GameState, date: Date = new Date()): vo
     } else if (easterActive) {
       unlockFeat(state, 'easter', small);
       if (countEventFinds(state, 'egg', year, ['egg']) >= 12) unlockFeat(state, 'egghunt', small);
+    } else if (isSeasonalEventActive(state, 'launch_day', date)) {
+      unlockFeat(state, 'launch_day', small);
     } else if (halloweenActive) {
       if (countEventFinds(state, 'trick', year, ['trick', 'treat']) >= 12) unlockFeat(state, 'trickortreat', small);
       if (date.getMonth() === 9 && date.getDate() === 31) unlockFeat(state, 'halloween', small);
@@ -697,7 +708,10 @@ export function checkResetAchievements(state: GameState, resetType: string): voi
       }
       break;
     case 'apotheosis':
-      unlockAchievement(state, 'godwin');
+      unlockAchievement(state, 'godslayer');
+      if (state.race.species === 'seraph' || state.race.species === 'unicorn') {
+        unlockAchievement(state, 'traitor');
+      }
       if (state.tech['world_control'] === undefined) {
         unlockAchievement(state, 'cult_of_personality');
       }

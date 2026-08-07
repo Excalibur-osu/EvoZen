@@ -14,16 +14,15 @@ import type {
   ResourceBreakdownEntry,
   ResourceBreakdownState,
 } from '@evozen/shared-types';
-import { craftingTickWithSupport } from './crafting';
+import { craftingTickDetailed } from './crafting';
+import { factoryTickDetailed } from './factory';
 import { tradeTick } from './trade';
-import { getInflationMultiplier } from './challenges';
 import {
   getTaxMultiplier,
   getKnowledgeMultiplier,
   getBankerImpactMultiplier,
   getCasinoIncomeMultiplier,
   getTourismIncomeMultiplier,
-  getFactoryOutputMultiplier,
   tickGovernmentCooldown,
 } from './government';
 import { BASIC_STRUCTURES } from './structures';
@@ -36,7 +35,6 @@ import {
   getToughMiningMultiplier,
   getIntelligentGlobalBonus,
   getSuctionGripBonus,
-  getToxicFactoryBonus,
   getCalmGlobalBonus,
   getLogicalKnowledgePerCitizen,
   getTrackerHuntBonus,
@@ -89,18 +87,19 @@ import {
   getBanquetFoodConsumptionMultiplier,
   getBanquetHuntingMultiplier,
   getBanquetLevel,
-  getBanquetLuxuryMultiplier,
   resetBanquetStrength,
 } from './achievements';
 import { complexTraitTick, getSelenophobiaMultiplier } from './complex-traits';
 import { petTick } from './pet';
 import { magicTick } from './magic';
 import { edenicTick, edenicProductionTick } from './edenic';
+import { syncSeasonalEventState } from './seasonal-events';
 import { truepathProductionTick } from './truepath';
-import { runGovernorTasks } from './governor';
+import { govActive, runGovernorTasks } from './governor';
 import {
   getSatelliteScientistImpactMultiplier,
   getObservatoryKnowledgeCapBonus,
+  SPACE_BARRACKS_FOOD_PER_TICK,
   SPACE_BARRACKS_OIL_PER_TICK,
   SPACE_STRUCTURES,
 } from './space';
@@ -306,9 +305,14 @@ function getOilBiomeMultiplier(state: GameState): number {
  */
 export function gameTick(state: GameState): { state: GameState; result: GameTickResult } {
   const messages: GameMessage[] = [];
+  let asteroidEleriumDiscovered = false;
   const deltas: Record<string, number> = {};
   const settledDeltas: Record<string, number> = {};
   const eventDeltas: Record<string, number> = {};
+  const deferredSettledDeltas: Record<string, number> = {};
+  const initialResourceAmounts = Object.fromEntries(
+    Object.entries(state.resource).map(([resId, resource]) => [resId, resource.amount]),
+  );
   const breakdownEntries: Record<string, ResourceBreakdownEntry[]> = {};
   const lastBreakdownSnapshot: Record<string, number> = {};
   const addBreakdownEntry = (
@@ -321,6 +325,28 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   ) => {
     if (!Number.isFinite(amount) || Math.abs(amount) < 1e-9) return;
     (breakdownEntries[resId] ??= []).push({ label, amount, kind, section, detail });
+  };
+  const applyBreakdownFactors = (
+    resId: string,
+    section: string,
+    baseAmount: number,
+    factors: Array<{ label: string; multiplier: number; detail?: string }>,
+  ): number => {
+    let amount = baseAmount;
+    for (const factor of factors) {
+      if (!Number.isFinite(factor.multiplier)) continue;
+      const next = amount * factor.multiplier;
+      addBreakdownEntry(
+        resId,
+        factor.label,
+        next - amount,
+        'modifier',
+        section,
+        factor.detail ?? `x${Number(factor.multiplier.toFixed(4))}`,
+      );
+      amount = next;
+    }
+    return amount;
   };
   const captureDeltaSection = (
     label: string,
@@ -336,6 +362,35 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         addBreakdownEntry(resId, label, amount, kindForAmount(amount), label, detail);
       }
       lastBreakdownSnapshot[resId] = current;
+    }
+  };
+  const snapshotResourceAmounts = (resourceState: GameState['resource']): Record<string, number> =>
+    Object.fromEntries(Object.entries(resourceState).map(([resId, resource]) => [resId, resource.amount]));
+  const captureDeferredSettledResourceMutations = (
+    before: Record<string, number>,
+    resourceState: GameState['resource'],
+    labelForResource: (resId: string, amount: number) => string,
+    section: string,
+  ) => {
+    const ids = new Set([...Object.keys(before), ...Object.keys(resourceState)]);
+    for (const resId of ids) {
+      const amount = (resourceState[resId]?.amount ?? 0) - (before[resId] ?? 0);
+      if (!Number.isFinite(amount) || Math.abs(amount) < 1e-9) continue;
+      deferredSettledDeltas[resId] = (deferredSettledDeltas[resId] ?? 0) + amount;
+      addBreakdownEntry(
+        resId,
+        labelForResource(resId, amount),
+        amount,
+        amount >= 0 ? 'source' : 'consume',
+        section,
+      );
+    }
+  };
+  const flushDeferredSettledDeltas = () => {
+    for (const [resId, amount] of Object.entries(deferredSettledDeltas)) {
+      deltas[resId] = (deltas[resId] ?? 0) + amount;
+      settledDeltas[resId] = (settledDeltas[resId] ?? 0) + amount;
+      lastBreakdownSnapshot[resId] = deltas[resId];
     }
   };
   const markCurrentDeltasSettled = () => {
@@ -364,14 +419,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       const res = resourceState[resId];
       let effectiveNet = net;
       let truncated = 0;
-      if (res) {
-        if (res.max > 0 && res.amount >= res.max && net > 0) {
-          truncated = net;
-          effectiveNet = 0;
-        } else if (res.amount <= 0 && net < 0) {
-          truncated = net;
-          effectiveNet = 0;
-        }
+      const hasLedgerActivity = entries.length > 0
+        || Object.prototype.hasOwnProperty.call(deltas, resId);
+      if (res && hasLedgerActivity) {
+        effectiveNet = res.amount - (initialResourceAmounts[resId] ?? 0);
+        truncated = net - effectiveNet;
+        if (Math.abs(effectiveNet) < 1e-9) effectiveNet = 0;
+        if (Math.abs(truncated) < 1e-9) truncated = 0;
       }
       result[resId] = {
         entries,
@@ -686,11 +740,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // agriculture >= 5 → 5%/座, 否则 3%/座（非电力化磨坊）
   const mills = structCount('mill');
   const millBonus = techLevel('agriculture') >= 5 ? 0.05 : 0.03;
-  let foodMult = 1 + mills * millBonus;
-  
+  const millFoodMult = 1 + mills * millBonus;
   // trashed 行星特性：农业产出 ×0.75
-  foodMult *= getFarmPlanetMultiplier(state);
-  const farmerFood = farmerFoodBase * foodMult;
+  const farmPlanetMult = getFarmPlanetMultiplier(state);
 
   // 食物消耗 — 原版 main.js L3711:
   // consume = (pop + soldiers - (unemployed + hunters) * 0.5) * food_consume_mod
@@ -716,11 +768,17 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
   // Trait 影响食物：tracker (+hunt), suction_grip, calm, ritual:farmer/hunting
   // 同时食物消耗会被 gluttony / ravenous / high_metabolism 放大
-  const foodProdTraitMult = getSuctionGripBonus(state) * getCalmGlobalBonus(state)
-    * getRitualMultiplier(state, 'farmer') * getSlaverBonus(state);
-  const huntTraitMult = getTrackerHuntBonus(state) * getRitualMultiplier(state, 'hunting')
-    * getBanquetHuntingMultiplier(state);
-  const foodConsumptionMul = getGluttonyFoodMultiplier(state) * getRavenousFoodMultiplier(state) * getHighMetabolismFoodMultiplier(state);
+  const suctionGripMult = getSuctionGripBonus(state);
+  const calmGlobalMult = getCalmGlobalBonus(state);
+  const slaverMult = getSlaverBonus(state);
+  const farmerRitualMult = getRitualMultiplier(state, 'farmer');
+  const huntingRitualMult = getRitualMultiplier(state, 'hunting');
+  const trackerHuntMult = getTrackerHuntBonus(state);
+  const banquetHuntingMult = getBanquetHuntingMultiplier(state);
+  const gluttonyFoodMult = getGluttonyFoodMultiplier(state);
+  const ravenousFoodMult = getRavenousFoodMultiplier(state);
+  const metabolismFoodMult = getHighMetabolismFoodMultiplier(state);
+  const foodConsumptionMul = gluttonyFoodMult * ravenousFoodMult * metabolismFoodMult;
   const banquetActive = getBanquetLevel(state) >= 1
     && ((state.city['banquet'] as { on?: number } | undefined)?.on ?? 0) > 0;
   const banquetFoodMultiplier = getBanquetFoodConsumptionMultiplier(state);
@@ -732,12 +790,79 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     && effectiveFoodConsumption * banquetFoodMultiplier >= (state.resource['Food']?.amount ?? 0);
   if (!banquetFoodShortage) effectiveFoodConsumption *= banquetFoodMultiplier;
 
-  deltas['Food'] =
-    (hunterFood * rageHuntMult * huntTraitMult + farmerFood * weatherFoodMult) * prodMult * planetGlobalMult * foodProdTraitMult
-    + biodomeFood * prodMult
-    - effectiveFoodConsumption
-    - tourismFoodDemand;
-  captureDeltaSection('食物生产与口粮');
+  addBreakdownEntry('Food', '猎人基础产出', hunterFood, 'source', '食物生产');
+  const hunterFoodOutput = applyBreakdownFactors('Food', '食物生产', hunterFood, [
+    { label: '狂暴行星狩猎', multiplier: rageHuntMult },
+    { label: '追踪者特质', multiplier: trackerHuntMult },
+    { label: '狩猎仪式', multiplier: huntingRitualMult },
+    { label: '餐厅狩猎加成', multiplier: banquetHuntingMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '吸盘特质', multiplier: suctionGripMult },
+    { label: '平静特质', multiplier: calmGlobalMult },
+    { label: '农耕仪式', multiplier: farmerRitualMult },
+    { label: '奴役修正', multiplier: slaverMult },
+  ]);
+
+  addBreakdownEntry('Food', '农民与农场基础产出', farmerFoodBase, 'source', '食物生产');
+  const farmerFoodOutput = applyBreakdownFactors('Food', '食物生产', farmerFoodBase, [
+    { label: '磨坊建筑', multiplier: millFoodMult },
+    { label: '农业行星特性', multiplier: farmPlanetMult },
+    { label: '天气修正', multiplier: weatherFoodMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '吸盘特质', multiplier: suctionGripMult },
+    { label: '平静特质', multiplier: calmGlobalMult },
+    { label: '农耕仪式', multiplier: farmerRitualMult },
+    { label: '奴役修正', multiplier: slaverMult },
+  ]);
+
+  addBreakdownEntry('Food', '生物圈产出', biodomeFood, 'source', '食物生产');
+  const biodomeFoodOutput = applyBreakdownFactors('Food', '食物生产', biodomeFood, [
+    { label: '士气效率', multiplier: prodMult },
+  ]);
+
+  addBreakdownEntry('Food', '基础人口口粮', -foodConsumption, 'consume', '食物消耗');
+  let accountedFoodConsumption = foodConsumption;
+  for (const factor of [
+    { label: '贪食特质', multiplier: gluttonyFoodMult },
+    { label: '贪婪特质', multiplier: ravenousFoodMult },
+    { label: '高代谢特质', multiplier: metabolismFoodMult },
+  ]) {
+    const next = accountedFoodConsumption * factor.multiplier;
+    addBreakdownEntry(
+      'Food',
+      factor.label,
+      -(next - accountedFoodConsumption),
+      'modifier',
+      '食物消耗',
+      `x${Number(factor.multiplier.toFixed(4))}`,
+    );
+    accountedFoodConsumption = next;
+  }
+  const banquetMinimumConsumption = banquetActive
+    ? Math.max(100, accountedFoodConsumption)
+    : accountedFoodConsumption;
+  addBreakdownEntry(
+    'Food',
+    '餐厅最低供餐',
+    -(banquetMinimumConsumption - accountedFoodConsumption),
+    'modifier',
+    '食物消耗',
+  );
+  addBreakdownEntry(
+    'Food',
+    banquetFoodShortage ? '餐厅额外口粮停用' : '餐厅额外口粮',
+    -(effectiveFoodConsumption - banquetMinimumConsumption),
+    'modifier',
+    '食物消耗',
+    banquetFoodShortage ? '库存不足' : `x${Number(banquetFoodMultiplier.toFixed(4))}`,
+  );
+  addBreakdownEntry('Food', '旅游中心需求', -tourismFoodDemand, 'consume', '食物消耗');
+
+  deltas['Food'] = hunterFoodOutput + farmerFoodOutput + biodomeFoodOutput
+    - effectiveFoodConsumption - tourismFoodDemand;
+  lastBreakdownSnapshot['Food'] = deltas['Food'];
 
   // ============================================================
   // 2. 毛皮（猎人副产品）
@@ -753,45 +878,58 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // axe bonus: (axe > 1 ? (axe-1) * 0.35 : 0) + 1  ← 只有 axe level 2+ 才有
   // lumber_yard: +2%/座
   const lumberjacks = workers('lumberjack');
-  let lumberBase = 1;  // impact = 1.0
-  lumberBase *= getLumberBiomeMultiplier(state);
+  const lumberBiomeMult = getLumberBiomeMultiplier(state);
   // 石斧科技加成 — 原版 main.js L5559: axe > 1 才有加成
   const axeLevel = techLevel('axe');
-  if (axeLevel > 1) {
-    lumberBase *= 1 + (axeLevel - 1) * 0.35;
-  }
+  const axeMult = axeLevel > 1 ? 1 + (axeLevel - 1) * 0.35 : 1;
   // 伐木场加成 +2%/座（原版 main.js L5575-5576）
   const lumberYards = structCount('lumber_yard');
   const sawmills = structCount('sawmill');
   const activeSawmills = poweredOn['sawmill'] ?? 0;
   const sawmillBonus = techLevel('saw') >= 2 ? 0.08 : 0.05;
   // legacy 这里是分段相乘，不是把 lumber_yard 与 sawmill 直接加到同一个线性项里
-  let lumberMult = (1 + lumberYards * 0.02) * (1 + sawmills * sawmillBonus);
-  if (activeSawmills > 0) {
-    lumberMult *= 1 + getDischargePoweredBonus(activeSawmills, 0.04, dischargeActive);
-  }
+  const lumberYardMult = 1 + lumberYards * 0.02;
+  const sawmillBuildingMult = 1 + sawmills * sawmillBonus;
+  const sawmillPowerMult = activeSawmills > 0
+    ? 1 + getDischargePoweredBonus(activeSawmills, 0.04, dischargeActive)
+    : 1;
   // Trait: weak (-X%), suction_grip (+X%), calm (+X%), hivemind, intelligent, ritual:lumberjack
-  const lumberTraitMult = getWeakWorkerMultiplier(state) * getSuctionGripBonus(state) * getCalmGlobalBonus(state)
-    * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, lumberjacks)
-    * getRitualMultiplier(state, 'lumberjack') * getSlaverBonus(state);
-  deltas['Lumber'] = lumberjacks * lumberBase * lumberMult * effectiveProdMult * lumberTraitMult;
-  captureDeltaSection('伐木工');
+  const weakWorkerMult = getWeakWorkerMultiplier(state);
+  const intelligentGlobalMult = getIntelligentGlobalBonus(state);
+  const lumberHivemindMult = getHivemindMultiplier(state, lumberjacks);
+  const lumberRitualMult = getRitualMultiplier(state, 'lumberjack');
+  addBreakdownEntry('Lumber', '伐木工基础产出', lumberjacks, 'source', '伐木工');
+  deltas['Lumber'] = applyBreakdownFactors('Lumber', '伐木工', lumberjacks, [
+    { label: '生物群系', multiplier: lumberBiomeMult },
+    { label: '斧具科技', multiplier: axeMult },
+    { label: '伐木场建筑', multiplier: lumberYardMult },
+    { label: '锯木厂建筑', multiplier: sawmillBuildingMult },
+    { label: '锯木厂供电', multiplier: sawmillPowerMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '饥饿修正', multiplier: hungerMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    { label: '虚弱特质', multiplier: weakWorkerMult },
+    { label: '吸盘特质', multiplier: suctionGripMult },
+    { label: '平静特质', multiplier: calmGlobalMult },
+    { label: '聪慧特质', multiplier: intelligentGlobalMult },
+    { label: '蜂群特质', multiplier: lumberHivemindMult },
+    { label: '伐木仪式', multiplier: lumberRitualMult },
+    { label: '奴役修正', multiplier: slaverMult },
+  ]);
+  lastBreakdownSnapshot['Lumber'] = deltas['Lumber'];
 
   // ============================================================
   // 4. 石头 — 石工
   // ============================================================
   // 原版 main.js L5663-5677: impact = 1.0（不是 0.8）
   const quarryWorkers = workers('quarry_worker');
-  let stoneBase = 1.0;  // quarry_worker.impact = 1.0
-  stoneBase *= getStoneBiomeMultiplier(state);
+  const stoneBiomeMult = getStoneBiomeMultiplier(state);
   // hammer 科技加成 — 原版 jobs.js L119: 每级 hammer +40%
   const hammerLevel = techLevel('hammer');
-  if (hammerLevel > 0) {
-    stoneBase *= 1 + hammerLevel * 0.4;
-  }
+  const hammerMult = hammerLevel > 0 ? 1 + hammerLevel * 0.4 : 1;
   // 炸药科技加成 — 原版 main.js: explosives >= 2 时采石场/铝精炼基础产量 + (tech * 25%)
   const quarryExplosiveMult = explosiveLevel >= 2 ? 1 + explosiveLevel * 0.25 : 1;
-  stoneBase *= quarryExplosiveMult;
   // 采石场加成 +2%/座（原版 main.js L5744-5745）
   const quarries = structCount('rock_quarry');
   const activeQuarries = poweredOn['rock_quarry'] ?? 0;
@@ -800,11 +938,28 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (activeQuarries > 0) {
     quarryPowerMult += getDischargePoweredBonus(activeQuarries, 0.04, dischargeActive);
   }
-  const stoneTraitMult = getWeakWorkerMultiplier(state) * getSuctionGripBonus(state) * getCalmGlobalBonus(state)
-    * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, quarryWorkers)
-    * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
-  deltas['Stone'] = quarryWorkers * stoneBase * stoneMult * quarryPowerMult * effectiveProdMult * stoneTraitMult;
-  captureDeltaSection('采石工');
+  const stoneHivemindMult = getHivemindMultiplier(state, quarryWorkers);
+  const stoneRitualMult = getRitualMultiplier(state, 'miner');
+  addBreakdownEntry('Stone', '采石工基础产出', quarryWorkers, 'source', '采石工');
+  deltas['Stone'] = applyBreakdownFactors('Stone', '采石工', quarryWorkers, [
+    { label: '生物群系', multiplier: stoneBiomeMult },
+    { label: '锤具科技', multiplier: hammerMult },
+    { label: '炸药科技', multiplier: quarryExplosiveMult },
+    { label: '采石场建筑', multiplier: stoneMult },
+    { label: '采石场供电', multiplier: quarryPowerMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '饥饿修正', multiplier: hungerMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    { label: '虚弱特质', multiplier: weakWorkerMult },
+    { label: '吸盘特质', multiplier: suctionGripMult },
+    { label: '平静特质', multiplier: calmGlobalMult },
+    { label: '聪慧特质', multiplier: intelligentGlobalMult },
+    { label: '蜂群特质', multiplier: stoneHivemindMult },
+    { label: '采矿仪式', multiplier: stoneRitualMult },
+    { label: '奴役修正', multiplier: slaverMult },
+  ]);
+  lastBreakdownSnapshot['Stone'] = deltas['Stone'];
 
   // ============================================================
   // 4.5 铝 — 采石副产物 (Aluminium)
@@ -813,26 +968,34 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const refineries = structCount('metal_refinery');
   if (refineries > 0) {
     const alumRatio = 0.08;
-    let alumBase = quarryWorkers * stoneBase * alumRatio;
-    
-    // 行星地质特征加成
-    if (state.city.geology?.['Aluminium']) {
-      alumBase *= 1 + state.city.geology['Aluminium'];
-    }
-
-    let alumDelta = alumBase * stoneMult * quarryPowerMult * effectiveProdMult;
-
-    // 金属精炼厂加成: +6%/座
-    let refineryMult = 1 + refineries * 0.06;
+    const aluminiumGeologyMult = 1 + (state.city.geology?.['Aluminium'] ?? 0);
+    const refineryBuildingMult = 1 + refineries * 0.06;
+    let refineryMult = refineryBuildingMult;
     // 如果研发了 alumina >= 2，通电的精炼厂额外 +6%/座
     if (techLevel('alumina') >= 2) {
       const activeRefineries = poweredOn['metal_refinery'] ?? 0;
       refineryMult += getDischargePoweredBonus(activeRefineries, 0.06, dischargeActive);
     }
-    alumDelta *= refineryMult;
-    deltas['Aluminium'] = alumDelta;
+    const refineryPowerMult = refineryMult / refineryBuildingMult;
+    const aluminiumBase = quarryWorkers * alumRatio;
+    addBreakdownEntry('Aluminium', '采石铝副产物基础', aluminiumBase, 'source', '铝副产物');
+    const aluminiumDelta = applyBreakdownFactors('Aluminium', '铝副产物', aluminiumBase, [
+      { label: '生物群系', multiplier: stoneBiomeMult },
+      { label: '锤具科技', multiplier: hammerMult },
+      { label: '炸药科技', multiplier: quarryExplosiveMult },
+      { label: '铝地质特征', multiplier: aluminiumGeologyMult },
+      { label: '采石场建筑', multiplier: stoneMult },
+      { label: '采石场供电', multiplier: quarryPowerMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      { label: '金属精炼厂建筑', multiplier: refineryBuildingMult },
+      { label: '金属精炼厂供电', multiplier: refineryPowerMult },
+    ]);
+    deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) + aluminiumDelta;
   }
-  captureDeltaSection('铝副产物');
+  lastBreakdownSnapshot['Aluminium'] = deltas['Aluminium'] ?? 0;
 
   // ============================================================
   // 5. 铜 / 铁 — 矿工
@@ -853,16 +1016,61 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const ironGeologyMult = 1 + (state.city.geology?.['Iron'] ?? 0);
   const copperBiomeMult = getCopperBiomeMultiplier(state);
   const ironBiomeMult = getIronBiomeMultiplier(state);
-  // Trait: weak (-), tough (+), suction_grip (+), calm (+), iron_allergy (-iron), intelligent, hivemind, ritual:miner
-  const minerTraitMult = getWeakWorkerMultiplier(state) * getToughMiningMultiplier(state) * getSuctionGripBonus(state)
-    * getCalmGlobalBonus(state) * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, actualMiners)
-    * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
-  deltas['Copper'] = actualMiners * (1 / 7) * minerToolMult * minerExplosiveMult * minePowerMult * copperGeologyMult * copperBiomeMult * minerPlanetMult * effectiveProdMult * minerTraitMult;
+  const toughMiningMult = getToughMiningMultiplier(state);
+  const minerHivemindMult = getHivemindMultiplier(state, actualMiners);
+  const miningRitualMult = getRitualMultiplier(state, 'miner');
+  const copperBase = actualMiners * (1 / 7);
+  addBreakdownEntry('Copper', '矿工铜基础产出', copperBase, 'source', '矿工');
+  const copperMinerDelta = applyBreakdownFactors('Copper', '矿工', copperBase, [
+    { label: '镐具科技', multiplier: minerToolMult },
+    { label: '炸药科技', multiplier: minerExplosiveMult },
+    { label: '矿井供电', multiplier: minePowerMult },
+    { label: '铜地质特征', multiplier: copperGeologyMult },
+    { label: '生物群系', multiplier: copperBiomeMult },
+    { label: '矿业行星特征', multiplier: minerPlanetMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '饥饿修正', multiplier: hungerMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    { label: '虚弱特质', multiplier: weakWorkerMult },
+    { label: '强韧特质', multiplier: toughMiningMult },
+    { label: '吸盘特质', multiplier: suctionGripMult },
+    { label: '平静特质', multiplier: calmGlobalMult },
+    { label: '聪慧特质', multiplier: intelligentGlobalMult },
+    { label: '蜂群特质', multiplier: minerHivemindMult },
+    { label: '采矿仪式', multiplier: miningRitualMult },
+    { label: '奴役修正', multiplier: slaverMult },
+  ]);
+  deltas['Copper'] = (deltas['Copper'] ?? 0) + copperMinerDelta;
+  lastBreakdownSnapshot['Copper'] = deltas['Copper'];
 
   if (techLevel('mining') >= 3) {
-    deltas['Iron'] = actualMiners * 0.25 * minerToolMult * minerExplosiveMult * minePowerMult * ironGeologyMult * ironBiomeMult * minerPlanetMult * effectiveProdMult * minerTraitMult * getIronAllergyPenalty(state);
+    const ironBase = actualMiners * 0.25;
+    addBreakdownEntry('Iron', '矿工铁基础产出', ironBase, 'source', '矿工');
+    const ironMinerDelta = applyBreakdownFactors('Iron', '矿工', ironBase, [
+      { label: '镐具科技', multiplier: minerToolMult },
+      { label: '炸药科技', multiplier: minerExplosiveMult },
+      { label: '矿井供电', multiplier: minePowerMult },
+      { label: '铁地质特征', multiplier: ironGeologyMult },
+      { label: '生物群系', multiplier: ironBiomeMult },
+      { label: '矿业行星特征', multiplier: minerPlanetMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      { label: '虚弱特质', multiplier: weakWorkerMult },
+      { label: '强韧特质', multiplier: toughMiningMult },
+      { label: '吸盘特质', multiplier: suctionGripMult },
+      { label: '平静特质', multiplier: calmGlobalMult },
+      { label: '聪慧特质', multiplier: intelligentGlobalMult },
+      { label: '蜂群特质', multiplier: minerHivemindMult },
+      { label: '采矿仪式', multiplier: miningRitualMult },
+      { label: '奴役修正', multiplier: slaverMult },
+      { label: '铁过敏特质', multiplier: getIronAllergyPenalty(state) },
+    ]);
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironMinerDelta;
   }
-  captureDeltaSection('矿工');
+  lastBreakdownSnapshot['Iron'] = deltas['Iron'] ?? 0;
 
   // ============================================================
   // 6. 煤炭 — 煤矿工人
@@ -872,21 +1080,39 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const activeCoalMines = poweredOn['coal_mine'] ?? 0;
   const coalPowerMult = 1 + getDischargePoweredBonus(activeCoalMines, 0.05, dischargeActive);
   const coalGeologyMult = 1 + (state.city.geology?.['Coal'] ?? 0);
-  const coalTraitMult = getWeakWorkerMultiplier(state) * getToughMiningMultiplier(state) * getSuctionGripBonus(state)
-    * getCalmGlobalBonus(state) * getIntelligentGlobalBonus(state) * getHivemindMultiplier(state, actualCoalMiners)
-    * getRitualMultiplier(state, 'miner') * getSlaverBonus(state);
-  deltas['Coal'] = actualCoalMiners * 0.2 * coalToolMult * minerExplosiveMult * coalPowerMult * coalGeologyMult * effectiveProdMult * coalTraitMult;
-  captureDeltaSection('煤矿工');
+  const coalHivemindMult = getHivemindMultiplier(state, actualCoalMiners);
+  const coalBase = actualCoalMiners * 0.2;
+  addBreakdownEntry('Coal', '煤矿工基础产出', coalBase, 'source', '煤矿工');
+  const coalMinerDelta = applyBreakdownFactors('Coal', '煤矿工', coalBase, [
+    { label: '镐具科技', multiplier: coalToolMult },
+    { label: '炸药科技', multiplier: minerExplosiveMult },
+    { label: '煤矿供电', multiplier: coalPowerMult },
+    { label: '煤地质特征', multiplier: coalGeologyMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '饥饿修正', multiplier: hungerMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    { label: '虚弱特质', multiplier: weakWorkerMult },
+    { label: '强韧特质', multiplier: toughMiningMult },
+    { label: '吸盘特质', multiplier: suctionGripMult },
+    { label: '平静特质', multiplier: calmGlobalMult },
+    { label: '聪慧特质', multiplier: intelligentGlobalMult },
+    { label: '蜂群特质', multiplier: coalHivemindMult },
+    { label: '采矿仪式', multiplier: miningRitualMult },
+    { label: '奴役修正', multiplier: slaverMult },
+  ]);
+  deltas['Coal'] = (deltas['Coal'] ?? 0) + coalMinerDelta;
+  lastBreakdownSnapshot['Coal'] = deltas['Coal'];
 
   // 铀 — 煤矿副产物
   // 对标 legacy main.js L6595: uranium = coal_delta / 115
-  if (techLevel('uranium') >= 1 && deltas['Coal'] > 0) {
-    let uraniumDelta = deltas['Coal'] / 115;
+  if (techLevel('uranium') >= 1 && coalMinerDelta > 0) {
+    let uraniumDelta = coalMinerDelta / 115;
     const geologyBonus = state.city.geology?.['Uranium'] ?? 0;
     if (geologyBonus) {
       uraniumDelta *= geologyBonus + 1;
     }
-    deltas['Uranium'] = uraniumDelta;
+    deltas['Uranium'] = (deltas['Uranium'] ?? 0) + uraniumDelta;
   }
   captureDeltaSection('铀副产物');
 
@@ -898,7 +1124,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const stonePerCement = 3;
     // 实际可用的石头限制水泥产出
     const availableStone = (state.resource['Stone']?.amount ?? 0) + (deltas['Stone'] ?? 0);
-    const maxByStone = Math.floor(availableStone / stonePerCement);
+    const maxByStone = Math.max(0, Math.floor(availableStone / stonePerCement));
     const effectiveCement = Math.min(cementWorkers, maxByStone);
     const cementLevel = techLevel('cement');
     const cementTechMult = cementLevel >= 7 ? 1.45 : (cementLevel >= 4 ? 1.2 : 1);
@@ -909,10 +1135,25 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       cementPowerRate,
       dischargeActive,
     );
-    deltas['Cement'] = effectiveCement * 0.4 * cementTechMult * cementPowerMult * effectiveProdMult;
-    deltas['Stone'] = (deltas['Stone'] ?? 0) - effectiveCement * stonePerCement;
+    const cementBase = cementWorkers * 0.4;
+    const stoneSupplyMult = cementWorkers > 0 ? effectiveCement / cementWorkers : 1;
+    addBreakdownEntry('Cement', '水泥工基础产出', cementBase, 'source', '水泥生产');
+    const cementDelta = applyBreakdownFactors('Cement', '水泥生产', cementBase, [
+      { label: '石料供应限制', multiplier: stoneSupplyMult },
+      { label: '水泥科技', multiplier: cementTechMult },
+      { label: '水泥厂供电', multiplier: cementPowerMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Cement'] = (deltas['Cement'] ?? 0) + cementDelta;
+    const stoneConsumed = effectiveCement * stonePerCement;
+    deltas['Stone'] = (deltas['Stone'] ?? 0) - stoneConsumed;
+    addBreakdownEntry('Stone', '水泥生产石料', -stoneConsumed, 'consume', '水泥生产');
   }
-  captureDeltaSection('水泥生产');
+  lastBreakdownSnapshot['Cement'] = deltas['Cement'] ?? 0;
+  lastBreakdownSnapshot['Stone'] = deltas['Stone'] ?? 0;
 
   // ============================================================
   // 8. 知识 — 日晷基础 + 教授 + 科学家
@@ -930,45 +1171,92 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const libraries = structCount('library');
   // 教授基础产出 — 原版 main.js L9313:
   // professor.impact = 0.5 + (library_count * 0.01)
-  let profImpact = 0.5 + getProfessorTraitBonus(state) + libraries * 0.01;
-  if (techLevel('anthropology') >= 3) {
-    profImpact *= 1 + structCount('temple') * 0.05;
-  }
+  const professorBase = professors * 0.5;
+  const professorTraitBonus = professors * getProfessorTraitBonus(state);
+  const professorLibraryBonus = professors * libraries * 0.01;
+  const professorTempleMult = techLevel('anthropology') >= 3
+    ? 1 + structCount('temple') * 0.05
+    : 1;
   // 神权政体惩罚——原版 main.js L4183-4184:
   // if (govern.type === 'theocracy') professors_base *= 1 - (govEffect.theocracy()[1] / 100)
   const profGovMult = getKnowledgeMultiplier(state, 'professor');
-  const professorsBase = professors * profImpact * profGovMult;
   // 科学家产出 — impact = 1.0
-  let sciImpact = 1.0;
   const activeWardenclyffes = poweredOn['wardenclyffe'] ?? 0;
-  if (techLevel('science') >= 6 && activeWardenclyffes > 0) {
-    sciImpact *= 1 + professors * activeWardenclyffes * 0.01;
-  }
+  const wardenclyffeScientistMult = techLevel('science') >= 6 && activeWardenclyffes > 0
+    ? 1 + professors * activeWardenclyffes * 0.01
+    : 1;
   // 卫星加成——原版 main.js L4197-4199:
   // if (global.space['satellite']) scientist_base *= 1 + (satellite.count * 0.01)
-  sciImpact *= getSatelliteScientistImpactMultiplier(state);
+  const satelliteScientistMult = getSatelliteScientistImpactMultiplier(state);
   // cataclysm 分支下，月球观测站还会放大科学家产出。
-  if (state.race['cataclysm'] && observatorySupported > 0) {
-    sciImpact *= 1 + observatorySupported * 0.25;
-  }
+  const observatoryScientistMult = state.race['cataclysm'] && observatorySupported > 0
+    ? 1 + observatorySupported * 0.25
+    : 1;
   // 神权政体惩罚——原版 main.js L4200-4201:
   // if (govern.type === 'theocracy') scientist_base *= 1 - (govEffect.theocracy()[2] / 100)
   const sciGovMult = getKnowledgeMultiplier(state, 'scientist');
-  const scientistBase = scientists * sciImpact * sciGovMult;
   // 图书馆全局加成 — 原版 main.js L4261
   // legacy: delta = (prof+sci)*hunger*global_mult + sundial*global_mult, 然后 delta *= library_mult
   // library_mult 作用于**包含日晷的整体 delta**，不仅仅是 prof+sci
   const libraryMult = 1 + libraries * 0.05;
   // Trait: pompous (-prof), ritual:science, logical (citizen knowledge)
-  const profTraitMult = getPompousProfessorPenalty(state) * getRitualMultiplier(state, 'science');
-  // 教授+科学家受饥饿影响；日晷不受（原版 L4228-4229）
-  const workerKnowledge = (professorsBase * profTraitMult + scientistBase) * effectiveProdMult;
-  const sundialKnowledge = (sundialBase + sundialPlanet) * prodMult * planetGlobalMult;
-  // Logical 合成种族：每市民 +X 知识/秒
-  const logicalKnowledge = getLogicalKnowledgePerCitizen(state) * pop * prodMult;
-  // legacy L4261: delta *= library_mult — 对整体（含日晷）统一乘以图书馆加成
-  deltas['Knowledge'] = (workerKnowledge + sundialKnowledge + logicalKnowledge) * libraryMult;
-  captureDeltaSection('知识生产');
+  const pompousProfessorMult = getPompousProfessorPenalty(state);
+  const scienceRitualMult = getRitualMultiplier(state, 'science');
+
+  addBreakdownEntry('Knowledge', '教授基础产出', professorBase, 'source', '知识生产');
+  addBreakdownEntry('Knowledge', '好学特质', professorTraitBonus, 'modifier', '知识生产');
+  addBreakdownEntry('Knowledge', '图书馆教授影响', professorLibraryBonus, 'modifier', '知识生产');
+  const professorKnowledge = applyBreakdownFactors(
+    'Knowledge',
+    '知识生产',
+    professorBase + professorTraitBonus + professorLibraryBonus,
+    [
+      { label: '神殿人类学加成', multiplier: professorTempleMult },
+      { label: '教授政体修正', multiplier: profGovMult },
+      { label: '自大特质', multiplier: pompousProfessorMult },
+      { label: '科学仪式', multiplier: scienceRitualMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ],
+  );
+
+  addBreakdownEntry('Knowledge', '科学家基础产出', scientists, 'source', '知识生产');
+  const scientistKnowledge = applyBreakdownFactors('Knowledge', '知识生产', scientists, [
+    { label: '沃登克里弗供电', multiplier: wardenclyffeScientistMult },
+    { label: '卫星建筑', multiplier: satelliteScientistMult },
+    { label: '观测站支援', multiplier: observatoryScientistMult },
+    { label: '科学家政体修正', multiplier: sciGovMult },
+    { label: '士气效率', multiplier: prodMult },
+    { label: '饥饿修正', multiplier: hungerMult },
+    { label: '行星全局修正', multiplier: planetGlobalMult },
+    { label: '占领/统一政策', multiplier: occupyUnifyMult },
+  ]);
+
+  addBreakdownEntry('Knowledge', '日晷基础产出', sundialBase, 'source', '知识生产');
+  addBreakdownEntry('Knowledge', '磁性行星日晷', sundialPlanet, 'modifier', '知识生产');
+  const sundialKnowledge = applyBreakdownFactors(
+    'Knowledge',
+    '知识生产',
+    sundialBase + sundialPlanet,
+    [
+      { label: '士气效率', multiplier: prodMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+    ],
+  );
+
+  const logicalKnowledgeBase = getLogicalKnowledgePerCitizen(state) * pop;
+  addBreakdownEntry('Knowledge', '逻辑特质市民产出', logicalKnowledgeBase, 'source', '知识生产');
+  const logicalKnowledge = applyBreakdownFactors('Knowledge', '知识生产', logicalKnowledgeBase, [
+    { label: '士气效率', multiplier: prodMult },
+  ]);
+
+  const knowledgeBeforeLibraries = professorKnowledge + scientistKnowledge + sundialKnowledge + logicalKnowledge;
+  deltas['Knowledge'] = applyBreakdownFactors('Knowledge', '知识生产', knowledgeBeforeLibraries, [
+    { label: '图书馆建筑', multiplier: libraryMult },
+  ]);
+  lastBreakdownSnapshot['Knowledge'] = deltas['Knowledge'];
 
   // ============================================================
   // 8a. 信仰（Faith）— 牧师产出
@@ -997,10 +1285,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (techLevel('currency') >= 1) {
     const taxRate = state.civic.taxes?.tax_rate ?? 20;
     const bankers = workers('banker');
-    const taxMoneyMult = prodMult * hungerMult * planetGlobalMult;
     // 原版 L7587: citizens = pop + soldiers - unemployed
     const citizens = pop + soldiers - unemployed;
-    let incomeBase = citizens * 0.4;  // 原版 L7592, non-truepath
+    const taxIncomeBase = citizens * 0.4;  // 原版 L7592, non-truepath
+    let bankerIncomeMult = 1;
     // 银行家加成只在“已喂饱 fed”时生效 — 原版 L7601
     if ((state.resource['Food']?.amount ?? 0) > 0 && techLevel('banking') >= 2 && bankers > 0) {
       let bankerImpact = 0.1;  // 基础 impact
@@ -1009,11 +1297,11 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
       bankerImpact *= getBankerImpactMultiplier(state);
       bankerImpact *= getTruthfulBankerPenalty(state); // seraph: -X% banker
-      incomeBase *= 1 + bankers * bankerImpact;
+      bankerIncomeMult = 1 + bankers * bankerImpact;
     }
-    incomeBase *= getTaxIncomeTraitMultiplier(state);
-    incomeBase *= taxRate / 20;  // 原版 L7626
-    incomeBase *= getTaxMultiplier(state);
+    const taxTraitMult = getTaxIncomeTraitMultiplier(state);
+    const taxRateMult = taxRate / 20;
+    const taxGovernmentMult = getTaxMultiplier(state);
 
     // anthropology:4 开始，每座神庙使税收 +2.5%
     let templeTaxMult = 1;
@@ -1021,7 +1309,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       templeTaxMult += structCount('temple') * 0.025 * getSpiritualTempleBonus(state);
     }
 
-    deltas['Money'] = incomeBase * templeTaxMult * taxMoneyMult;
+    addBreakdownEntry('Money', '市民基础税收', taxIncomeBase, 'source', '税收与商业');
+    const taxIncome = applyBreakdownFactors('Money', '税收与商业', taxIncomeBase, [
+      { label: '银行家岗位', multiplier: bankerIncomeMult },
+      { label: '贪婪特质', multiplier: taxTraitMult },
+      { label: '税率政策', multiplier: taxRateMult },
+      { label: '税收政体修正', multiplier: taxGovernmentMult },
+      { label: '神殿建筑', multiplier: templeTaxMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+    ]);
+    let commercialIncome = 0;
 
     // 赌场收入 — 对标 legacy main.js L7674-7684
     // 计算所有通电的赌场（包括 city.casino 和 space.spc_casino）
@@ -1029,48 +1328,77 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const spcCasinoOn = (state.space['spc_casino'] as { on?: number } | undefined)?.on ?? 0;
     const activeCasinos = cityCasinoOn + spcCasinoOn;
     if (techLevel('gambling') >= 1 && activeCasinos > 0) {
-      deltas['Money'] += activeCasinos
-        * getCasinoIncomePerActive(state)
-        * getCasinoIncomeMultiplier(state)
-        * taxMoneyMult;
+      const casinoIncomeBase = activeCasinos * getCasinoIncomePerActive(state);
+      addBreakdownEntry('Money', '赌场基础收入', casinoIncomeBase, 'source', '税收与商业');
+      commercialIncome += applyBreakdownFactors('Money', '税收与商业', casinoIncomeBase, [
+        { label: '赌场政体/成就修正', multiplier: getCasinoIncomeMultiplier(state) },
+        { label: '士气效率', multiplier: prodMult },
+        { label: '饥饿修正', multiplier: hungerMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+      ]);
     }
 
     // 旅游收入 — 对标 legacy main.js L7687-7728（当前阶段只保留已实装的贡献项）
     if (touristCenters > 0) {
-      deltas['Money'] += getTourismIncome(state, touristCenters)
-        * getTourismIncomeMultiplier(state)
-        * taxMoneyMult;
+      const tourismIncomeBase = getTourismIncome(state, touristCenters);
+      addBreakdownEntry('Money', '旅游中心基础收入', tourismIncomeBase, 'source', '税收与商业');
+      commercialIncome += applyBreakdownFactors('Money', '税收与商业', tourismIncomeBase, [
+        { label: '旅游政体/餐厅修正', multiplier: getTourismIncomeMultiplier(state) },
+        { label: '士气效率', multiplier: prodMult },
+        { label: '饥饿修正', multiplier: hungerMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+      ]);
     }
+    deltas['Money'] = taxIncome + commercialIncome;
+    lastBreakdownSnapshot['Money'] = deltas['Money'];
   }
-  captureDeltaSection('税收与商业');
 
   // ============================================================
   // 9a. 冶金系统 (Metallurgy) — 对标 legacy main.js L4842-5146
   // ============================================================
   const smelterState = state.city.smelter;
+  const smelterWoodFuelResource = state.race['evil']
+    ? state.race['soul_eater'] && state.race.species !== 'wendigo' && !state.race['artificial']
+      ? 'Food'
+      : 'Furs'
+    : 'Lumber';
   if (smelterState && smelterState.count > 0) {
     let woodFuel = smelterState.Wood ?? 0;
     let coalFuel = smelterState.Coal ?? 0;
     let oilFuel = smelterState.Oil ?? 0;
+    const substitutesCoalForWood = Boolean(
+      (state.race['kindling_kindred'] || state.race['smoldering']) && !state.race['evil'],
+    );
+    if (substitutesCoalForWood) {
+      coalFuel += woodFuel;
+      woodFuel = 0;
+    }
 
-    let ironSmelter = smelterState.Iron ?? 0;
-    let steelSmelter = Object.prototype.hasOwnProperty.call(state.race, 'steelen')
-      ? 0
-      : smelterState.Steel ?? 0;
-    const iridiumSmelter = smelterState.Iridium ?? 0;
+    const woodFuelResourceId = smelterWoodFuelResource;
 
-    const availableLumber = (state.resource['Lumber']?.amount ?? 0) / TIME_MULTIPLIER;
+    const assignedIronSmelters = smelterState.Iron ?? 0;
+    const redirectedSteelSmelters = Object.prototype.hasOwnProperty.call(state.race, 'steelen')
+      ? smelterState.Steel ?? 0
+      : 0;
+    let requestedIronSmelters = assignedIronSmelters + redirectedSteelSmelters;
+    const requestedSteelSmelters = redirectedSteelSmelters > 0 ? 0 : smelterState.Steel ?? 0;
+    const requestedIridiumSmelters = smelterState.Iridium ?? 0;
+    let ironSmelter = requestedIronSmelters;
+    let steelSmelter = requestedSteelSmelters;
+    let iridiumSmelter = requestedIridiumSmelters;
+
+    const availableWoodFuel = (state.resource[woodFuelResourceId]?.amount ?? 0) / TIME_MULTIPLIER;
     const availableCoal = (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER;
     const availableOil = (state.resource['Oil']?.amount ?? 0) / TIME_MULTIPLIER;
 
     // 对标 legacy industry.js L150-181 smelterFuelConfig()
     // l_cost=3, c_cost=0.25(kindling_kindred/smoldering: 0.15), o_cost=0.35(forge种族: 0)
-    const lumberCost = 3;
-    const coalCost = 0.25;   // 原版默认 0.25
-    const oilCost = 0.35;    // 原版默认 0.35
+    const woodFuelCost = woodFuelResourceId === 'Furs' ? 1 : 3;
+    const coalCost = state.race['kindling_kindred'] || state.race['smoldering'] ? 0.15 : 0.25;
+    const oilCost = state.race['forge'] ? 0 : 0.35;
 
     // 处理实际能够工作的燃料槽
-    const maxWoodOperable = Math.max(0, Math.floor(availableLumber / lumberCost));
+    const maxWoodOperable = Math.max(0, Math.floor(availableWoodFuel / woodFuelCost));
     if (maxWoodOperable < woodFuel) {
       woodFuel = maxWoodOperable;
     }
@@ -1078,7 +1406,9 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     if (maxCoalOperable < coalFuel) {
       coalFuel = maxCoalOperable;
     }
-    const maxOilOperable = Math.max(0, Math.floor(availableOil / oilCost));
+    const maxOilOperable = oilCost > 0
+      ? Math.max(0, Math.floor(availableOil / oilCost))
+      : oilFuel;
     if (maxOilOperable < oilFuel) {
       oilFuel = maxOilOperable;
     }
@@ -1088,6 +1418,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     // 当配置产出 > 实际提供的燃料数时做自动降级
     // 对标 legacy main.js L4993-5004: 先降钢，再降铁，最后降铱
     let overage = ironSmelter + steelSmelter + iridiumSmelter - totalFuel;
+    let implicitIronSmelters = 0;
     if (overage > 0) {
       const disableSteel = Math.min(overage, steelSmelter);
       steelSmelter -= disableSteel;
@@ -1095,17 +1426,44 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
       const disableIron = Math.min(overage, ironSmelter);
       ironSmelter -= disableIron;
+      overage -= disableIron;
 
-      // 极端情况：iridium 也不够
+      const disableIridium = Math.min(overage, iridiumSmelter);
+      iridiumSmelter -= disableIridium;
     } else if (overage < 0) {
       // 原版默认会将多余的所有燃料强行塞入产铁
-      ironSmelter += Math.abs(overage);
+      implicitIronSmelters = Math.abs(overage);
+      requestedIronSmelters += implicitIronSmelters;
+      ironSmelter += implicitIronSmelters;
     }
 
     // 扣除燃料
-    deltas['Lumber'] = (deltas['Lumber'] ?? 0) - woodFuel * lumberCost;
-    deltas['Coal'] = (deltas['Coal'] ?? 0) - coalFuel * coalCost;
-    deltas['Oil'] = (deltas['Oil'] ?? 0) - oilFuel * oilCost;
+    const woodFuelConsumed = woodFuel * woodFuelCost;
+    const coalFuelConsumed = coalFuel * coalCost;
+    const oilFuelConsumed = oilFuel * oilCost;
+    deltas[woodFuelResourceId] = (deltas[woodFuelResourceId] ?? 0) - woodFuelConsumed;
+    deltas['Coal'] = (deltas['Coal'] ?? 0) - coalFuelConsumed;
+    deltas['Oil'] = (deltas['Oil'] ?? 0) - oilFuelConsumed;
+    const woodFuelName = state.resource[woodFuelResourceId]?.name ?? woodFuelResourceId;
+    addBreakdownEntry(
+      woodFuelResourceId,
+      `冶炼厂${woodFuelName}燃料`,
+      -woodFuelConsumed,
+      'consume',
+      '冶金系统',
+    );
+    addBreakdownEntry('Coal', '冶炼厂煤炭燃料', -coalFuelConsumed, 'consume', '冶金系统');
+    addBreakdownEntry('Oil', '冶炼厂石油燃料', -oilFuelConsumed, 'consume', '冶金系统');
+
+    // 煤燃料产生铀灰，不受全局生产乘数影响。
+    if (coalFuelConsumed > 0 && techLevel('uranium') >= 3) {
+      const uraniumAshBase = coalFuelConsumed / 65;
+      addBreakdownEntry('Uranium', '冶炼厂煤灰基础', uraniumAshBase, 'source', '冶金系统');
+      const uraniumAsh = applyBreakdownFactors('Uranium', '冶金系统', uraniumAshBase, [
+        { label: '铀地质特征', multiplier: 1 + (state.city.geology?.['Uranium'] ?? 0) },
+      ]);
+      deltas['Uranium'] = (deltas['Uranium'] ?? 0) + uraniumAsh;
+    }
 
     // 产出铁 (不受全员效率影响，定额产出)
     // 对标 legacy main.js L5007-5022
@@ -1113,74 +1471,158 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     const ironAdvanced = techLevel('smelting') >= 7 ? 1.25 : 1;
     // oil_bonus: 每个石油燃料槽加成铁/铱产量
     const oilBonus = oilFuel > 0 ? 1 + (oilFuel / 200) : 1;  // legacy L5019-5022
-    // 熔炉 trait 加成：pyrophobia 减产、iron_allergy 减铁、forge（无燃料）
+    // 熔炉 trait 加成：pyrophobia 减产、iron_allergy 减铁
     const smelterTraitMult = getPyrophobiaSmelterPenalty(state);
-    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironSmelter * ironBlast * ironAdvanced * oilBonus * smelterTraitMult * getIronAllergyPenalty(state);
+    addBreakdownEntry('Iron', '熔炉炼铁分配', assignedIronSmelters, 'source', '冶金系统');
+    addBreakdownEntry('Iron', '无钢挑战转炼铁', redirectedSteelSmelters, 'source', '冶金系统');
+    addBreakdownEntry('Iron', '未分配燃料转炼铁', implicitIronSmelters, 'source', '冶金系统');
+    const ironOutput = applyBreakdownFactors('Iron', '冶金系统', requestedIronSmelters, [
+      {
+        label: '可用燃料限制',
+        multiplier: requestedIronSmelters > 0 ? ironSmelter / requestedIronSmelters : 1,
+      },
+      { label: '高炉科技', multiplier: ironBlast },
+      { label: '先进冶炼科技', multiplier: ironAdvanced },
+      { label: '石油燃料加成', multiplier: oilBonus },
+      { label: '畏热症特质', multiplier: smelterTraitMult },
+      { label: '铁过敏特质', multiplier: getIronAllergyPenalty(state) },
+    ]);
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironOutput;
 
     // 产出铱 — 对标 legacy main.js L5008-5021
     // iridium_smelter *= 0.05（基础铱效率），同样应用 smelting>=7 和 oil_bonus 修正
     // legacy L5008: iridium_smelter *= 0.05
     // legacy L5017: iridium_smelter *= 1.25 (smelting>=7)
     // legacy L5021: iridium_smelter *= 1 + (oil_bonus/200)
-    if (iridiumSmelter > 0 && (state.resource['Iridium']?.display ?? false)) {
-      const iridiumBase = iridiumSmelter * 0.05 * ironAdvanced * oilBonus;
-      deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumBase;
+    if (requestedIridiumSmelters > 0 && (state.resource['Iridium']?.display ?? false)) {
+      const iridiumBase = requestedIridiumSmelters * 0.05;
+      addBreakdownEntry('Iridium', '熔炉炼铱基础', iridiumBase, 'source', '冶金系统');
+      const iridiumOutput = applyBreakdownFactors('Iridium', '冶金系统', iridiumBase, [
+        {
+          label: '可用燃料限制',
+          multiplier: requestedIridiumSmelters > 0 ? iridiumSmelter / requestedIridiumSmelters : 1,
+        },
+        { label: '先进冶炼科技', multiplier: ironAdvanced },
+        { label: '石油燃料加成', multiplier: oilBonus },
+        { label: '畏热症特质', multiplier: smelterTraitMult },
+      ]);
+      deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumOutput;
     }
 
     // 产出钢
-    if (techLevel('smelting') >= 2 && steelSmelter > 0) {
-      let ironConsume = steelSmelter * 2;
-      let coalConsume = steelSmelter * 0.25;
-
-      const availIron = (state.resource['Iron']?.amount ?? 0) / TIME_MULTIPLIER;
-      const availCoal = (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER;
-
-      // 验证库存，削减无效配额
-      while ((ironConsume > availIron && ironConsume > 0) || (coalConsume > availCoal && coalConsume > 0)) {
-        ironConsume -= 2;
-        coalConsume -= 0.25;
-        steelSmelter--;
-      }
+    if (techLevel('smelting') >= 2 && requestedSteelSmelters > 0) {
+      const fuelLimitedSteelSmelters = steelSmelter;
+      const availIron = Math.max(0, (state.resource['Iron']?.amount ?? 0) / TIME_MULTIPLIER);
+      const availCoal = Math.max(
+        0,
+        (state.resource['Coal']?.amount ?? 0) / TIME_MULTIPLIER - coalFuelConsumed,
+      );
+      steelSmelter = Math.min(
+        fuelLimitedSteelSmelters,
+        Math.floor(availIron / 2),
+        Math.floor(availCoal / 0.25),
+      );
+      const ironConsume = steelSmelter * 2;
+      const coalConsume = steelSmelter * 0.25;
 
       deltas['Iron'] = (deltas['Iron'] ?? 0) - ironConsume;
       deltas['Coal'] = (deltas['Coal'] ?? 0) - coalConsume;
+      addBreakdownEntry('Iron', '炼钢消耗铁', -ironConsume, 'consume', '冶金系统');
+      addBreakdownEntry('Coal', '炼钢消耗煤', -coalConsume, 'consume', '冶金系统');
 
-      let steelBase = 1;
+      let steelTechMult = 1;
       for (let i = 4; i <= 6; i++) {
-        if (techLevel('smelting') >= i) steelBase *= 1.2;
+        if (techLevel('smelting') >= i) steelTechMult *= 1.2;
       }
-      if (techLevel('smelting') >= 7) steelBase *= 1.25;
+      if (techLevel('smelting') >= 7) steelTechMult *= 1.25;
 
       // 原版：钢的合成受全局效率 (effectiveProdMult) 加成
       const steelenBonus = 1 + getAchievementLevel(state, 'steelen') * 0.02;
-      const steelOutput = steelSmelter * steelBase * effectiveProdMult * smelterTraitMult * steelenBonus;
+      const lamentisBonus = getAchievementLevel(state, 'lamentis') >= 2 ? 1.1 : 1;
+      addBreakdownEntry('Steel', '熔炉炼钢分配', requestedSteelSmelters, 'source', '冶金系统');
+      const steelOutput = applyBreakdownFactors('Steel', '冶金系统', requestedSteelSmelters, [
+        {
+          label: '可用燃料限制',
+          multiplier: requestedSteelSmelters > 0
+            ? fuelLimitedSteelSmelters / requestedSteelSmelters
+            : 1,
+        },
+        {
+          label: '铁/煤原料限制',
+          multiplier: fuelLimitedSteelSmelters > 0
+            ? steelSmelter / fuelLimitedSteelSmelters
+            : 1,
+        },
+        { label: '炼钢科技', multiplier: steelTechMult },
+        { label: '石油燃料加成', multiplier: oilBonus },
+        { label: '士气效率', multiplier: prodMult },
+        { label: '饥饿修正', multiplier: hungerMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+        { label: '占领/统一政策', multiplier: occupyUnifyMult },
+        { label: '畏热症特质', multiplier: smelterTraitMult },
+        { label: '无钢成就加成', multiplier: steelenBonus },
+        { label: '拉门提斯成就加成', multiplier: lamentisBonus },
+      ]);
       deltas['Steel'] = (deltas['Steel'] ?? 0) + steelOutput;
 
       // 钛副产物
       if (techLevel('titanium') >= 1) {
         const titaniumDivisor = techLevel('titanium') >= 3 ? 10 : 25;
-        deltas['Titanium'] = (deltas['Titanium'] ?? 0) + steelOutput / titaniumDivisor;
+        addBreakdownEntry('Titanium', '炼钢钛副产物基础', steelOutput, 'source', '冶金系统');
+        const titaniumOutput = applyBreakdownFactors('Titanium', '冶金系统', steelOutput, [
+          { label: '钛提炼科技', multiplier: 1 / titaniumDivisor, detail: `1/${titaniumDivisor}` },
+        ]);
+        deltas['Titanium'] = (deltas['Titanium'] ?? 0) + titaniumOutput;
       }
     }
   }
-  captureDeltaSection('冶金系统');
+  for (const resId of new Set([
+    smelterWoodFuelResource,
+    'Lumber',
+    'Coal',
+    'Oil',
+    'Uranium',
+    'Iron',
+    'Iridium',
+    'Steel',
+    'Titanium',
+  ])) {
+    lastBreakdownSnapshot[resId] = deltas[resId] ?? 0;
+  }
 
   // ============================================================
   // 9b. 石油产出 — 对标 legacy main.js L6720-6760
   // ============================================================
   const oilWells = structCount('oil_well');
   if (oilWells > 0 && techLevel('oil') >= 1) {
-    let oilPerWell = techLevel('oil') >= 4 ? 0.48 : 0.4;
-    if (techLevel('oil') >= 7) {
-      oilPerWell *= 2;
-    } else if (techLevel('oil') >= 5) {
-      oilPerWell *= techLevel('oil') >= 6 ? 1.75 : 1.25;
-    }
-    oilPerWell *= 1 + (state.city.geology?.['Oil'] ?? 0);
-    oilPerWell *= getOilBiomeMultiplier(state);
-    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWells * oilPerWell * effectiveProdMult;
+    const oilLevel = techLevel('oil');
+    const drillingTechMult = oilLevel >= 4 ? 1.2 : 1;
+    const refiningTechMult = oilLevel >= 7
+      ? 2
+      : oilLevel >= 6
+        ? 1.75
+        : oilLevel >= 5
+          ? 1.25
+          : 1;
+    const oilGeologyMult = 1 + (state.city.geology?.['Oil'] ?? 0);
+    const oilBiomeMult = getOilBiomeMultiplier(state);
+    const dirtyJobsMult = 1 + govActive(state, 'dirty_jobs', 2) / 100;
+    const oilWellBase = oilWells * 0.4;
+    addBreakdownEntry('Oil', '油井基础产出', oilWellBase, 'source', '石油井');
+    const oilWellOutput = applyBreakdownFactors('Oil', '石油井', oilWellBase, [
+      { label: '钻井科技', multiplier: drillingTechMult },
+      { label: '石油提炼科技', multiplier: refiningTechMult },
+      { label: '石油地质特征', multiplier: oilGeologyMult },
+      { label: '生物群系', multiplier: oilBiomeMult },
+      { label: '苦活担当总督', multiplier: dirtyJobsMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilWellOutput;
   }
-  captureDeltaSection('石油井');
+  lastBreakdownSnapshot['Oil'] = deltas['Oil'] ?? 0;
 
   // ============================================================
   // 9c. 深空建筑产出分段 — 对标 legacy/src/prod.js
@@ -1188,122 +1630,273 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // gas_mining (He3 采集船) — prod.js L340-375
   const gasShipCount = poweredOn['gas_mining'] ?? 0;
   if (gasShipCount > 0) {
-    const gasTech = techLevel('helium');
-    let gasRate = 0.5;
-    if (gasTech >= 4) gasRate = 0.65;
-    if (gasTech >= 5) gasRate = 0.85;
-    if (dischargeActive) gasRate *= 0.5;
-    deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + gasShipCount * gasRate;
+    const gasBase = gasShipCount * 0.5;
+    addBreakdownEntry('Helium_3', '气体采集站基础产出', gasBase, 'source', '气态巨行星采集');
+    const gasOutput = applyBreakdownFactors('Helium_3', '气态巨行星采集', gasBase, [
+      { label: '氦-3 吸引科技', multiplier: techLevel('helium') >= 1 ? 1.3 : 1 },
+      { label: '放电挑战', multiplier: dischargeActive ? 0.5 : 1 },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + gasOutput;
   }
-  captureDeltaSection('气态巨行星采集');
+  lastBreakdownSnapshot['Helium_3'] = deltas['Helium_3'] ?? 0;
 
   // oil_extractor (气态卫星石油) — prod.js L395-425
-  const oilExtractorCount = (state.space['oil_extractor'] as { on?: number } | undefined)?.on ?? 0;
+  const oilExtractorCount = poweredOn['oil_extractor'] ?? 0;
   if (oilExtractorCount > 0) {
-    let extractRate = techLevel('oil') >= 4 ? 0.48 : 0.4;
-    if (techLevel('oil') >= 7) {
-      extractRate *= 2;
-    } else if (techLevel('oil') >= 5) {
-      extractRate *= techLevel('oil') >= 6 ? 1.75 : 1.25;
-    }
+    const oilLevel = techLevel('oil');
+    const drillingTechMult = oilLevel >= 4 ? 1.2 : 1;
+    const refiningTechMult = oilLevel >= 7
+      ? 2
+      : oilLevel >= 6
+        ? 1.75
+        : oilLevel >= 5
+          ? 1.25
+          : 1;
     const miningDrones = (state.space['drone'] as { count?: number } | undefined)?.count ?? 0;
-    if (miningDrones > 0) {
-      const droneRate = getAchievementLevel(state, 'iron_will') >= 3 ? 0.12 : 0.06;
-      extractRate *= 1 + miningDrones * droneRate;
-    }
-    deltas['Oil'] = (deltas['Oil'] ?? 0) + oilExtractorCount * extractRate;
+    const droneRate = getAchievementLevel(state, 'iron_will') >= 3 ? 0.12 : 0.06;
+    const droneMult = 1 + miningDrones * droneRate;
+    const extractorBase = oilExtractorCount * 0.4;
+    addBreakdownEntry('Oil', '石油提取器基础产出', extractorBase, 'source', '气态巨行星石油');
+    const extractorOutput = applyBreakdownFactors('Oil', '气态巨行星石油', extractorBase, [
+      { label: '钻井科技', multiplier: drillingTechMult },
+      { label: '石油提炼科技', multiplier: refiningTechMult },
+      { label: '采矿无人机', multiplier: droneMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Oil'] = (deltas['Oil'] ?? 0) + extractorOutput;
   }
-  captureDeltaSection('气态巨行星石油');
+  lastBreakdownSnapshot['Oil'] = deltas['Oil'] ?? 0;
 
-  // space_station (小行星带) belt_mining — prod.js L430-460
-  const stationCount = (state.space['space_station'] as { on?: number } | undefined)?.on ?? 0;
-  if (stationCount > 0) {
-    const asteroidTech = techLevel('asteroid');
-    let beltRate = 0.12;
-    if (asteroidTech >= 5) beltRate = 0.18;
-    if (asteroidTech >= 6) beltRate = 0.28;
-    const beltMining = stationCount * beltRate;
-    deltas['Iron'] = (deltas['Iron'] ?? 0) + beltMining;
+  const eleriumShipSupported = spaceSupport.supportOn['elerium_ship'] ?? 0;
+  const iridiumShipSupported = spaceSupport.supportOn['iridium_ship'] ?? 0;
+  const ironShipSupported = spaceSupport.supportOn['iron_ship'] ?? 0;
+  const asteroidTech = techLevel('asteroid');
 
-    // Elerium 随机发现事件 — 对标 legacy main.js L10875-10895
-    // 当 asteroid=3 且矿船活跃时，以概率 beltMining/250 触发 asteroid:4
-    if (asteroidTech === 3 && beltMining > 0) {
-      if (Math.random() * 250 <= beltMining) {
-        const next = state as GameState;
-        next.tech['asteroid'] = 4;
-        if (!next.resource['Elerium']) {
-          next.resource['Elerium'] = { name: '超铀', amount: 0, max: 100, display: true, diff: 0, value: 0, rate: 0, crates: 0, delta: 0 };
-        } else {
-          next.resource['Elerium'].display = true;
-        }
-        messages.push({
-          text: '⚛️ 矿船在小行星带发现了超铀元素！',
-          type: 'info',
-          category: 'progress',
-        });
-      }
-    }
+  // Elerium 随机发现事件 — 对标 legacy main.js L10875-10895
+  // asteroid=3 时，实际获得支援的铁/铱采矿船共同提供发现概率。
+  const beltMiningActivity = ironShipSupported + iridiumShipSupported;
+  if (asteroidTech === 3 && beltMiningActivity > 0 && Math.random() * 250 <= beltMiningActivity) {
+    asteroidEleriumDiscovered = true;
+    messages.push({
+      text: '⚛️ 矿船在小行星带发现了超铀元素！',
+      type: 'info',
+      category: 'progress',
+    });
   }
-  captureDeltaSection('小行星采矿');
 
   // elerium_ship — 对标 legacy prod.js L168-171
-  const eleriumShipSupported = spaceSupport.supportOn['elerium_ship'] ?? 0;
   if (eleriumShipSupported > 0) {
-    const asteroidTech = techLevel('asteroid');
-    let eleriumRate = 0.005;
-    if (asteroidTech >= 6) eleriumRate = 0.0075;
-    if (asteroidTech >= 7) eleriumRate = 0.009;
-    if (dischargeActive) eleriumRate *= 0.75;
-    deltas['Elerium'] = (deltas['Elerium'] ?? 0) + eleriumShipSupported * eleriumRate;
+    const eleriumTechMult = asteroidTech >= 7 ? 1.8 : asteroidTech >= 6 ? 1.5 : 1;
+    const eleriumBase = eleriumShipSupported * 0.005;
+    addBreakdownEntry('Elerium', '超铀采矿船基础产出', eleriumBase, 'source', '超铀采矿船');
+    const eleriumOutput = applyBreakdownFactors('Elerium', '超铀采矿船', eleriumBase, [
+      { label: '小行星采矿科技', multiplier: eleriumTechMult },
+      { label: '放电挑战', multiplier: dischargeActive ? 0.75 : 1 },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Elerium'] = (deltas['Elerium'] ?? 0) + eleriumOutput;
   }
-  captureDeltaSection('超铀采矿船');
+  lastBreakdownSnapshot['Elerium'] = deltas['Elerium'] ?? 0;
 
   // iridium_ship — 对标 legacy prod.js L172-175
-  const iridiumShipSupported = spaceSupport.supportOn['iridium_ship'] ?? 0;
   if (iridiumShipSupported > 0) {
-    const asteroidTech = techLevel('asteroid');
-    let iridiumRate = 0.055;
-    if (asteroidTech >= 6) iridiumRate = 0.08;
-    if (asteroidTech >= 7) iridiumRate = 0.1;
-    deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumShipSupported * iridiumRate;
+    const iridiumTechMult = asteroidTech >= 7 ? 0.1 / 0.055 : asteroidTech >= 6 ? 0.08 / 0.055 : 1;
+    const iridiumBase = iridiumShipSupported * 0.055;
+    addBreakdownEntry('Iridium', '铱矿采矿船基础产出', iridiumBase, 'source', '铱矿采矿船');
+    const iridiumOutput = applyBreakdownFactors('Iridium', '铱矿采矿船', iridiumBase, [
+      { label: '小行星采矿科技', multiplier: iridiumTechMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Iridium'] = (deltas['Iridium'] ?? 0) + iridiumOutput;
   }
-  captureDeltaSection('Iridium 采矿船');
+  lastBreakdownSnapshot['Iridium'] = deltas['Iridium'] ?? 0;
 
   // iron_ship — 对标 legacy prod.js L176-179
-  const ironShipSupported = spaceSupport.supportOn['iron_ship'] ?? 0;
   if (ironShipSupported > 0) {
-    const asteroidTech = techLevel('asteroid');
-    let ironRate = 2;
-    if (asteroidTech >= 6) ironRate = 3;
-    if (asteroidTech >= 7) ironRate = 4;
-    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironShipSupported * ironRate;
+    const ironTechMult = asteroidTech >= 7 ? 2 : asteroidTech >= 6 ? 1.5 : 1;
+    const ironShipBase = ironShipSupported * 2;
+    addBreakdownEntry('Iron', '铁矿采矿船基础产出', ironShipBase, 'source', '铁矿采矿船');
+    const ironShipOutput = applyBreakdownFactors('Iron', '铁矿采矿船', ironShipBase, [
+      { label: '小行星采矿科技', multiplier: ironTechMult },
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ]);
+    deltas['Iron'] = (deltas['Iron'] ?? 0) + ironShipOutput;
   }
-  captureDeltaSection('Iron 采矿船');
+  lastBreakdownSnapshot['Iron'] = deltas['Iron'] ?? 0;
 
   // space_barracks Oil 消耗 — 对标 legacy main.js L2393-2403
   // 每座 on 消耗 2 Oil/tick
+  let effectiveSpaceBarracksOn: number | null = null;
   if (!state.race['fasting']) {
     const spaceBarracks = state.space['space_barracks'] as { count?: number; on?: number } | undefined;
     if (spaceBarracks && (spaceBarracks.on ?? 0) > 0) {
       const oilCost = SPACE_BARRACKS_OIL_PER_TICK;
-      const oilConsume = (spaceBarracks.on ?? 0) * oilCost;
+      const requestedOn = spaceBarracks.on ?? 0;
+      const reservedOil = Math.max(0, -(powerResult.fuelDeltas['Oil'] ?? 0))
+        + Math.max(0, spaceSupport.fuelDrain['Oil'] ?? 0)
+        + Math.max(0, interstellarSupport.fuelDrain['Oil'] ?? 0);
+      const availableOil = Math.max(
+        0,
+        (state.resource['Oil']?.amount ?? 0) - reservedOil * TIME_MULTIPLIER,
+      );
+      const maxAffordable = Math.max(
+        0,
+        Math.floor(availableOil / (oilCost * TIME_MULTIPLIER)),
+      );
+      effectiveSpaceBarracksOn = Math.min(requestedOn, maxAffordable);
+      const oilConsume = effectiveSpaceBarracksOn * oilCost;
       deltas['Oil'] = (deltas['Oil'] ?? 0) - oilConsume;
+      addBreakdownEntry(
+        'Oil',
+        '太空军营燃料',
+        -oilConsume,
+        'consume',
+        '太空军营燃料',
+        `开启 ${effectiveSpaceBarracksOn}/${requestedOn}`,
+      );
     }
   }
-  captureDeltaSection('太空军营燃料');
+  lastBreakdownSnapshot['Oil'] = deltas['Oil'] ?? 0;
+
+  if (!state.race['fasting']) {
+    const stationOn = spaceSupport.supplierEffectiveOn['space_station'] ?? 0;
+    const stationFood = stationOn * (state.race['cataclysm'] ? 1 : 10);
+    const barracksFood = state.race['cataclysm']
+      ? 0
+      : (effectiveSpaceBarracksOn ?? 0) * SPACE_BARRACKS_FOOD_PER_TICK;
+    if (stationFood > 0) {
+      deltas['Food'] = (deltas['Food'] ?? 0) - stationFood;
+      addBreakdownEntry('Food', '太空站口粮', -stationFood, 'consume', '深空口粮');
+    }
+    if (barracksFood > 0) {
+      deltas['Food'] = (deltas['Food'] ?? 0) - barracksFood;
+      addBreakdownEntry(
+        'Food',
+        '太空军营口粮',
+        -barracksFood,
+        'consume',
+        '深空口粮',
+        `开启 ${effectiveSpaceBarracksOn}`,
+      );
+    }
+  }
+  lastBreakdownSnapshot['Food'] = deltas['Food'] ?? 0;
 
   // ============================================================
   // 10a. 工匠合成产线（自动消耗原料、产出合成品）
   // ============================================================
-  const craftDeltas = craftingTickWithSupport(
+  const craftAvailableResources = Object.fromEntries(
+    Object.entries(state.resource).map(([resId, resource]) => {
+      let available = resource.amount + (deltas[resId] ?? 0) * TIME_MULTIPLIER;
+      available = Math.max(0, available);
+      if (resource.max > 0) available = Math.min(resource.max, available);
+      return [resId, available];
+    }),
+  );
+  const craftResult = craftingTickDetailed(
     state,
     fabricationSupported,
     effectiveColonistWorkers,
+    { poweredOn, availableResources: craftAvailableResources },
   );
-  for (const [resId, delta] of Object.entries(craftDeltas)) {
-    deltas[resId] = (deltas[resId] ?? 0) + delta;
+  for (const line of craftResult.lines) {
+    const craftName = state.resource[line.craftId]?.name ?? line.craftId;
+    const section = `工匠合成：${craftName}`;
+    addBreakdownEntry(
+      line.craftId,
+      `工匠基础产出：${craftName}`,
+      line.assignedBaseOutput,
+      'source',
+      section,
+      `${line.effectiveWorkers}/${line.assignedWorkers} 名工匠，速度 x${line.speed}`,
+    );
+    addBreakdownEntry(
+      line.craftId,
+      '原料供应限制',
+      line.materialBaseOutput - line.assignedBaseOutput,
+      'modifier',
+      section,
+      `${line.effectiveWorkers}/${line.assignedWorkers} 名有效工匠`,
+    );
+    addBreakdownEntry(
+      line.craftId,
+      '高人口工匠效率',
+      line.scaledBaseOutput - line.materialBaseOutput,
+      'modifier',
+      section,
+    );
+    for (const factor of line.additions) {
+      addBreakdownEntry(
+        line.craftId,
+        factor.label,
+        line.scaledBaseOutput * factor.bonus,
+        'modifier',
+        section,
+        `${factor.bonus >= 0 ? '+' : ''}${Number((factor.bonus * 100).toFixed(2))}%`,
+      );
+    }
+    let accountedOutput = line.scaledBaseOutput
+      * (1 + line.additions.reduce((sum, factor) => sum + factor.bonus, 0));
+    for (const factor of line.multipliers) {
+      const next = accountedOutput * factor.multiplier;
+      addBreakdownEntry(
+        line.craftId,
+        factor.label,
+        next - accountedOutput,
+        'modifier',
+        section,
+        `x${Number(factor.multiplier.toFixed(4))}`,
+      );
+      accountedOutput = next;
+    }
+
+    for (const input of line.inputs) {
+      const inputName = state.resource[input.resource]?.name ?? input.resource;
+      addBreakdownEntry(
+        input.resource,
+        `工匠基础原料：${craftName}`,
+        -input.baseConsumption,
+        'consume',
+        section,
+        `${input.baseRecipeAmount} ${inputName}/单位`,
+      );
+      addBreakdownEntry(
+        input.resource,
+        `种族配方修正：${craftName}`,
+        -(input.adjustedConsumption - input.baseConsumption),
+        'modifier',
+        section,
+        `${input.baseRecipeAmount} -> ${input.adjustedRecipeAmount}`,
+      );
+      addBreakdownEntry(
+        input.resource,
+        `机智特质原料折扣：${craftName}`,
+        -(input.consumption - input.adjustedConsumption),
+        'modifier',
+        section,
+      );
+    }
   }
-  captureDeltaSection('手工合成');
+  for (const [resId, delta] of Object.entries(craftResult.deltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + delta;
+    lastBreakdownSnapshot[resId] = deltas[resId];
+  }
 
   // ============================================================
   // 10b. 贸易路线自动执行
@@ -1336,6 +1929,28 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   captureDeltaSection('时间缩放', () => 'modifier', `x${TIME_MULTIPLIER}`);
 
   const newState: GameState = JSON.parse(JSON.stringify(state));
+  if (asteroidEleriumDiscovered) {
+    newState.tech['asteroid'] = 4;
+    if (!newState.resource['Elerium']) {
+      newState.resource['Elerium'] = {
+        name: '超铀',
+        amount: 0,
+        max: 100,
+        display: true,
+        diff: 0,
+        value: 0,
+        rate: 0,
+        crates: 0,
+        delta: 0,
+      };
+    } else {
+      newState.resource['Elerium'].display = true;
+    }
+  }
+  if (effectiveSpaceBarracksOn !== null) {
+    const spaceBarracks = newState.space['space_barracks'] as { on?: number } | undefined;
+    if (spaceBarracks) spaceBarracks.on = effectiveSpaceBarracksOn;
+  }
   if (banquetFoodShortage) resetBanquetStrength(newState);
   if (emfieldTick) {
     newState.race['emfield'] = emfieldTick.emfield;
@@ -1379,8 +1994,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 10c. 建造队列处理
   // ============================================================
+  const foodProductionDelta = deltas['Food'] ?? 0;
   if (newState.queue?.queue && newState.queue.queue.length > 0) {
     const item = newState.queue.queue[0];
+    const queueResourceSnapshot = snapshotResourceAmounts(newState.resource);
     const def = BASIC_STRUCTURES.find(d => d.id === item.id);
     if (def) {
       const structObj = newState.city[item.id] as { count?: number } | undefined;
@@ -1435,11 +2052,18 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       // 防止无效项卡死队列
       newState.queue.queue.shift();
     }
+    captureDeferredSettledResourceMutations(
+      queueResourceSnapshot,
+      newState.resource,
+      () => `建造队列：${item.label}`,
+      '建造队列',
+    );
   }
 
   // ============================================================
   // 10.5 人口自然增长 (Pop Spawn)
   // ============================================================
+  const populationResourceSnapshot = snapshotResourceAmounts(newState.resource);
   tickPopulationGrowth(newState, TIME_MULTIPLIER, messages);
 
   // ============================================================
@@ -1450,7 +2074,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 在非 fasting 种族下，以 Math.rand(0,10)===0 的 1/11 概率（≈9.09%）减少 1 人口
   // 相当于：每 11 个 fast-tick（≈2.75s）平均死亡一次
   // NOTE: fasting / anthropophagite / slow_digestion 等特质 Phase 1 未实装，使用基础逻辑
-  if (newState.resource['Food']?.amount === 0 && (deltas['Food'] ?? 0) < 0) {
+  if (newState.resource['Food']?.amount === 0 && foodProductionDelta < 0) {
     if (getPopulation(newState) > 1) {
       // 1/11 概率 — 对标 legacy Math.rand(0,10) === 0
       if (Math.floor(Math.random() * 11) === 0) {
@@ -1463,6 +2087,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
   }
+  captureDeferredSettledResourceMutations(
+    populationResourceSnapshot,
+    newState.resource,
+    (resId, amount) => amount >= 0
+      ? `人口增长：${newState.resource[resId]?.name ?? resId}`
+      : `人口损失：${newState.resource[resId]?.name ?? resId}`,
+    '人口变化',
+  );
 
   // ============================================================
   // 11.5 市场价格波动收敛 (Market Price Fluctuation)
@@ -1578,7 +2210,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 12a. 派生状态同步
   // 让排队建造完成后的上限、岗位、显示状态在当前 tick 就保持一致
   // ============================================================
+  const derivedResourceSnapshot = snapshotResourceAmounts(newState.resource);
   applyDerivedStateInPlace(newState);
+  captureDeferredSettledResourceMutations(
+    derivedResourceSnapshot,
+    newState.resource,
+    (resId) => `库存容量调整：${newState.resource[resId]?.name ?? resId}`,
+    '库存容量',
+  );
   if (observatorySupported > 0 && newState.resource['Knowledge']) {
     newState.resource['Knowledge'].max += getObservatoryKnowledgeCapBonus(newState, observatorySupported);
 
@@ -1705,7 +2344,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 13a. 随机事件系统
   // ============================================================
+  const randomEventResourceSnapshot = snapshotResourceAmounts(newState.resource);
   const eventMessages = tickEvents(newState);
+  captureDeferredSettledResourceMutations(
+    randomEventResourceSnapshot,
+    newState.resource,
+    (resId, amount) => amount >= 0
+      ? `随机事件奖励：${newState.resource[resId]?.name ?? resId}`
+      : `随机事件损失：${newState.resource[resId]?.name ?? resId}`,
+    '随机事件',
+  );
   for (const msg of eventMessages) {
     messages.push(msg);
   }
@@ -1750,6 +2398,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 14e. 间谍外交通信 tick
   // ============================================================
+  const spyResourceSnapshot = snapshotResourceAmounts(newState.resource);
   [0, 1, 2, 3, 4].forEach(govIndex => {
     if (newState.civic.foreign[`gov${govIndex}` as keyof typeof newState.civic.foreign]) {
       const spyMessages = resolveSpyActionTick(newState, govIndex, TIME_MULTIPLIER);
@@ -1758,22 +2407,101 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
   });
+  captureDeferredSettledResourceMutations(
+    spyResourceSnapshot,
+    newState.resource,
+    (resId, amount) => amount >= 0
+      ? `间谍行动收益：${newState.resource[resId]?.name ?? resId}`
+      : `间谍行动支出：${newState.resource[resId]?.name ?? resId}`,
+    '间谍行动',
+  );
 
   // ============================================================
   // 15. 工厂产线 tick
   // 对标 legacy/src/industry.js f_rate表，工厂 powered = on
   // ============================================================
-  factoryTick(
-    newState,
-    powerResult.activeConsumers['factory'] ?? 0,
-    TIME_MULTIPLIER,
-    deltas,
-    effectiveProdMult,
-    redFactoryPowered,
-    redFactoryMaxLines,
+  const factoryResult = factoryTickDetailed(newState, {
+    poweredOn: powerResult.activeConsumers['factory'] ?? 0,
+    timeMultiplier: TIME_MULTIPLIER,
+    productionModifiers: [
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ],
+    extraPoweredLines: redFactoryPowered,
+    extraMaxLines: redFactoryMaxLines,
     dischargeActive,
-  );
-  captureDeltaSection('工厂产线');
+    activeCitadels: powerResult.activeConsumers['citadel'] ?? 0,
+  });
+  for (const [resId, amount] of Object.entries(factoryResult.deltas)) {
+    deltas[resId] = (deltas[resId] ?? 0) + amount;
+  }
+  const factoryTouchedResources = new Set<string>();
+  for (const line of factoryResult.lines) {
+    const outputName = newState.resource[line.outputResource]?.name ?? line.outputResource;
+    const section = `工厂产线：${outputName}`;
+    addBreakdownEntry(
+      line.outputResource,
+      `产线基础产出：${outputName}`,
+      line.requestedBaseOutput,
+      'source',
+      section,
+      `${line.requestedLines} 条分配，装配等级 ${line.assemblyLevel}，供电效率 ${Number((line.efficiency * 100).toFixed(2))}%`,
+    );
+    addBreakdownEntry(
+      line.outputResource,
+      '可用产线限制',
+      line.allocatedBaseOutput - line.requestedBaseOutput,
+      'modifier',
+      section,
+      `${line.allocatedLines}/${line.requestedLines} 条有效分配`,
+    );
+    addBreakdownEntry(
+      line.outputResource,
+      '原料供应限制',
+      line.materialBaseOutput - line.allocatedBaseOutput,
+      'modifier',
+      section,
+      `${line.effectiveLines}/${line.allocatedLines} 条实际生产`,
+    );
+    let runningOutput = line.materialBaseOutput;
+    for (const modifier of line.modifiers) {
+      const nextOutput = runningOutput * modifier.multiplier;
+      addBreakdownEntry(
+        line.outputResource,
+        modifier.label,
+        nextOutput - runningOutput,
+        'modifier',
+        section,
+        `x${Number(modifier.multiplier.toFixed(4))}`,
+      );
+      runningOutput = nextOutput;
+    }
+    addBreakdownEntry(
+      line.outputResource,
+      '产物存储上限',
+      line.actualOutput - line.theoreticalOutput,
+      'modifier',
+      section,
+      `实际 ${Number(line.actualOutput.toFixed(6))}`,
+    );
+    factoryTouchedResources.add(line.outputResource);
+    for (const input of line.inputs) {
+      addBreakdownEntry(
+        input.resource,
+        `工厂原料：${outputName}`,
+        -input.consumption,
+        'consume',
+        section,
+        `${Number(input.amountPerLine.toFixed(6))}/产线`,
+      );
+      factoryTouchedResources.add(input.resource);
+    }
+  }
+  for (const resId of factoryTouchedResources) {
+    lastBreakdownSnapshot[resId] = deltas[resId] ?? 0;
+  }
   markCurrentDeltasSettled();
 
   // ============================================================
@@ -1785,18 +2513,32 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     messages.push(...patrolResult.messages);
     portalProductionTick(newState, TIME_MULTIPLIER, deltas);
     captureDeltaSection('Portal 建筑');
+    const mechResourceSnapshot = snapshotResourceAmounts(newState.resource);
     mechBuildTick(newState, TIME_MULTIPLIER);
     // Mech Station 巡逻（asphodel mech_station 通电时启用）
     const edenObj = newState.eden as Record<string, { on?: number }>;
     if ((edenObj['mech_station']?.on ?? 0) > 0) {
       mechStationPatrolTick(newState, TIME_MULTIPLIER);
     }
+    captureDeferredSettledResourceMutations(
+      mechResourceSnapshot,
+      newState.resource,
+      (resId) => `机甲巡逻：${newState.resource[resId]?.name ?? resId}`,
+      '机甲巡逻',
+    );
   }
 
   // ============================================================
   // 15b. 魔法宇宙 tick（Mana 再生 + 炼金转化）
   // ============================================================
+  const magicResourceSnapshot = snapshotResourceAmounts(newState.resource);
   magicTick(newState, TIME_MULTIPLIER);
+  captureDeferredSettledResourceMutations(
+    magicResourceSnapshot,
+    newState.resource,
+    (resId) => resId === 'Mana' ? '法力恢复' : `炼金转化：${newState.resource[resId]?.name ?? resId}`,
+    '魔法宇宙',
+  );
 
   // ============================================================
   // 15b1. Truepath 建筑产出 + 辛迪加海盗骚扰
@@ -1804,7 +2546,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   if (newState.race['truepath']) {
     truepathProductionTick(newState, TIME_MULTIPLIER, deltas);
     captureDeltaSection('Truepath 建筑');
+    const syndicateResourceSnapshot = snapshotResourceAmounts(newState.resource);
     syndicateTick(newState, TIME_MULTIPLIER);
+    captureDeferredSettledResourceMutations(
+      syndicateResourceSnapshot,
+      newState.resource,
+      (resId, amount) => amount >= 0
+        ? `辛迪加事件收益：${newState.resource[resId]?.name ?? resId}`
+        : `辛迪加骚扰损失：${newState.resource[resId]?.name ?? resId}`,
+      '辛迪加事件',
+    );
     womlingTick(newState, TIME_MULTIPLIER, deltas);
     captureDeltaSection('Womling');
   }
@@ -1813,8 +2564,8 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 15c. Edenic tick（神圣腐化进度）+ 建筑产出
   // ============================================================
   if ((newState.tech['edenic'] ?? 0) >= 1) {
-    edenicTick(newState, TIME_MULTIPLIER);
-    edenicProductionTick(newState, TIME_MULTIPLIER, deltas);
+    edenicTick(newState, TIME_MULTIPLIER, powerResult.activeConsumers);
+    edenicProductionTick(newState, TIME_MULTIPLIER, deltas, powerResult.activeConsumers);
     captureDeltaSection('Edenic 建筑');
     siegeTick(newState, TIME_MULTIPLIER);
   }
@@ -1823,10 +2574,21 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 15d. 总督自动化任务
   // ============================================================
   if (newState.race['governor']) {
+    const governorResourceSnapshot = snapshotResourceAmounts(newState.resource);
     runGovernorTasks(newState);
+    captureDeferredSettledResourceMutations(
+      governorResourceSnapshot,
+      newState.resource,
+      (resId, amount) => amount >= 0
+        ? `总督自动化：${newState.resource[resId]?.name ?? resId}`
+        : `总督自动支出：${newState.resource[resId]?.name ?? resId}`,
+      '总督自动化',
+    );
   }
 
   if (dayAdvanced) advanceBanquetStrength(newState);
+
+  syncSeasonalEventState(newState);
 
   // ============================================================
   // 15e. 成就自动检查（每 tick 简化版；高频检查不会显著影响性能）
@@ -1836,7 +2598,16 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 15f. 复杂 trait 持续效果（unstable 死亡 / wish 冷却等）
   // ============================================================
+  const complexTraitResourceSnapshot = snapshotResourceAmounts(newState.resource);
   complexTraitTick(newState, TIME_MULTIPLIER);
+  captureDeferredSettledResourceMutations(
+    complexTraitResourceSnapshot,
+    newState.resource,
+    (resId, amount) => amount < 0
+      ? `trait 损耗：${newState.resource[resId]?.name ?? resId}`
+      : `trait 产出：${newState.resource[resId]?.name ?? resId}`,
+    '复杂 trait',
+  );
 
   // ============================================================
   // 15f1. Pet 宠物 tick
@@ -1877,7 +2648,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 16. ARPA 长线研究 tick
   // ============================================================
+  const arpaResourceSnapshot = snapshotResourceAmounts(newState.resource);
   const arpaDone = arpaTick(newState, TIME_MULTIPLIER);
+  captureDeferredSettledResourceMutations(
+    arpaResourceSnapshot,
+    newState.resource,
+    (resId) => `ARPA 项目投入：${newState.resource[resId]?.name ?? resId}`,
+    'ARPA',
+  );
   for (const projId of arpaDone) {
     const names: Record<string, string> = {
       launch_facility: '发射设施',
@@ -1891,17 +2669,20 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     });
   }
 
+  const geneResourceSnapshot = snapshotResourceAmounts(newState.resource);
   const geneResult = geneSequenceTick(
     newState,
     powerResult.activeConsumers['biolab'] ?? 0,
     TIME_MULTIPLIER,
   );
-  if (geneResult.knowledgeCost > 0) {
-    deltas['Knowledge'] = (deltas['Knowledge'] ?? 0) - geneResult.knowledgeCost;
-    settledDeltas['Knowledge'] = (settledDeltas['Knowledge'] ?? 0) - geneResult.knowledgeCost;
-    addBreakdownEntry('Knowledge', '基因序列研究', -geneResult.knowledgeCost, 'consume', '基因工程');
-    lastBreakdownSnapshot['Knowledge'] = deltas['Knowledge'];
-  }
+  captureDeferredSettledResourceMutations(
+    geneResourceSnapshot,
+    newState.resource,
+    (resId, amount) => amount < 0
+      ? '基因序列研究'
+      : `基因治疗奖励：${newState.resource[resId]?.name ?? resId}`,
+    '基因工程',
+  );
   if (geneResult.completed === 'genome') {
     messages.push({
       text: '基因组测序已经完成。',
@@ -1917,6 +2698,7 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     });
   }
 
+  flushDeferredSettledDeltas();
   settlePendingDeltas(newState.resource);
 
   // 14-16 阶段仍可能继续改写 deltas；在返回前统一回填最终 diff。
@@ -2047,315 +2829,5 @@ function tickPopulationGrowth(state: GameState, timeMultiplier: number, messages
       type: 'success',
       category: 'progress'
     });
-  }
-}
-
-// ============================================================
-// 工厂产线 tick
-// 对标 legacy/src/industry.js L117-147 f_rate 表，下标 0 (无 assembly 科技)
-// ============================================================
-
-export function factoryTick(
-  state: GameState,
-  poweredOn: number,
-  timeMul: number,
-  deltas: Record<string, number>,
-  prodMultiplier: number,
-  extraPoweredLines: number = 0,
-  extraMaxLines: number = 0,
-  dischargeActive: boolean = false,
-): void {
-  const factory = state.city['factory'] as {
-    count: number;
-    on: number;
-    Lux?: number;
-    Furs?: number;
-    Alloy: number;
-    Polymer: number;
-    Nano?: number;
-    Stanene?: number;
-  } | undefined;
-  if (!factory) return;
-
-  const maxFactories = Math.max(0, (factory.on ?? factory.count ?? 0) + extraMaxLines);
-  const activeFactories = Math.max(0, poweredOn + extraPoweredLines);
-  const eff = maxFactories > 0 ? activeFactories / maxFactories : 0;
-  if (eff <= 0) return;
-
-  let remainingLines = maxFactories;
-  const allocate = (requested: number | undefined): number => {
-    const lines = Math.max(0, Math.min(requested ?? 0, remainingLines));
-    remainingLines -= lines;
-    return lines;
-  };
-
-  const allocLux = allocate(factory.Lux);
-  const allocFurs = allocate(factory.Furs);
-  const allocAlloy = allocate(factory.Alloy);
-  const allocPolymer = allocate(factory.Polymer);
-  const allocNano = allocate(factory.Nano);
-  const allocStanene = allocate(factory.Stanene);
-
-  const assembly = Math.min(state.tech['factory'] ?? 0, 4);
-  let outputMultiplier = getFactoryOutputMultiplier(state);
-  const ironWillFactoryMultiplier = getAchievementLevel(state, 'iron_will') >= 2 ? 1.1 : 1;
-  outputMultiplier *= ironWillFactoryMultiplier;
-  // 蘑菇人种族 (toxic)：工厂工人产出 +20% 默认
-  outputMultiplier *= getToxicFactoryBonus(state);
-  // 仪式：factory ritual
-  outputMultiplier *= getRitualMultiplier(state, 'factory');
-  if (dischargeActive) outputMultiplier *= 0.5;
-  const luxDemandMultiplier = state.civic.govern?.type === 'corpocracy'
-    ? 2.5
-    : (state.civic.govern?.type === 'socialist' ? 0.8 : 1);
-  let pendingMoneyGain = 0;
-
-  if (allocLux > 0) {
-    const furPerLine = [2, 3, 4, 5, 6][assembly] * eff * timeMul;
-    let workDone = allocLux;
-    let furCost = workDone * furPerLine;
-    while (workDone > 0 && furCost > (state.resource['Furs']?.amount ?? 0)) {
-      workDone--;
-      furCost = workDone * furPerLine;
-    }
-
-    if (workDone > 0) {
-      if (state.resource['Furs']) {
-        state.resource['Furs'].amount -= furCost;
-      }
-      deltas['Furs'] = (deltas['Furs'] ?? 0) - furCost;
-
-      const demand = (getPopulation(state) * [0.14, 0.21, 0.28, 0.35, 0.42][assembly] * eff)
-        * luxDemandMultiplier
-        * ironWillFactoryMultiplier
-        * getBanquetLuxuryMultiplier(state)
-        * getInflationMultiplier(state, 1250);
-      pendingMoneyGain += workDone * demand * prodMultiplier * timeMul * (dischargeActive ? 0.5 : 1);
-    }
-  }
-
-  if (allocFurs > 0 && state.resource['Furs']) {
-    const moneyPerLine = [10, 15, 20, 25, 30][assembly] * eff * timeMul;
-    const polymerPerLine = [1.5, 2.25, 3, 3.75, 4.5][assembly] * eff * timeMul;
-    let workDone = allocFurs;
-    let moneyCost = workDone * moneyPerLine;
-    let polymerCost = workDone * polymerPerLine;
-
-    while (workDone > 0 && polymerCost > (state.resource['Polymer']?.amount ?? 0)) {
-      workDone--;
-      moneyCost = workDone * moneyPerLine;
-      polymerCost = workDone * polymerPerLine;
-    }
-    while (workDone > 0 && moneyCost > (state.resource['Money']?.amount ?? 0)) {
-      workDone--;
-      moneyCost = workDone * moneyPerLine;
-      polymerCost = workDone * polymerPerLine;
-    }
-
-    if (workDone > 0) {
-      if (state.resource['Money']) state.resource['Money'].amount -= moneyCost;
-      if (state.resource['Polymer']) state.resource['Polymer'].amount -= polymerCost;
-      deltas['Money'] = (deltas['Money'] ?? 0) - moneyCost;
-      deltas['Polymer'] = (deltas['Polymer'] ?? 0) - polymerCost;
-
-      const fursOutput = workDone * [1, 1.5, 2, 2.5, 3][assembly] * outputMultiplier * prodMultiplier * timeMul;
-      const furs = state.resource['Furs'];
-      const maxFurs = furs.max >= 0 ? furs.max : Infinity;
-      const actual = Math.min(fursOutput, maxFurs - furs.amount);
-      if (actual > 0) {
-        furs.amount += actual;
-        deltas['Furs'] = (deltas['Furs'] ?? 0) + actual;
-      }
-    }
-  }
-
-  // ----------------------------------------------------------
-  // 合金 (Alloy) 产线
-  // 对标 f_rate.Alloy: copper[0]=0.75, aluminium[0]=1.0, output[0]=0.075
-  // 每条产线每 tick 消耗铜 0.75 + 铝 1.0，产出合金 0.075
-  // ----------------------------------------------------------
-  if (allocAlloy > 0 && state.resource['Alloy']) {
-    const copperPerLine = [0.75, 1.12, 1.49, 1.86, 2.23][assembly] * eff * timeMul;
-    const aluminiumPerLine = [1, 1.5, 2, 2.5, 3][assembly] * eff * timeMul;
-    let workDone = allocAlloy;
-    let copperCost = workDone * copperPerLine;
-    let aluminiumCost = workDone * aluminiumPerLine;
-
-    while (workDone > 0 && copperCost > (state.resource['Copper']?.amount ?? 0)) {
-      workDone--;
-      copperCost = workDone * copperPerLine;
-      aluminiumCost = workDone * aluminiumPerLine;
-    }
-    while (workDone > 0 && aluminiumCost > (state.resource['Aluminium']?.amount ?? 0)) {
-      workDone--;
-      copperCost = workDone * copperPerLine;
-      aluminiumCost = workDone * aluminiumPerLine;
-    }
-
-    if (workDone > 0) {
-      if (state.resource['Copper']) state.resource['Copper'].amount -= copperCost;
-      if (state.resource['Aluminium']) state.resource['Aluminium'].amount -= aluminiumCost;
-      deltas['Copper'] = (deltas['Copper'] ?? 0) - copperCost;
-      deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) - aluminiumCost;
-
-      let alloyOutput = workDone * [0.075, 0.112, 0.149, 0.186, 0.223][assembly] * outputMultiplier * prodMultiplier * timeMul;
-      if ((state.tech['alloy'] ?? 0) >= 1) {
-        alloyOutput *= 1.37;
-      }
-
-      const alloy = state.resource['Alloy'];
-      const maxAlloy = alloy.max >= 0 ? alloy.max : Infinity;
-      const actual = Math.min(alloyOutput, maxAlloy - alloy.amount);
-      if (actual > 0) {
-        alloy.amount += actual;
-        deltas['Alloy'] = (deltas['Alloy'] ?? 0) + actual;
-      }
-    }
-  }
-
-  // ----------------------------------------------------------
-  // 聚合物 (Polymer) 产线
-  // 对标 f_rate.Polymer: oil[0]=0.18, lumber[0]=15, output[0]=0.125
-  // 每条产线每 tick 消耗石油 0.18 + 木材 15，产出聚合物 0.125
-  // ----------------------------------------------------------
-  if (allocPolymer > 0 && state.resource['Polymer']) {
-    const oilTable = state.race['kindling_kindred'] || state.race['smoldering']
-      ? [0.22, 0.33, 0.44, 0.55, 0.66]
-      : [0.18, 0.27, 0.36, 0.45, 0.54];
-    const lumberTable = state.race['kindling_kindred'] || state.race['smoldering']
-      ? [0, 0, 0, 0, 0]
-      : [15, 22, 29, 36, 43];
-    const oilPerLine = oilTable[assembly] * eff * timeMul;
-    const lumberPerLine = lumberTable[assembly] * eff * timeMul;
-    let workDone = allocPolymer;
-    let oilCost = workDone * oilPerLine;
-    let lumberCost = workDone * lumberPerLine;
-
-    while (workDone > 0 && lumberCost > (state.resource['Lumber']?.amount ?? 0)) {
-      workDone--;
-      oilCost = workDone * oilPerLine;
-      lumberCost = workDone * lumberPerLine;
-    }
-    while (workDone > 0 && oilCost > (state.resource['Oil']?.amount ?? 0)) {
-      workDone--;
-      oilCost = workDone * oilPerLine;
-      lumberCost = workDone * lumberPerLine;
-    }
-
-    if (workDone > 0) {
-      if (state.resource['Oil']) state.resource['Oil'].amount -= oilCost;
-      if (state.resource['Lumber']) state.resource['Lumber'].amount -= lumberCost;
-      deltas['Oil'] = (deltas['Oil'] ?? 0) - oilCost;
-      deltas['Lumber'] = (deltas['Lumber'] ?? 0) - lumberCost;
-
-      let polymerOutput = workDone * [0.125, 0.187, 0.249, 0.311, 0.373][assembly] * outputMultiplier * prodMultiplier * timeMul;
-      if ((state.tech['polymer'] ?? 0) >= 2) {
-        polymerOutput *= 1.42;
-      }
-
-      const polymer = state.resource['Polymer'];
-      const maxPolymer = polymer.max >= 0 ? polymer.max : Infinity;
-      const actual = Math.min(polymerOutput, maxPolymer - polymer.amount);
-      if (actual > 0) {
-        polymer.amount += actual;
-        deltas['Polymer'] = (deltas['Polymer'] ?? 0) + actual;
-      }
-    }
-  }
-
-  // ----------------------------------------------------------
-  // 纳米管 (Nano_Tube) 产线
-  // 对标 f_rate.Nano_Tube: coal[0]=8, neutronium[0]=0.05, output[0]=0.2
-  // ----------------------------------------------------------
-  if (allocNano > 0 && state.resource['Nano_Tube']) {
-    const coalPerLine = [8, 12, 16, 20, 24][assembly] * eff * timeMul;
-    const neutroniumPerLine = [0.05, 0.075, 0.1, 0.125, 0.15][assembly] * eff * timeMul;
-    let workDone = allocNano;
-    let coalCost = workDone * coalPerLine;
-    let neutroniumCost = workDone * neutroniumPerLine;
-
-    while (workDone > 0 && neutroniumCost > (state.resource['Neutronium']?.amount ?? 0)) {
-      workDone--;
-      coalCost = workDone * coalPerLine;
-      neutroniumCost = workDone * neutroniumPerLine;
-    }
-    while (workDone > 0 && coalCost > (state.resource['Coal']?.amount ?? 0)) {
-      workDone--;
-      coalCost = workDone * coalPerLine;
-      neutroniumCost = workDone * neutroniumPerLine;
-    }
-
-    if (workDone > 0) {
-      if (state.resource['Coal']) state.resource['Coal'].amount -= coalCost;
-      if (state.resource['Neutronium']) state.resource['Neutronium'].amount -= neutroniumCost;
-      deltas['Coal'] = (deltas['Coal'] ?? 0) - coalCost;
-      deltas['Neutronium'] = (deltas['Neutronium'] ?? 0) - neutroniumCost;
-
-      const output = workDone
-        * [0.2, 0.3, 0.4, 0.5, 0.6][assembly]
-        * outputMultiplier
-        * prodMultiplier
-        * timeMul;
-      const nano = state.resource['Nano_Tube'];
-      const maxNano = nano.max >= 0 ? nano.max : Infinity;
-      const actual = Math.min(output, maxNano - nano.amount);
-      if (actual > 0) {
-        nano.amount += actual;
-        deltas['Nano_Tube'] = (deltas['Nano_Tube'] ?? 0) + actual;
-      }
-    }
-  }
-
-  // ----------------------------------------------------------
-  // 锡烯 (Stanene) 产线
-  // 对标 f_rate.Stanene: aluminium[0]=30, nano[0]=0.02, output[0]=0.6
-  // ----------------------------------------------------------
-  if (allocStanene > 0 && state.resource['Stanene']) {
-    const aluminiumPerLine = [30, 45, 60, 75, 90][assembly] * eff * timeMul;
-    const nanoPerLine = [0.02, 0.03, 0.04, 0.05, 0.06][assembly] * eff * timeMul;
-    let workDone = allocStanene;
-    let aluminiumCost = workDone * aluminiumPerLine;
-    let nanoCost = workDone * nanoPerLine;
-
-    while (workDone > 0 && aluminiumCost > (state.resource['Aluminium']?.amount ?? 0)) {
-      workDone--;
-      aluminiumCost = workDone * aluminiumPerLine;
-      nanoCost = workDone * nanoPerLine;
-    }
-    while (workDone > 0 && nanoCost > (state.resource['Nano_Tube']?.amount ?? 0)) {
-      workDone--;
-      aluminiumCost = workDone * aluminiumPerLine;
-      nanoCost = workDone * nanoPerLine;
-    }
-
-    if (workDone > 0) {
-      if (state.resource['Aluminium']) state.resource['Aluminium'].amount -= aluminiumCost;
-      if (state.resource['Nano_Tube']) state.resource['Nano_Tube'].amount -= nanoCost;
-      deltas['Aluminium'] = (deltas['Aluminium'] ?? 0) - aluminiumCost;
-      deltas['Nano_Tube'] = (deltas['Nano_Tube'] ?? 0) - nanoCost;
-
-      const output = workDone
-        * [0.6, 0.9, 1.2, 1.5, 1.8][assembly]
-        * outputMultiplier
-        * prodMultiplier
-        * timeMul;
-      const stanene = state.resource['Stanene'];
-      const maxStanene = stanene.max >= 0 ? stanene.max : Infinity;
-      const actual = Math.min(output, maxStanene - stanene.amount);
-      if (actual > 0) {
-        stanene.amount += actual;
-        deltas['Stanene'] = (deltas['Stanene'] ?? 0) + actual;
-      }
-    }
-  }
-
-  if (pendingMoneyGain > 0 && state.resource['Money']) {
-    const money = state.resource['Money'];
-    const maxMoney = money.max >= 0 ? money.max : Infinity;
-    const actual = Math.min(pendingMoneyGain, maxMoney - money.amount);
-    if (actual > 0) {
-      money.amount += actual;
-      deltas['Money'] = (deltas['Money'] ?? 0) + actual;
-    }
   }
 }

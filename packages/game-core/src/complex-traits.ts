@@ -11,6 +11,7 @@ import { getTraitVar } from './trait-ranks';
 import { GENUS_DEFS, getRaceFullTraits, RACES } from './races';
 import { TRAITS } from './trait-data';
 import { loadCustomRace } from './custom-race';
+import { tickWishCooldowns } from './wishes';
 
 function rankVal(state: GameState, trait: string, idx: number = 0): number {
   if (!state.race[trait]) return 0;
@@ -239,137 +240,6 @@ export function getShapeshifterNegativeRank(state: GameState): number {
 }
 
 // ============================================================
-// Wish (djinn) — 许愿冷却机制 + 12 种随机奖励
-// ============================================================
-export function isWishReady(state: GameState): boolean {
-  if (!state.race['wish']) return false;
-  const lastWish = (state.race['wish_cooldown'] as number) ?? 0;
-  return Date.now() > lastWish;
-}
-
-export type WishReward =
-  | { type: 'money'; amount: number }
-  | { type: 'resource'; res: string; amount: number }
-  | { type: 'plasmid'; amount: number }
-  | { type: 'phage'; amount: number }
-  | { type: 'soul_gem'; amount: number }
-  | { type: 'inspired'; ticks: number }
-  | { type: 'motivated'; ticks: number }
-  | { type: 'zodiac'; ticks: number }    // 黄道宫效果 ×2
-  | { type: 'pop_growth'; ticks: number }
-  | { type: 'tech_speed'; ticks: number }
-  | { type: 'lucky'; ticks: number }
-  | { type: 'fortune'; amount: number };
-
-export function makeWish(state: GameState): WishReward | null {
-  if (!isWishReady(state)) return null;
-
-  const cooldownMinutes = rankVal(state, 'wish', 0); // 1440 默认 = 24h
-  state.race['wish_cooldown'] = Date.now() + cooldownMinutes * 60 * 1000;
-
-  // 从 12 种奖励中随机选一种
-  const pick = Math.floor(Math.random() * 12);
-  let reward: WishReward;
-
-  const knowTotal = (state.stats?.['know'] as number) ?? 1;
-  const scale = Math.max(1, knowTotal / 100);
-
-  switch (pick) {
-    case 0: {
-      const amount = Math.round(50_000 * scale);
-      if (state.resource['Money']) {
-        state.resource['Money'].amount = Math.min(state.resource['Money'].max, state.resource['Money'].amount + amount);
-      }
-      reward = { type: 'money', amount };
-      break;
-    }
-    case 1: {
-      const candidates = ['Iron', 'Steel', 'Adamantite', 'Bolognium', 'Vitreloy'];
-      const res = candidates[Math.floor(Math.random() * candidates.length)];
-      const amount = Math.round(1000 * scale);
-      if (state.resource[res]) {
-        state.resource[res].amount = state.resource[res].max < 0
-          ? state.resource[res].amount + amount
-          : Math.min(state.resource[res].max, state.resource[res].amount + amount);
-      }
-      reward = { type: 'resource', res, amount };
-      break;
-    }
-    case 2: {
-      const amount = Math.max(1, Math.floor(scale / 10));
-      const prestige = state.prestige as Record<string, { count: number }>;
-      if (prestige['Plasmid']) prestige['Plasmid'].count += amount;
-      reward = { type: 'plasmid', amount };
-      break;
-    }
-    case 3: {
-      const amount = Math.max(1, Math.floor(scale / 20));
-      const prestige = state.prestige as Record<string, { count: number }>;
-      if (prestige['Phage']) prestige['Phage'].count = (prestige['Phage'].count ?? 0) + amount;
-      reward = { type: 'phage', amount };
-      break;
-    }
-    case 4: {
-      const amount = Math.max(1, Math.floor(scale / 30));
-      if (state.resource['Soul_Gem']) {
-        state.resource['Soul_Gem'].amount = state.resource['Soul_Gem'].max < 0
-          ? state.resource['Soul_Gem'].amount + amount
-          : Math.min(state.resource['Soul_Gem'].max, state.resource['Soul_Gem'].amount + amount);
-      }
-      reward = { type: 'soul_gem', amount };
-      break;
-    }
-    case 5: {
-      const ticks = 1200;
-      state.race['inspired'] = ticks;
-      reward = { type: 'inspired', ticks };
-      break;
-    }
-    case 6: {
-      const ticks = 1200;
-      state.race['motivated'] = ticks;
-      reward = { type: 'motivated', ticks };
-      break;
-    }
-    case 7: {
-      const ticks = 2400;
-      state.race['wishStats'] = state.race['wishStats'] ?? {};
-      (state.race['wishStats'] as Record<string, unknown>)['astro'] = true;
-      reward = { type: 'zodiac', ticks };
-      break;
-    }
-    case 8: {
-      const ticks = 1800;
-      state.race['popgrowth_boost'] = ticks;
-      reward = { type: 'pop_growth', ticks };
-      break;
-    }
-    case 9: {
-      const ticks = 1800;
-      state.race['tech_speed'] = ticks;
-      reward = { type: 'tech_speed', ticks };
-      break;
-    }
-    case 10: {
-      const ticks = 1200;
-      state.race['lucky'] = ticks;
-      reward = { type: 'lucky', ticks };
-      break;
-    }
-    case 11:
-    default: {
-      const amount = Math.round(200_000 * scale);
-      if (state.resource['Money']) {
-        state.resource['Money'].amount = Math.min(state.resource['Money'].max, state.resource['Money'].amount + amount);
-      }
-      reward = { type: 'fortune', amount };
-      break;
-    }
-  }
-  return reward;
-}
-
-// ============================================================
 // Ocular Power (beholder) — 激活能量眼
 // ============================================================
 export function getOcularPowers(state: GameState): { active: number; scaling: number } {
@@ -401,4 +271,5 @@ export function complexTraitTick(state: GameState, timeMul: number): void {
   applyImitationTraits(state);
   // unstable 死亡
   processUnstableDeath(state, timeMul);
+  tickWishCooldowns(state, timeMul);
 }

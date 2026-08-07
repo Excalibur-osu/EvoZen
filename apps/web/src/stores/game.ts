@@ -28,6 +28,8 @@ import {
   manualCraft,
   assignCraftsman as coreAssignCraftsman,
   removeCraftsman as coreRemoveCraftsman,
+  buildSeasonalFirework as coreBuildSeasonalFirework,
+  setSeasonalFireworkActive as coreSetSeasonalFireworkActive,
   assignSmelter as coreAssignSmelter,
   removeSmelter as coreRemoveSmelter,
   type CraftableId,
@@ -68,6 +70,7 @@ import {
   assignSpeciesTraits,
   getSpeciesTraitDescriptors,
   applySpecialRaceTraits,
+  applyAnnihilationRunMarker,
   runSimulationTick,
   // 军事系统
   mercCost as coreMercCost,
@@ -603,6 +606,11 @@ export const useGameStore = defineStore('game', () => {
     if (!def) return
     const result = coreResearchTech(state.value, techId)
     if (!result) return
+    if (techId === 'matter_replicator' && result.race.universe === 'antimatter' && result.race['amexplode']) {
+      state.value = coreTriggerReset(result, 'mad') ?? result
+      addMessage('反物质复制器失控并引发了湮灭。', 'danger', 'progress')
+      return
+    }
     state.value = result
     addMessage(`🔬 ${def.name} 研发完成！`, 'special', 'progress')
   }
@@ -738,6 +746,7 @@ export const useGameStore = defineStore('game', () => {
     state.value.race.species = startSpeciesId
     state.value.city.ptrait = ptrait
     syncRaceTraits(replacedBySpecialSpecies ? undefined : resolvedMainType)
+    applyAnnihilationRunMarker(state.value)
     if (state.value.race['imitation']) {
       if (imitationTarget) state.value.race['srace'] = imitationTarget
       else delete state.value.race['srace']
@@ -1001,6 +1010,7 @@ export const useGameStore = defineStore('game', () => {
         Wrought_Iron: '锻铁',
         Sheet_Metal: '金属板',
         Mythril: '秘银',
+        Thermite: '铝热剂',
       }
       addMessage(`⚒ 手动合成了 ${qty} 份${names[craftId] ?? craftId}。`, 'success', 'progress')
     } else {
@@ -1345,6 +1355,18 @@ export const useGameStore = defineStore('game', () => {
     addMessage(`🌌 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
   }
 
+  function buildSeasonalFirework() {
+    const result = coreBuildSeasonalFirework(state.value)
+    if (!result) return
+    state.value = result
+    addMessage('烟花厂已建成，可以开始节日表演。', 'special', 'progress')
+  }
+
+  function setSeasonalFireworkActive(active: boolean) {
+    const result = coreSetSeasonalFireworkActive(state.value, active)
+    if (result) state.value = result
+  }
+
   function getGalaxyBuildCost(structureId: string): Record<string, number> {
     return coreGetGalaxyBuildCost(state.value, structureId)
   }
@@ -1429,6 +1451,8 @@ export const useGameStore = defineStore('game', () => {
     doCraft,
     assignCraftLine,
     removeCraftLine,
+    buildSeasonalFirework,
+    setSeasonalFireworkActive,
     assignFactoryLine,
     removeFactoryLine,
     assignMiningDroid,

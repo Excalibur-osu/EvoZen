@@ -126,7 +126,17 @@ export {
   type SpeciesTraitId,
   type SpeciesTraitDescriptor,
 } from './traits';
-export { gameTick, factoryTick } from './tick';
+export { gameTick } from './tick';
+export {
+  factoryTick,
+  factoryTickDetailed,
+  calculateQuantumLevel,
+  type FactoryModifier,
+  type FactoryInputResult,
+  type FactoryLineResult,
+  type FactoryTickResult,
+  type FactoryTickOptions,
+} from './factory';
 export { saveGame, loadGame, exportSave, importSave } from './save';
 export {
   STANDARD_CHALLENGE_FLAGS,
@@ -162,12 +172,30 @@ export {
   manualCraft,
   craftingTick,
   craftingTickWithSupport,
+  craftingTickDetailed,
   assignCraftsman,
   removeCraftsman,
   CRAFTABLE_IDS,
+  isCraftableAvailable,
   type CraftableId,
   type FoundryState,
+  type CraftingModifier,
+  type CraftingAddition,
+  type CraftingInputResult,
+  type CraftingLineResult,
+  type CraftingTickResult,
+  type CraftingTickOptions,
 } from './crafting';
+export {
+  isSeasonalEventActive,
+  getSolsticeThermiteGoal,
+  getFireworkRegion,
+  syncSeasonalEventState,
+  canBuildSeasonalFirework,
+  buildSeasonalFirework,
+  setSeasonalFireworkActive,
+  type SeasonalEventId,
+} from './seasonal-events';
 export type { FactoryState } from '@evozen/shared-types';
 export {
   buyResource,
@@ -388,15 +416,22 @@ export {
   getLinkedQuantiumBonus,
   getShapeshifterPositiveRank,
   getShapeshifterNegativeRank,
-  isWishReady,
-  makeWish,
-  type WishReward,
   getOcularPowers,
   isForgeSmelting,
   isCataclysmRace,
   complexTraitTick,
   type ElementalType,
 } from './complex-traits';
+export {
+  initializeWishStats,
+  getWishStats,
+  isMajorWishReady,
+  castGreatnessWish,
+  tickWishCooldowns,
+  type WishStats,
+  type GreatnessWishResult,
+  type WishWonder,
+} from './wishes';
 export {
   applySludgeTraits,
   applyJunkerTraits,
@@ -414,7 +449,9 @@ export {
   getRaceFullTraits,
   getRaceTraitDetails,
   downgradeTraitRank,
+  upgradeTraitRank,
   applyRaceTraits,
+  applyAnnihilationRunMarker,
   isGenusId,
   applyChallengeGeneTraits,
   NEGATIVE_ROLL_TRAITS,
@@ -426,6 +463,7 @@ export {
   type RaceDefinition,
   type RaceTraitDetail,
 } from './races';
+export { applyFanaticism } from './fanaticism';
 export {
   applyAltRaceLock,
   applyAltRaceTraits,
@@ -517,10 +555,20 @@ export {
 export {
   CRISPR_UPGRADES,
   getCrisprLevel,
+  getCrisprPrestigeResource,
   canPurchaseCrispr,
   purchaseCrispr,
   isCrisprUnlocked,
   getAvailableCrispr,
+  getRaceTraitRemovalCost,
+  getRaceTraitAdditionCost,
+  getRemovableRaceTraits,
+  getAddableRaceTraits,
+  canRemoveRaceTrait,
+  canAddRaceTrait,
+  removeRaceTrait,
+  addRaceTrait,
+  type RaceTraitModification,
   getDiscoveredMinorTraits,
   rollMinorTrait,
   type CrisprUpgrade,
@@ -629,6 +677,7 @@ export {
   isEdenicRegionUnlocked,
   isAsphodelHostile,
   getEdenicBuildingsByRegion,
+  ensureEdenicStructure,
   getEdenicBuildCost,
   canBuildEdenic,
   buildEdenicStructure,
