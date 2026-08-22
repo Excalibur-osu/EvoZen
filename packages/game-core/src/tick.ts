@@ -56,6 +56,7 @@ import { tickTraining, tickHealing, armyRating, garrisonSize } from './military'
 import { tickEvents } from './events';
 import { resolveSpyActionTick } from './espionage';
 import { applyDerivedStateInPlace } from './derived-state';
+import { calculateTeamsterLoad } from './production-modifiers';
 import {
   hasPlanetTrait,
   getGlobalPlanetMultiplier,
@@ -94,7 +95,9 @@ import { petTick } from './pet';
 import { magicTick } from './magic';
 import { edenicTick, edenicProductionTick } from './edenic';
 import { syncSeasonalEventState } from './seasonal-events';
-import { truepathProductionTick } from './truepath';
+import { resolveEnceladusSupport, truepathProductionTick, tritonWarTick } from './truepath';
+import { advanceTruepathFleet, truepathFleetFuelTick } from './truepath-ships';
+import { galaxyProductionTick } from './galaxy';
 import { govActive, runGovernorTasks } from './governor';
 import {
   getSatelliteScientistImpactMultiplier,
@@ -105,6 +108,15 @@ import {
 } from './space';
 import { resolveInterstellarSupport } from './interstellar';
 import { resolveSpaceSupport } from './space-support';
+import {
+  getTaucetiAlienOutpostKnowledgeBonus,
+  getTaucetiFactoryConfiguredLines,
+  getTaucetiFactorySupportedLines,
+  resolveTaucetiSupport,
+  taucetiAlienOutpostTick,
+  taucetiFarmTick,
+  taucetiHomeTick,
+} from './tauceti';
 import {
   getCasinoIncomePerActive,
   getTourismFoodDemand,
@@ -493,6 +505,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   for (const [resId, delta] of Object.entries(powerResult.fuelDeltas)) {
     deltas[resId] = (deltas[resId] ?? 0) + delta;
   }
+  if (state.tech['isolation'] && state.race['lone_survivor']) {
+    const fusionGenerators = powerResult.activeGenerators['fusion_generator'] ?? 0;
+    if (fusionGenerators > 0) {
+      deltas['Helium_3'] = (deltas['Helium_3'] ?? 0) + fusionGenerators * 15;
+    }
+  }
   captureDeltaSection('电力燃料', (amount) => amount >= 0 ? 'source' : 'consume');
   // 用电建筑实际开启数（含 city + space）
   const poweredOn = powerResult.activeConsumers;
@@ -529,6 +547,10 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   }
   const interstellarSupport = resolveInterstellarSupport(state, poweredOn);
   for (const [resId, drain] of Object.entries(interstellarSupport.fuelDrain)) {
+    deltas[resId] = (deltas[resId] ?? 0) - drain;
+  }
+  const taucetiSupport = resolveTaucetiSupport(state, poweredOn);
+  for (const [resId, drain] of Object.entries(taucetiSupport.fuelDrain)) {
     deltas[resId] = (deltas[resId] ?? 0) - drain;
   }
   captureDeltaSection('支援燃料', (amount) => amount >= 0 ? 'source' : 'consume');
@@ -1146,6 +1168,14 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       { label: '饥饿修正', multiplier: hungerMult },
       { label: '行星全局修正', multiplier: planetGlobalMult },
       { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      {
+        label: 'Tau 殖民地',
+        multiplier: state.tech['isolation'] ? 1 + (taucetiSupport.supportOn['colony'] ?? 0) * 0.5 : 1,
+      },
+      {
+        label: 'Tau 矿坑',
+        multiplier: state.tech['isolation'] ? 1 + (taucetiSupport.supportOn['mining_pit'] ?? 0) * 0.08 : 1,
+      },
     ]);
     deltas['Cement'] = (deltas['Cement'] ?? 0) + cementDelta;
     const stoneConsumed = effectiveCement * stonePerCement;
@@ -1809,11 +1839,19 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       return [resId, available];
     }),
   );
+  const enceladusSupport = resolveEnceladusSupport(state, poweredOn);
   const craftResult = craftingTickDetailed(
     state,
     fabricationSupported,
     effectiveColonistWorkers,
-    { poweredOn, availableResources: craftAvailableResources },
+    {
+      poweredOn,
+      supportedOn: {
+        ...taucetiSupport.supportOn,
+        zero_g_lab: enceladusSupport.zeroGLab,
+      },
+      availableResources: craftAvailableResources,
+    },
   );
   for (const line of craftResult.lines) {
     const craftName = state.resource[line.craftId]?.name ?? line.craftId;
@@ -1828,11 +1866,19 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
     );
     addBreakdownEntry(
       line.craftId,
-      '原料供应限制',
-      line.materialBaseOutput - line.assignedBaseOutput,
+      '特殊建筑产能限制',
+      line.capacityBaseOutput - line.assignedBaseOutput,
       'modifier',
       section,
-      `${line.effectiveWorkers}/${line.assignedWorkers} 名有效工匠`,
+      `${line.capacityWorkers}/${line.assignedWorkers} 名工匠获得产能`,
+    );
+    addBreakdownEntry(
+      line.craftId,
+      '原料供应限制',
+      line.materialBaseOutput - line.capacityBaseOutput,
+      'modifier',
+      section,
+      `${line.effectiveWorkers}/${line.capacityWorkers} 名工匠获得原料`,
     );
     addBreakdownEntry(
       line.craftId,
@@ -2164,7 +2210,6 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
 
       // 每天随机化天气 — 对标 legacy main.js L1222-1265
       randomizeWeather(newState);
-
       // 月相推进 — 对标 legacy main.js: moon 每天 +1, 到 28 归零
       newState.city.calendar.moon = ((newState.city.calendar.moon ?? 0) + 1) % 28;
 
@@ -2210,6 +2255,13 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 12a. 派生状态同步
   // 让排队建造完成后的上限、岗位、显示状态在当前 tick 就保持一致
   // ============================================================
+  newState.city.power = {
+    generated: powerResult.totalGenerated,
+    consumed: powerResult.totalConsumed,
+    surplus: powerResult.totalGenerated - powerResult.totalConsumed,
+    activeGenerators: powerResult.activeGenerators,
+    activeConsumers: powerResult.activeConsumers,
+  };
   const derivedResourceSnapshot = snapshotResourceAmounts(newState.resource);
   applyDerivedStateInPlace(newState);
   captureDeferredSettledResourceMutations(
@@ -2268,6 +2320,22 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
       }
     }
   }
+  if (newState.resource['Knowledge']) {
+    newState.resource['Knowledge'].max += getTaucetiAlienOutpostKnowledgeBonus(
+      newState,
+      newState.resource['Knowledge'].max,
+      powerResult.activeConsumers,
+    );
+  }
+  if (newState.resource['Cipher']) {
+    const zeroGLabCapacity = newState.resource['Cipher'].display ? enceladusSupport.zeroGLab * 10_000 : 0;
+    const outpostCapacity = newState.resource['Cipher'].display
+      && newState.tech['isolation']
+      && newState.tauceti['alien_outpost']
+      ? 200_000
+      : 0;
+    newState.resource['Cipher'].max = zeroGLabCapacity + outpostCapacity;
+  }
 
   // 对标 legacy/src/main.js L8888-8892：
   //   - living_quarters 增加 species.max 与 colonist.max
@@ -2325,13 +2393,6 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // ============================================================
   // 12c. 存储电力数据 — 供 UI 展示
   // ============================================================
-  newState.city.power = {
-    generated: powerResult.totalGenerated,
-    consumed: powerResult.totalConsumed,
-    surplus: powerResult.totalGenerated - powerResult.totalConsumed,
-    activeGenerators: powerResult.activeGenerators,
-    activeConsumers: powerResult.activeConsumers,
-  };
   if ((newState.tech['ascension'] ?? 0) >= 7) {
     newState.tech['ascension'] = (powerResult.activeConsumers['ascension_trigger'] ?? 0) > 0 ? 8 : 7;
   }
@@ -2420,17 +2481,30 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 15. 工厂产线 tick
   // 对标 legacy/src/industry.js f_rate表，工厂 powered = on
   // ============================================================
+  newState.race['teamster'] = calculateTeamsterLoad(newState, {
+    factory: powerResult.activeConsumers['factory'] ?? 0,
+    redFactory: redFactoryPowered,
+    iridiumMine: iridiumSupported,
+    heliumMine: heliumSupported,
+    redMine: redMineSupported,
+    outpost: powerResult.activeConsumers['outpost'] ?? 0,
+  });
   const factoryResult = factoryTickDetailed(newState, {
     poweredOn: powerResult.activeConsumers['factory'] ?? 0,
     timeMultiplier: TIME_MULTIPLIER,
     productionModifiers: [
+      {
+        label: 'Tau 殖民地',
+        multiplier: newState.tech['isolation'] ? 1 + (taucetiSupport.supportOn['colony'] ?? 0) * 0.5 : 1,
+      },
       { label: '士气效率', multiplier: prodMult },
       { label: '饥饿修正', multiplier: hungerMult },
       { label: '行星全局修正', multiplier: planetGlobalMult },
       { label: '占领/统一政策', multiplier: occupyUnifyMult },
     ],
-    extraPoweredLines: redFactoryPowered,
-    extraMaxLines: redFactoryMaxLines,
+    extraPoweredLines: redFactoryPowered
+      + getTaucetiFactorySupportedLines(newState, taucetiSupport.supportOn),
+    extraMaxLines: redFactoryMaxLines + getTaucetiFactoryConfiguredLines(newState),
     dischargeActive,
     activeCitadels: powerResult.activeConsumers['citadel'] ?? 0,
   });
@@ -2505,7 +2579,82 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   markCurrentDeltasSettled();
 
   // ============================================================
-  // 15a. Portal 要塞入侵 tick + 建筑产出
+  // 15a. 银河制造：玻璃合金工厂
+  // ============================================================
+  const galaxyResult = galaxyProductionTick(newState, TIME_MULTIPLIER, deltas, {
+    activeVitreloyPlants: powerResult.activeConsumers['vitreloy_plant'] ?? 0,
+    productionModifiers: [
+      { label: '士气效率', multiplier: prodMult },
+      { label: '饥饿修正', multiplier: hungerMult },
+      { label: '行星全局修正', multiplier: planetGlobalMult },
+      { label: '占领/统一政策', multiplier: occupyUnifyMult },
+    ],
+    dischargeActive,
+  });
+  if (galaxyResult.vitreloy) {
+    const vitreloy = galaxyResult.vitreloy;
+    const section = '银河制造：玻璃合金';
+    addBreakdownEntry(
+      'Vitreloy',
+      '玻璃合金工厂基础产出',
+      vitreloy.requestedBaseOutput,
+      'source',
+      section,
+      `${vitreloy.requestedPlants} 座请求运行，基础速率 ${vitreloy.baseRate}`,
+    );
+    addBreakdownEntry(
+      'Vitreloy',
+      '银河电力限制',
+      vitreloy.poweredBaseOutput - vitreloy.requestedBaseOutput,
+      'modifier',
+      section,
+      `${vitreloy.poweredPlants}/${vitreloy.requestedPlants} 座获得供电`,
+    );
+    addBreakdownEntry(
+      'Vitreloy',
+      '制造原料限制',
+      vitreloy.materialBaseOutput - vitreloy.poweredBaseOutput,
+      'modifier',
+      section,
+      `${vitreloy.effectivePlants}/${vitreloy.poweredPlants} 座实际生产`,
+    );
+    let runningOutput = vitreloy.materialBaseOutput;
+    for (const modifier of vitreloy.modifiers) {
+      const nextOutput = runningOutput * modifier.multiplier;
+      addBreakdownEntry(
+        'Vitreloy',
+        modifier.label,
+        nextOutput - runningOutput,
+        'modifier',
+        section,
+        `x${Number(modifier.multiplier.toFixed(4))}`,
+      );
+      runningOutput = nextOutput;
+    }
+    addBreakdownEntry(
+      'Vitreloy',
+      '产物存储上限',
+      vitreloy.actualOutput - vitreloy.theoreticalOutput,
+      'modifier',
+      section,
+      `实际 ${Number(vitreloy.actualOutput.toFixed(6))}`,
+    );
+    lastBreakdownSnapshot.Vitreloy = deltas.Vitreloy ?? 0;
+    for (const input of vitreloy.inputs) {
+      addBreakdownEntry(
+        input.resource,
+        `玻璃合金原料：${newState.resource[input.resource]?.name ?? input.resource}`,
+        -input.consumption,
+        'consume',
+        section,
+        `${Number(input.amountPerPlant.toFixed(6))}/座`,
+      );
+      lastBreakdownSnapshot[input.resource] = deltas[input.resource] ?? 0;
+    }
+  }
+
+  // ============================================================
+  // 15b. Portal 要塞入侵 tick + 建筑产出
   // ============================================================
   if ((newState.tech['portal'] ?? 0) >= 2) {
     const patrolResult = fortressTick(newState, TIME_MULTIPLIER, { runPatrols: dayAdvanced });
@@ -2544,7 +2693,129 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   // 15b1. Truepath 建筑产出 + 辛迪加海盗骚扰
   // ============================================================
   if (newState.race['truepath']) {
-    truepathProductionTick(newState, TIME_MULTIPLIER, deltas);
+    const truepathDeltaSnapshot = { ...deltas };
+    const truepathResult = truepathProductionTick(newState, TIME_MULTIPLIER, deltas, {
+      productionModifiers: [
+        { label: '士气效率', multiplier: prodMult },
+        { label: '饥饿修正', multiplier: hungerMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+        { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      ],
+      dischargeActive,
+      activeCitadels: powerResult.activeConsumers['citadel'] ?? 0,
+      activeElectrolysis: powerResult.activeConsumers['electrolysis'] ?? 0,
+      activeWaterFreighters: enceladusSupport.waterFreighter,
+      activeFob: powerResult.activeConsumers['fob'] ?? 0,
+    });
+    if (truepathResult.graphene) {
+      const graphene = truepathResult.graphene;
+      const section = 'Truepath 石墨烯产线';
+      addBreakdownEntry(
+        'Graphene',
+        '石墨烯产线基础产出',
+        graphene.requestedBaseOutput,
+        'source',
+        section,
+        `${graphene.requestedLines} 条分配，基础速率 ${Number(graphene.baseRate.toFixed(6))}`,
+      );
+      addBreakdownEntry(
+        'Graphene',
+        '可用产线限制',
+        graphene.allocatedBaseOutput - graphene.requestedBaseOutput,
+        'modifier',
+        section,
+        `${graphene.allocatedLines}/${graphene.requestedLines} 条有效分配`,
+      );
+      addBreakdownEntry(
+        'Graphene',
+        '原料供应限制',
+        graphene.materialBaseOutput - graphene.allocatedBaseOutput,
+        'modifier',
+        section,
+        `${graphene.effectiveLines}/${graphene.allocatedLines} 条实际生产`,
+      );
+      let runningOutput = graphene.materialBaseOutput;
+      for (const modifier of graphene.modifiers) {
+        const nextOutput = runningOutput * modifier.multiplier;
+        addBreakdownEntry(
+          'Graphene',
+          modifier.label,
+          nextOutput - runningOutput,
+          'modifier',
+          section,
+          `x${Number(modifier.multiplier.toFixed(4))}`,
+        );
+        runningOutput = nextOutput;
+      }
+      lastBreakdownSnapshot.Graphene = deltas.Graphene ?? 0;
+      for (const input of graphene.inputs) {
+        addBreakdownEntry(
+          input.resource,
+          `石墨烯原料：${newState.resource[input.resource]?.name ?? input.resource}`,
+          -input.consumption,
+          'consume',
+          section,
+          `${Number(input.amountPerLine.toFixed(6))}/产线`,
+        );
+        lastBreakdownSnapshot[input.resource] = deltas[input.resource] ?? 0;
+      }
+    }
+    if (truepathResult.triton) {
+      const triton = truepathResult.triton;
+      const section = '海卫一前线';
+      addBreakdownEntry('Helium_3', '前进基地氦-3 消耗', -triton.heliumConsumption, 'consume', section,
+        `${triton.activeFob}/${triton.requestedFob} 座有效基地`);
+      addBreakdownEntry('Oil', '登陆器石油消耗', -triton.oilConsumption, 'consume', section,
+        `${triton.activeLanders}/${triton.requestedLanders} 艘有效登陆器`);
+      addBreakdownEntry('Cipher', '登陆器基础产出', triton.cipherBaseOutput, 'source', section,
+        `${triton.activeLanders} 艘，控制度 ${triton.control}/100`);
+      let cipherOutput = triton.cipherBaseOutput;
+      for (const modifier of triton.cipherModifiers) {
+        const next = cipherOutput * modifier.multiplier;
+        addBreakdownEntry('Cipher', modifier.label, next - cipherOutput, 'modifier', section,
+          `x${Number(modifier.multiplier.toFixed(4))}`);
+        cipherOutput = next;
+      }
+      lastBreakdownSnapshot['Helium_3'] = deltas['Helium_3'] ?? 0;
+      lastBreakdownSnapshot['Oil'] = deltas['Oil'] ?? 0;
+      lastBreakdownSnapshot['Cipher'] = deltas['Cipher'] ?? 0;
+    }
+    const truepathPendingDeltas = Object.fromEntries(
+      Object.keys(deltas).map((resource) => [
+        resource,
+        (deltas[resource] ?? 0) - (truepathDeltaSnapshot[resource] ?? 0),
+      ]),
+    );
+    const fleetFuel = truepathFleetFuelTick(newState, TIME_MULTIPLIER, deltas, truepathPendingDeltas);
+    for (const [resource, amount] of Object.entries(fleetFuel.drains)) {
+      addBreakdownEntry(
+        resource,
+        'Truepath 舰队燃料',
+        -amount,
+        'consume',
+        'Truepath 舰队',
+        `${fleetFuel.fueledShips} 艘获得燃料，${fleetFuel.stalledShips} 艘停航`,
+      );
+      lastBreakdownSnapshot[resource] = deltas[resource] ?? 0;
+    }
+    if (dayAdvanced) {
+      const travel = advanceTruepathFleet(newState);
+      if (travel.tauDiscovered) {
+        messages.push({
+          text: `${travel.arrivedShips[0] ?? '探索舰'} 已抵达并扫描 Tau Ceti。`,
+          type: 'special',
+          category: 'progress',
+        });
+      }
+      const tritonWar = tritonWarTick(newState);
+      if (tritonWar?.completed) {
+        messages.push({
+          text: '海卫一坠毁飞船已完成控制，登陆器开始回收密文。',
+          type: 'info',
+          category: 'progress',
+        });
+      }
+    }
     captureDeltaSection('Truepath 建筑');
     const syndicateResourceSnapshot = snapshotResourceAmounts(newState.resource);
     syndicateTick(newState, TIME_MULTIPLIER);
@@ -2556,7 +2827,149 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
         : `辛迪加骚扰损失：${newState.resource[resId]?.name ?? resId}`,
       '辛迪加事件',
     );
-    womlingTick(newState, TIME_MULTIPLIER, deltas);
+    const tauFarmLines = taucetiFarmTick(
+      newState,
+      TIME_MULTIPLIER,
+      deltas,
+      [
+        { label: '士气效率', multiplier: prodMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+        { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      ],
+      taucetiSupport.supportOn,
+      powerResult.activeConsumers,
+    );
+    for (const line of tauFarmLines) {
+      const section = 'Tau 家园农场';
+      addBreakdownEntry(
+        line.resource,
+        '农场基础产出',
+        line.baseOutput,
+        'source',
+        section,
+        `${line.active} 座有效农场，基础速率 ${line.ratePerFarm}`,
+      );
+      let runningOutput = line.baseOutput;
+      for (const modifier of line.modifiers) {
+        const nextOutput = runningOutput * modifier.multiplier;
+        addBreakdownEntry(
+          line.resource,
+          modifier.label,
+          nextOutput - runningOutput,
+          'modifier',
+          section,
+          `x${Number(modifier.multiplier.toFixed(4))}`,
+        );
+        runningOutput = nextOutput;
+      }
+      lastBreakdownSnapshot[line.resource] = deltas[line.resource] ?? 0;
+    }
+    captureDeltaSection('Tau 家园农场');
+    const tauHomeLines = taucetiHomeTick(newState, TIME_MULTIPLIER, deltas, {
+      supportedOn: taucetiSupport.supportOn,
+      productionModifiers: [
+        {
+          label: '矿工治理修正',
+          multiplier: (1 - govActive(newState, 'theorist', 1) / 100)
+            * (1 + govActive(newState, 'inspirational', 0) / 100)
+            * (1 + govActive(newState, 'dirty_jobs', 2) / 100),
+        },
+        { label: '士气效率', multiplier: prodMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+        { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      ],
+      hungerMultiplier: hungerMult,
+    });
+    for (const line of tauHomeLines) {
+      const section = 'Tau 家园矿业';
+      addBreakdownEntry(
+        line.resource,
+        '坑道矿工基础产出',
+        line.baseOutput,
+        'source',
+        section,
+        `${line.miners} 名矿工，基础速率 ${line.ratePerMiner}`,
+      );
+      let runningOutput = line.baseOutput;
+      for (const modifier of line.modifiers) {
+        const nextOutput = runningOutput * modifier.multiplier;
+        addBreakdownEntry(
+          line.resource,
+          modifier.label,
+          nextOutput - runningOutput,
+          'modifier',
+          section,
+          `x${Number(modifier.multiplier.toFixed(4))}`,
+        );
+        runningOutput = nextOutput;
+      }
+      lastBreakdownSnapshot[line.resource] = deltas[line.resource] ?? 0;
+    }
+    captureDeltaSection('Tau 家园矿业');
+    const alienOutpostLine = taucetiAlienOutpostTick(
+      newState,
+      TIME_MULTIPLIER,
+      deltas,
+      [
+        { label: '士气效率', multiplier: prodMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+        { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      ],
+      taucetiSupport.supportOn,
+    );
+    if (alienOutpostLine) {
+      const section = '外星前哨';
+      addBreakdownEntry('Cipher', '前哨基础产出', alienOutpostLine.baseOutput, 'source', section);
+      let runningOutput = alienOutpostLine.baseOutput;
+      for (const modifier of alienOutpostLine.modifiers) {
+        const nextOutput = runningOutput * modifier.multiplier;
+        addBreakdownEntry(
+          'Cipher',
+          modifier.label,
+          nextOutput - runningOutput,
+          'modifier',
+          section,
+          `x${Number(modifier.multiplier.toFixed(4))}`,
+        );
+        runningOutput = nextOutput;
+      }
+      lastBreakdownSnapshot['Cipher'] = deltas['Cipher'] ?? 0;
+    }
+    captureDeltaSection('外星前哨');
+    const womlingResult = womlingTick(newState, TIME_MULTIPLIER, deltas, {
+      supportedOn: taucetiSupport.supportOn,
+      productionModifiers: [
+        { label: '士气效率', multiplier: prodMult },
+        { label: '行星全局修正', multiplier: planetGlobalMult },
+        { label: '占领/统一政策', multiplier: occupyUnifyMult },
+      ],
+      hungerMultiplier: hungerMult,
+    });
+    for (const line of womlingResult.lines) {
+      const section = '红星 Womling 矿业';
+      addBreakdownEntry(
+        line.resource,
+        'Womling 矿工基础产出',
+        line.baseOutput,
+        'source',
+        section,
+        `${line.miners} 名矿工，基础速率 ${line.ratePerMiner}`,
+      );
+      let runningOutput = line.baseOutput;
+      for (const modifier of line.modifiers) {
+        const nextOutput = runningOutput * modifier.multiplier;
+        addBreakdownEntry(
+          line.resource,
+          modifier.label,
+          nextOutput - runningOutput,
+          'modifier',
+          section,
+          `x${Number(modifier.multiplier.toFixed(4))}`,
+        );
+        runningOutput = nextOutput;
+      }
+      lastBreakdownSnapshot[line.resource] = deltas[line.resource] ?? 0;
+    }
     captureDeltaSection('Womling');
   }
 
@@ -2672,7 +3085,12 @@ export function gameTick(state: GameState): { state: GameState; result: GameTick
   const geneResourceSnapshot = snapshotResourceAmounts(newState.resource);
   const geneResult = geneSequenceTick(
     newState,
-    powerResult.activeConsumers['biolab'] ?? 0,
+    {
+      activeBiolabs: powerResult.activeConsumers['biolab'] ?? 0,
+      exoticLabsSupported: exoticLabSupported,
+      activeTwistedLabs: powerResult.activeConsumers['twisted_lab'] ?? 0,
+      infectiousDiseaseLabsSupported: taucetiSupport.supportOn['infectious_disease_lab'] ?? 0,
+    },
     TIME_MULTIPLIER,
   );
   captureDeferredSettledResourceMutations(

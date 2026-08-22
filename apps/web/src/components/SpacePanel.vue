@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import MiningDroidPanel from './MiningDroidPanel.vue'
+import ShipyardPanel from './ShipyardPanel.vue'
 import EmptyState from './ui/EmptyState.vue'
 
 const game = useGameStore()
@@ -193,6 +194,7 @@ const regionGroups = computed<RegionGroup[]>(() => {
     const hasSlot = (struct?.count ?? 0) > 0
     if (!techUnlocked && !hasSlot) continue
     if (!traitOk && !hasSlot) continue
+    if (def.condition && !def.condition(game.state) && !hasSlot) continue
 
     if (!groups[def.region]) {
       groups[def.region] = {
@@ -335,6 +337,8 @@ function resourceName(id: string): string {
       </article>
     </section>
 
+    <ShipyardPanel v-if="(game.state.space['shipyard']?.count ?? 0) > 0" />
+
     <section v-if="regionGroups.length === 0" class="registry-card">
       <EmptyState text="完成发射与月球任务后，这里会开始出现真实的太空结构槽位。" icon="space" />
     </section>
@@ -378,7 +382,7 @@ function resourceName(id: string): string {
             :disabled="!item.canBuild"
             @click="buildStructure(item)"
           >
-            {{ !item.techUnlocked ? '未解锁' : !item.spaceReqsOk ? '前置不足' : item.canBuild ? (item.segmentCap ? '建造一段' : '建造一座') : '资源不足' }}
+            {{ item.segmentCap && item.count >= item.segmentCap ? '已完成' : !item.techUnlocked ? '未解锁' : !item.spaceReqsOk ? '前置不足' : item.canBuild ? (item.segmentCap ? '建造一段' : '建造一座') : '资源不足' }}
           </button>
         </article>
       </div>

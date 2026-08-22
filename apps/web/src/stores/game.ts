@@ -26,6 +26,7 @@ import {
   BASIC_STRUCTURES,
   BASIC_TECHS,
   manualCraft,
+  getManualCraftPreview,
   assignCraftsman as coreAssignCraftsman,
   removeCraftsman as coreRemoveCraftsman,
   buildSeasonalFirework as coreBuildSeasonalFirework,
@@ -56,6 +57,7 @@ import {
   assignContainer as coreAssignContainer,
   unassignContainer as coreUnassignContainer,
   getCrateValue,
+  getContainerValue,
   STORABLE_RESOURCES,
   CRATE_VALUE,
   CONTAINER_VALUE,
@@ -119,6 +121,22 @@ import {
   getGalaxyBuildCost as coreGetGalaxyBuildCost,
   canBuildGalaxyStructure as coreCanBuildGalaxyStructure,
   buildGalaxyStructure as coreBuildGalaxyStructure,
+  getImplementedTaucetiStructuresForRegion as coreGetImplementedTaucetiStructuresForRegion,
+  isTaucetiStructureVisible as coreIsTaucetiStructureVisible,
+  getTaucetiBuildCost as coreGetTaucetiBuildCost,
+  canBuildTaucetiStructure as coreCanBuildTaucetiStructure,
+  buildTaucetiStructure as coreBuildTaucetiStructure,
+  isTaucetiMissionAvailable as coreIsTaucetiMissionAvailable,
+  canRunTaucetiMission as coreCanRunTaucetiMission,
+  runTaucetiMission as coreRunTaucetiMission,
+  isWomlingRelationAvailable as coreIsWomlingRelationAvailable,
+  getWomlingRelationCost as coreGetWomlingRelationCost,
+  canChooseWomlingRelation as coreCanChooseWomlingRelation,
+  chooseWomlingRelation as coreChooseWomlingRelation,
+  type TaucetiRegion,
+  type TaucetiMissionDefinition,
+  type TaucetiStructureDefinition,
+  type WomlingRelation,
   assignFactoryLine as coreAssignFactoryLine,
   removeFactoryLine as coreRemoveFactoryLine,
   assignMiningDroid as coreAssignMiningDroid,
@@ -210,9 +228,21 @@ import {
   isTruepathRegionUnlocked,
   canBuildTruepath as coreCanBuildTruepath,
   buildTruepathStructure as coreBuildTruepathStructure,
+  getGrapheneFactory as coreGetGrapheneFactory,
+  assignGrapheneFeedstock as coreAssignGrapheneFeedstock,
+  removeGrapheneFeedstock as coreRemoveGrapheneFeedstock,
   getTruepathBuildCost as coreGetTruepathBuildCost,
   getTruepathBuildingsByRegion as coreGetTruepathBuildingsByRegion,
+  type GrapheneFeedstockId,
   type TruepathRegionId,
+  getExplorerShips as coreGetExplorerShips,
+  getExplorerCrewSize as coreGetExplorerCrewSize,
+  getExplorerShipCost as coreGetExplorerShipCost,
+  isTruepathShipyardPowered as coreIsTruepathShipyardPowered,
+  canBuildExplorerShip as coreCanBuildExplorerShip,
+  buildExplorerShip as coreBuildExplorerShip,
+  canDispatchExplorerToTau as coreCanDispatchExplorerToTau,
+  dispatchExplorerToTau as coreDispatchExplorerToTau,
   // Edenic
   EDENIC_REGIONS,
   EDENIC_BUILDINGS,
@@ -234,10 +264,6 @@ import {
   type MechDef,
   attemptSpireFloor,
   getCurrentSpireInfo,
-  discoverWomling as coreDiscoverWomling,
-  initWomling,
-  getWomlingPopCap,
-  assignWomling as coreAssignWomling,
   canUseWomling,
   getServantsState,
   canUseServants,
@@ -612,7 +638,13 @@ export const useGameStore = defineStore('game', () => {
       return
     }
     state.value = result
-    addMessage(`🔬 ${def.name} 研发完成！`, 'special', 'progress')
+    addMessage(
+      techId === 'alien_outpost'
+        ? '外星前哨是一座研究实验室；其中的设计图揭示了空间跃迁之门。'
+        : `🔬 ${def.name} 研发完成！`,
+      'special',
+      'progress',
+    )
   }
 
   // ---- 岗位操作 ----
@@ -1001,6 +1033,7 @@ export const useGameStore = defineStore('game', () => {
 
   /** 手动合成一次（一键制作） */
   function doCraft(craftId: CraftableId, qty: number = 1) {
+    const preview = getManualCraftPreview(state.value, craftId, qty)
     const result = manualCraft(state.value, craftId, qty)
     if (result) {
       state.value = result
@@ -1010,9 +1043,14 @@ export const useGameStore = defineStore('game', () => {
         Wrought_Iron: '锻铁',
         Sheet_Metal: '金属板',
         Mythril: '秘银',
+        Aerogel: '气凝胶',
+        Nanoweave: '纳米织物',
+        Scarletite: '猩红石',
+        Quantium: '量子素',
         Thermite: '铝热剂',
       }
-      addMessage(`⚒ 手动合成了 ${qty} 份${names[craftId] ?? craftId}。`, 'success', 'progress')
+      const output = Number((preview?.output ?? qty).toFixed(4)).toLocaleString('zh-CN')
+      addMessage(`⚒ 手动合成了 ${output} 份${names[craftId] ?? craftId}。`, 'success', 'progress')
     } else {
       addMessage('材料不足，无法合成。', 'warning', 'progress')
     }
@@ -1326,6 +1364,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function buildSpaceStructure(structureId: string) {
+    const taucetiBefore = state.value.tech['tauceti'] ?? 0
     const result = coreBuildSpaceStructure(state.value, structureId)
     if (!result) {
       addMessage('太空建筑建造条件未满足或资源不足。', 'warning', 'progress')
@@ -1333,7 +1372,11 @@ export const useGameStore = defineStore('game', () => {
     }
     state.value = result
     const def = SPACE_STRUCTURES.find((d) => d.id === structureId)
-    addMessage(`🛰️ 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
+    if (structureId === 'jump_gate' && taucetiBefore === 3 && (result.tech['tauceti'] ?? 0) === 4) {
+      addMessage('两座空间跃迁之门已经连通，Tau Ceti 与母星现在可以共享资源。', 'special', 'progress')
+    } else {
+      addMessage(`🛰️ 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
+    }
   }
 
   function getInterstellarBuildCost(structureId: string): Record<string, number> {
@@ -1353,6 +1396,16 @@ export const useGameStore = defineStore('game', () => {
     state.value = result
     const def = INTERSTELLAR_STRUCTURES.find((d) => d.id === structureId)
     addMessage(`🌌 建造完成：${def?.name ?? '未知建筑'}`, 'success', 'progress')
+  }
+
+  function assignGrapheneFeedstock(resource: GrapheneFeedstockId) {
+    const result = coreAssignGrapheneFeedstock(state.value, resource)
+    if (result) state.value = result
+  }
+
+  function removeGrapheneFeedstock(resource: GrapheneFeedstockId) {
+    const result = coreRemoveGrapheneFeedstock(state.value, resource)
+    if (result) state.value = result
   }
 
   function buildSeasonalFirework() {
@@ -1455,6 +1508,8 @@ export const useGameStore = defineStore('game', () => {
     setSeasonalFireworkActive,
     assignFactoryLine,
     removeFactoryLine,
+    assignGrapheneFeedstock,
+    removeGrapheneFeedstock,
     assignMiningDroid,
     removeMiningDroid,
     // 熔炉系统
@@ -1493,6 +1548,7 @@ export const useGameStore = defineStore('game', () => {
     CRATE_VALUE,
     CONTAINER_VALUE,
     getCrateValue,
+    getContainerValue,
     CRATE_COST_PLYWOOD,
     CONTAINER_COST_STEEL,
     // 军事系统
@@ -1536,6 +1592,46 @@ export const useGameStore = defineStore('game', () => {
     getGalaxyBuildCost,
     canBuildGalaxyStructure,
     buildGalaxyStructure,
+
+    // Tau Ceti
+    getTaucetiStructuresByRegion: (r: TaucetiRegion) => coreGetImplementedTaucetiStructuresForRegion(r),
+    isTaucetiStructureVisible: (building: TaucetiStructureDefinition) => coreIsTaucetiStructureVisible(state.value, building),
+    getTaucetiBuildCost: (id: string) => coreGetTaucetiBuildCost(state.value, id),
+    canBuildTaucetiStructure: (id: string) => coreCanBuildTaucetiStructure(state.value, id),
+    buildTaucetiStructure: (id: string) => {
+      const taucetiBefore = state.value.tech['tauceti'] ?? 0
+      const ok = coreBuildTaucetiStructure(state.value, id)
+      const linked = ok && id === 'jump_gate' && taucetiBefore === 3 && (state.value.tech['tauceti'] ?? 0) === 4
+      const successMessage = linked
+        ? '两座空间跃迁之门已经连通，Tau Ceti 与母星现在可以共享资源。'
+        : id === 'repository'
+          ? 'Tau 储存库已建成，已发现资源的容量上限已扩展。'
+          : 'Tau Ceti 建筑已建造'
+      addMessage(
+        ok ? successMessage : '资源不足或条件不满足',
+        linked ? 'special' : ok ? 'info' : 'warning',
+        'truepath',
+      )
+      return ok
+    },
+    isTaucetiMissionAvailable: (id: TaucetiMissionDefinition['id']) => coreIsTaucetiMissionAvailable(state.value, id),
+    canRunTaucetiMission: (id: TaucetiMissionDefinition['id']) => coreCanRunTaucetiMission(state.value, id),
+    runTaucetiMission: (id: TaucetiMissionDefinition['id']) => {
+      const ok = coreRunTaucetiMission(state.value, id)
+      const successMessage = id === 'excavate'
+        ? '外星前哨已经发掘完毕，现在可以研究它的功能。'
+        : 'Tau Ceti 任务已完成'
+      addMessage(ok ? successMessage : '任务条件或资源不足', ok ? 'info' : 'warning', 'truepath')
+      return ok
+    },
+    isWomlingRelationAvailable: () => coreIsWomlingRelationAvailable(state.value),
+    getWomlingRelationCost: (relation: WomlingRelation) => coreGetWomlingRelationCost(state.value, relation),
+    canChooseWomlingRelation: (relation: WomlingRelation) => coreCanChooseWomlingRelation(state.value, relation),
+    chooseWomlingRelation: (relation: WomlingRelation) => {
+      const ok = coreChooseWomlingRelation(state.value, relation)
+      addMessage(ok ? '已确定 Womling 关系' : '关系条件或资源不足', ok ? 'info' : 'warning', 'womling')
+      return ok
+    },
 
     // ==================== Phase 3 新增 ====================
 
@@ -1660,11 +1756,29 @@ export const useGameStore = defineStore('game', () => {
     isTruepathMode: computed(() => isTruepath(state.value)),
     isTruepathRegionUnlocked: (r: TruepathRegionId) => isTruepathRegionUnlocked(state.value, r),
     getTruepathBuildingsByRegion: (r: TruepathRegionId) => coreGetTruepathBuildingsByRegion(r),
+    getGrapheneFactory: () => coreGetGrapheneFactory(state.value),
     getTruepathBuildCost: (id: string) => coreGetTruepathBuildCost(state.value, id),
     canBuildTruepath: (id: string) => coreCanBuildTruepath(state.value, id),
     buildTruepathStructure: (id: string) => {
       const ok = coreBuildTruepathStructure(state.value, id)
       addMessage(ok ? '真相之路建筑已建造' : '资源不足', ok ? 'info' : 'warning', 'truepath')
+      return ok
+    },
+    getExplorerShips: () => coreGetExplorerShips(state.value),
+    getExplorerCrewSize: () => coreGetExplorerCrewSize(state.value),
+    getExplorerShipCost: () => coreGetExplorerShipCost(state.value),
+    isTruepathShipyardPowered: () => coreIsTruepathShipyardPowered(state.value),
+    canBuildExplorerShip: () => coreCanBuildExplorerShip(state.value),
+    buildExplorerShip: (name?: string) => {
+      const ship = coreBuildExplorerShip(state.value, name)
+      addMessage(ship ? `探索舰 ${ship.name} 已建造。` : '探索舰建造条件未满足。', ship ? 'success' : 'warning', 'truepath')
+      return ship
+    },
+    canDispatchExplorerToTau: (shipId: string) => coreCanDispatchExplorerToTau(state.value, shipId),
+    dispatchExplorerToTau: (shipId: string) => {
+      const ship = coreGetExplorerShips(state.value).find((candidate) => candidate.id === shipId)
+      const ok = coreDispatchExplorerToTau(state.value, shipId)
+      addMessage(ok ? `${ship?.name ?? '探索舰'} 已启程前往 Tau Ceti。` : '探索舰当前无法出发。', ok ? 'special' : 'warning', 'truepath')
       return ok
     },
 
@@ -1709,15 +1823,7 @@ export const useGameStore = defineStore('game', () => {
 
     // Womling
     canUseWomling: () => canUseWomling(state.value) || canUseServants(state.value),
-    discoverWomling: () => coreDiscoverWomling(state.value),
-    getWomling: () => initWomling(state.value),
-    getWomlingPopCap: () => getWomlingPopCap(state.value),
     getServants: () => getServantsState(state.value),
-    assignWomling: (job: 'farmer' | 'miner' | 'lab' | 'soldier', delta: number) => {
-      const ok = coreAssignWomling(state.value, job, delta)
-      if (!ok) addMessage('无法分配（人口不足或岗位为零）', 'warning', 'womling')
-      return ok
-    },
 
     // Tick 钩子（供 Phase 3 接入主循环）
     _fortressTick: (timeMul: number = 1) => fortressTick(state.value, timeMul),

@@ -148,7 +148,7 @@ const GALAXY_PIRATE_BASE: Record<GalaxyRegion, { base: number; instinct: number;
 };
 
 function galaxyState(state: GameState): GalaxyState {
-  return ((state as unknown as { galaxy?: GalaxyState }).galaxy ?? {}) as GalaxyState;
+  return state.galaxy as GalaxyState;
 }
 
 function galaxyOn(state: GameState, id: string): number {

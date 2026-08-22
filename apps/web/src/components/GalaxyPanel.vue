@@ -64,13 +64,11 @@ function buildingsByRegion(region: GalaxyRegion) {
 }
 
 function buildingCount(id: string): number {
-  const galaxy = (game.state as unknown as { galaxy?: Record<string, { count?: number }> }).galaxy
-  return galaxy?.[id]?.count ?? 0
+  return game.state.galaxy[id]?.count ?? 0
 }
 
 function buildingOn(id: string): number {
-  const galaxy = (game.state as unknown as { galaxy?: Record<string, { on?: number }> }).galaxy
-  return galaxy?.[id]?.on ?? 0
+  return game.state.galaxy[id]?.on ?? 0
 }
 
 function buildCost(id: string): Record<string, number> {
@@ -98,7 +96,7 @@ function formatNum(n: number): string {
     <PanelHeader
       icon="galaxy"
       title="银河"
-      subtitle="星门之后的银河设施。此处先接入建筑入口、成本和基础解锁，舰队/海盗/外交仍待继续验收。"
+      subtitle="星门之后的银河设施。建筑、供电与玻璃合金生产已接入，舰队编组与外交仍待继续验收。"
     />
 
     <EmptyState

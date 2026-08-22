@@ -153,6 +153,7 @@ export type BasicJobId =
   | 'quarry_worker'
   | 'miner'
   | 'coal_miner'
+  | 'pit_miner'
   | 'colonist'
   | 'craftsman'
   | 'cement_worker'
@@ -305,6 +306,15 @@ export interface FactoryState {
   Lux: number;
   /** 分配给合成毛皮产线的工厂数（需 synthetic_fur 科技） */
   Furs: number;
+}
+
+/** Truepath/星际零重力工厂的 Graphene 原料产线分配。 */
+export interface GrapheneFactoryState {
+  count: number;
+  on: number;
+  Lumber: number;
+  Coal: number;
+  Oil: number;
 }
 
 // ============================================================
@@ -533,6 +543,7 @@ export interface GameState {
   arpa?: Record<string, unknown>;
   space: Record<string, StructureState>;
   interstellar: Record<string, StructureState>;
+  galaxy: Record<string, StructureState>;
   portal: Record<string, StructureState>;
   eden: Record<string, StructureState>;
   tauceti: Record<string, StructureState>;

@@ -1,7 +1,32 @@
 import type { GameState } from '@evozen/shared-types';
 import { getAchievementLevel, unlockAchievement } from './achievements';
+import { getElementalBonus, getElementalType } from './complex-traits';
+import { hasPlanetTrait, toxicVars } from './planet-traits';
 import { TRAITS } from './trait-data';
 import { getTraitVar } from './trait-ranks';
+
+export type GeneSequenceLabSource =
+  | 'biolab'
+  | 'exotic_lab'
+  | 'twisted_lab'
+  | 'infectious_disease_lab'
+  | 'none';
+
+export interface GeneSequenceLabOptions {
+  activeBiolabs?: number;
+  exoticLabsSupported?: number;
+  activeTwistedLabs?: number;
+  infectiousDiseaseLabsSupported?: number;
+}
+
+export interface GeneSequenceLabResult {
+  labs: number;
+  baseLabs: number;
+  source: GeneSequenceLabSource;
+  loneSurvivorBonus: number;
+  toxicBonus: number;
+  frostMultiplier: number;
+}
 
 export interface GeneSequenceState {
   max: number;
@@ -11,6 +36,8 @@ export interface GeneSequenceState {
   boost: boolean;
   auto: boolean;
   labs: number;
+  source?: GeneSequenceLabSource;
+  loneSurvivorBonus?: number;
 }
 
 export interface GeneSequenceTickResult {
@@ -36,6 +63,8 @@ function createGeneSequenceState(state: GameState): GeneSequenceState {
     boost: false,
     auto: false,
     labs: 0,
+    source: 'none',
+    loneSurvivorBonus: 0,
   };
 }
 
@@ -68,6 +97,69 @@ function addStat(state: GameState, id: 'plasmid' | 'antiplasmid', amount: number
   stats[id] = Number(stats[id] ?? 0) + amount;
 }
 
+function highPopAdjust(state: GameState, value: number): number {
+  const rank = Number(state.race['high_pop'] ?? 0);
+  return rank > 0 ? value * getTraitVar('high_pop', 1, rank) / 100 : value;
+}
+
+/** 对标 legacy arpa.js sequenceLabs() 的路线选择和实验室修饰。 */
+export function resolveGeneSequenceLabs(
+  state: GameState,
+  options: GeneSequenceLabOptions = {},
+): GeneSequenceLabResult {
+  let source: GeneSequenceLabSource;
+  let baseLabs: number;
+
+  if (state.tech['isolation']) {
+    source = 'infectious_disease_lab';
+    baseLabs = Math.max(0, options.infectiousDiseaseLabsSupported ?? 0) * 5;
+  } else if (state.race['cataclysm'] || state.race['orbit_decayed']) {
+    source = 'exotic_lab';
+    baseLabs = Math.max(0, options.exoticLabsSupported ?? 0);
+  } else if (state.race['warlord']) {
+    source = 'twisted_lab';
+    baseLabs = Math.max(0, options.activeTwistedLabs ?? 0);
+  } else {
+    source = 'biolab';
+    baseLabs = Math.max(0, options.activeBiolabs ?? 0);
+  }
+
+  const loneSurvivorBonus = state.race['lone_survivor'] ? 2 : 0;
+  let adjustedLabs = baseLabs + loneSurvivorBonus;
+  const toxicBonus = adjustedLabs > 0 && hasPlanetTrait(state, 'toxic') ? toxicVars(state)[0] : 0;
+  adjustedLabs += toxicBonus;
+
+  let frostMultiplier = 1;
+  if (adjustedLabs > 0 && getElementalType(state) === 'frost') {
+    const population = state.resource[state.race.species]?.amount ?? 0;
+    const bioscienceRate = getElementalBonus(state, 'bioscience') - 1;
+    frostMultiplier += highPopAdjust(state, population * bioscienceRate / 100);
+    adjustedLabs *= frostMultiplier;
+  }
+
+  return {
+    labs: Math.max(0, Math.round(adjustedLabs)),
+    baseLabs,
+    source,
+    loneSurvivorBonus,
+    toxicBonus,
+    frostMultiplier,
+  };
+}
+
+export const GENE_SEQUENCE_SOURCE_NAMES: Record<GeneSequenceLabSource, string> = {
+  biolab: '生物实验室',
+  exotic_lab: '异星实验室',
+  twisted_lab: '扭曲实验室',
+  infectious_disease_lab: '传染病实验室',
+  none: '有效实验室',
+};
+
+export function getGeneSequenceLabLabel(sequence: GeneSequenceState): string {
+  const source = GENE_SEQUENCE_SOURCE_NAMES[sequence.source ?? 'none'];
+  return (sequence.loneSurvivorBonus ?? 0) > 0 ? `${source} + 孤独幸存者` : source;
+}
+
 function awardMinorTrait(state: GameState, rng: () => number): string {
   let pool = MINOR_TRAITS.filter((trait) => !state.race[trait]);
   if (pool.length === 0) pool = [...MINOR_TRAITS];
@@ -80,15 +172,20 @@ function awardMinorTrait(state: GameState, rng: () => number): string {
 /** 对标 legacy main.js 的基因组测序/基因治疗循环。 */
 export function geneSequenceTick(
   state: GameState,
-  activeBiolabs: number,
+  labOptions: GeneSequenceLabOptions | number,
   timeMultiplier: number,
   rng: () => number = Math.random,
 ): GeneSequenceTickResult {
   const result: GeneSequenceTickResult = { completed: null, knowledgeCost: 0 };
   const sequence = getGeneSequenceState(state);
-  if (!sequence || !sequence.on) return result;
+  if (!sequence) return result;
 
-  sequence.labs = Math.max(0, Math.round(activeBiolabs));
+  const options = typeof labOptions === 'number' ? { activeBiolabs: labOptions } : labOptions;
+  const labResult = resolveGeneSequenceLabs(state, options);
+  sequence.labs = labResult.labs;
+  sequence.source = labResult.source;
+  sequence.loneSurvivorBonus = labResult.loneSurvivorBonus;
+  if (!sequence.on) return result;
   if (sequence.labs <= 0 || sequence.time <= 0) return result;
 
   const mutation = Number(state.race['mutation'] ?? 0);

@@ -36,6 +36,16 @@ function countInterstellar(state: GameState, id: string): number {
   return Number(value?.on ?? value?.count ?? 0)
 }
 
+function countGalaxy(state: GameState, id: string): number {
+  const value = state.galaxy[id]
+  return Number(value?.on ?? value?.count ?? 0)
+}
+
+function countTauceti(state: GameState, id: string): number {
+  const value = state.tauceti[id]
+  return Number(value?.on ?? value?.count ?? 0)
+}
+
 function workers(state: GameState, id: string): number {
   const value = state.civic[id] as { workers?: number; assigned?: number } | undefined
   return Number(value?.workers ?? value?.assigned ?? 0)
@@ -122,10 +132,11 @@ function powerHints(state: GameState, id: string): string[] {
     Aluminium: ['metal_refinery'],
     Money: ['casino', 'factory'],
     Furs: ['factory'],
-    Alloy: ['factory', 'red_factory', 'g_factory'],
+    Alloy: ['factory', 'red_factory'],
     Polymer: ['factory'],
     Nano_Tube: ['factory'],
     Stanene: ['factory'],
+    Vitreloy: ['vitreloy_plant'],
     Iridium: ['iridium_mine', 'iridium_ship'],
     Helium_3: ['helium_mine', 'red_factory'],
     Elerium: ['elerium_ship', 'elerium_mine'],
@@ -133,8 +144,6 @@ function powerHints(state: GameState, id: string): string[] {
     Uranium: ['uranium_mine', 'mining_droid', 'coal_power'],
     Neutronium: ['neutronium_mine'],
     Orichalcum: ['orichalcum_mine'],
-    Hydrogen: ['electrolysis'],
-    Oxygen: ['electrolysis'],
     Oil: ['oil_power', 'space_barracks'],
   }
 
@@ -143,7 +152,10 @@ function powerHints(state: GameState, id: string): string[] {
   const related = (relevantConsumers[id] ?? [])
     .map((consumerId) => {
       const active = activeConsumers[consumerId] ?? 0
-      const configured = countCity(state, consumerId) || countSpace(state, consumerId) || countInterstellar(state, consumerId)
+      const configured = countCity(state, consumerId)
+        || countSpace(state, consumerId)
+        || countInterstellar(state, consumerId)
+        || countGalaxy(state, consumerId)
       if (active <= 0 && configured <= 0) return null
       return `${consumerId}: ${fmt(active)}/${fmt(configured)} on`
     })
@@ -179,18 +191,19 @@ function supportHints(state: GameState, id: string): string[] {
     Titanium: ['red_mine'],
     Elerium: ['elerium_ship'],
     Iron: ['iron_ship'],
+    Unobtainium: ['womling_mine'],
   }
 
   for (const structureId of supportedSpace[id] ?? []) {
-    const struct = state.space[structureId] as { count?: number; on?: number } | undefined
+    const struct = (state.space[structureId] ?? state.tauceti[structureId]) as { count?: number; on?: number } | undefined
     if (!struct) continue
     const requested = struct.on ?? struct.count ?? 0
     const active = state.city.power?.activeConsumers?.[structureId] ?? requested
     if (requested > 0) lines.push(`支援建筑: ${structureId} ${fmt(active)}/${fmt(requested)} on`)
   }
 
-  for (const providerId of ['moon_base', 'spaceport', 'space_station']) {
-    const provider = state.space[providerId] as { count?: number; on?: number; support?: number; s_max?: number } | undefined
+  for (const providerId of ['moon_base', 'spaceport', 'space_station', 'orbital_station', 'orbital_platform']) {
+    const provider = (state.space[providerId] ?? state.tauceti[providerId]) as { count?: number; on?: number; support?: number; s_max?: number } | undefined
     if (!provider) continue
     const support = provider.support ?? 0
     const max = provider.s_max ?? 0
@@ -208,7 +221,8 @@ function regionalHints(state: GameState, id: string): string[] {
     Hydrogen: ['electrolysis'],
     Oxygen: ['electrolysis'],
     Adamantite: ['titan_mine', 'mining_droid'],
-    Alloy: ['g_factory'],
+    Graphene: ['g_factory'],
+    Vitreloy: ['vitreloy_plant'],
     Water: ['water_freighter'],
     Orichalcum: ['orichalcum_mine'],
     Elerium: ['elerium_mine', 'elerium_ship'],
@@ -216,10 +230,11 @@ function regionalHints(state: GameState, id: string): string[] {
     Neutronium: ['neutronium_mine'],
     Infernite: ['hell_smelter'],
     Mythril: ['sacred_smelter'],
+    Unobtainium: ['womling_mine'],
   }
 
   for (const structureId of spaceSources[id] ?? []) {
-    const count = countSpace(state, structureId)
+    const count = countSpace(state, structureId) || countGalaxy(state, structureId) || countTauceti(state, structureId)
     if (count > 0) lines.push(`区域建筑: ${structureId} ${fmt(count)} on`)
   }
 

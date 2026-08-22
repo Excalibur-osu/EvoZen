@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
 import { getResourceName } from '../utils/resourceNames'
 import type { FactoryState, FactoryLineId } from '@evozen/game-core'
+import { getTaucetiFactoryLinesPerBuilding } from '@evozen/game-core'
 import AppIcon from './ui/AppIcon.vue'
 import AllocationControl from './ui/AllocationControl.vue'
 
@@ -14,7 +15,11 @@ const redFactories = computed(() => {
   const red = game.state.space['red_factory'] as { count?: number } | undefined
   return red?.count ?? 0
 })
-const totalFactories = computed(() => cityFactories.value + redFactories.value)
+const tauFactoryLines = computed(() => {
+  const tau = game.state.tauceti['tau_factory'] as { count?: number } | undefined
+  return (tau?.count ?? 0) * getTaucetiFactoryLinesPerBuilding(game.state)
+})
+const totalFactories = computed(() => cityFactories.value + redFactories.value + tauFactoryLines.value)
 const isUnlocked = computed(() => totalFactories.value > 0)
 
 const lineDefs: Array<{

@@ -87,6 +87,11 @@ export function permafrostVars(): [number, number] {
   return [0.75, 100];
 }
 
+/** toxic: [测序实验室加值, 出生率倍率] */
+export function toxicVars(state: GameState): [number, number] {
+  return state.race['rejuvenated'] ? [2, 1.5] : [1, 1.25];
+}
+
 // ============================================================
 // 聚合：获取矿工产出乘数
 // ============================================================

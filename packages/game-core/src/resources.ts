@@ -25,6 +25,7 @@ export const RESOURCE_VALUES: Record<string, number> = {
   Nano_Tube: 750,
   Adamantite: 2250,
   Stanene: 3600,
+  Unobtainium: 168.59,
 };
 
 /** 贸易比率 */
@@ -55,5 +56,9 @@ export const CRAFT_COSTS: Record<string, CraftRecipe[]> = {
   Wrought_Iron: [{ resource: 'Iron', amount: 80 }],
   Sheet_Metal: [{ resource: 'Aluminium', amount: 120 }],
   Mythril: [{ resource: 'Iridium', amount: 100 }, { resource: 'Alloy', amount: 250 }],
+  Aerogel: [{ resource: 'Graphene', amount: 2500 }, { resource: 'Infernite', amount: 50 }],
+  Nanoweave: [{ resource: 'Nano_Tube', amount: 1000 }, { resource: 'Vitreloy', amount: 40 }],
+  Scarletite: [{ resource: 'Iron', amount: 250000 }, { resource: 'Adamantite', amount: 7500 }, { resource: 'Orichalcum', amount: 500 }],
+  Quantium: [{ resource: 'Nano_Tube', amount: 1000 }, { resource: 'Graphene', amount: 1000 }, { resource: 'Elerium', amount: 25 }],
   Thermite: [{ resource: 'Iron', amount: 180 }, { resource: 'Aluminium', amount: 60 }],
 };

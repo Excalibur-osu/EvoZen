@@ -71,6 +71,21 @@ export const BASE_JOBS: JobDefinition[] = [
     description: '煤矿工人在地下深处开采煤炭。',
   },
   {
+    id: 'pit_miner',
+    name: '坑道矿工',
+    impact: 1,
+    stress: 4.5,
+    description: '坑道矿工在 Tau 家园的受支援矿坑中开采资源。',
+  },
+  {
+    id: 'teamster',
+    name: '运输工人',
+    impact: 1,
+    stress: 4,
+    requiredTech: { transport: 1 },
+    description: '运输工人维持重力井世界的资源运输效率。',
+  },
+  {
     id: 'colonist',
     name: '行星居民',
     impact: 1,

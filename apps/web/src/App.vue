@@ -24,6 +24,7 @@ import MilitaryPanel from './components/MilitaryPanel.vue'
 import ArpaPanel from './components/ArpaPanel.vue'
 import SpacePanel from './components/SpacePanel.vue'
 import GalaxyPanel from './components/GalaxyPanel.vue'
+import TaucetiPanel from './components/TaucetiPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import MessageLog from './components/MessageLog.vue'
 import MobileNotSupported from './components/MobileNotSupported.vue'
@@ -51,7 +52,7 @@ import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 const game = useGameStore()
 type TabId = 'evolution' | 'city' | 'civic' | 'arpa' | 'space' | 'resources' | 'industry' | 'market' | 'storage'
   | 'portal' | 'governor' | 'magic' | 'achievements' | 'races' | 'truepath' | 'edenic' | 'prestige'
-  | 'galaxy' | 'mech' | 'womling' | 'crispr' | 'custom_race' | 'stats'
+  | 'galaxy' | 'tauceti' | 'mech' | 'womling' | 'crispr' | 'custom_race' | 'stats'
   | 'wish'
 
 const activeTab = ref<TabId>('evolution')
@@ -110,6 +111,7 @@ const tabs = computed(() => {
       { id: 'space', label: '太空', icon: 'space', visible: (game.state.tech['high_tech'] ?? 0) >= 7 || (game.state.tech['space_explore'] ?? 0) >= 1 || (game.state.tech['mars'] ?? 0) >= 1 },
       { id: 'galaxy', label: '银河', icon: 'galaxy', visible: (game.state.tech['stargate'] ?? 0) >= 1 || (game.state.tech['gateway'] ?? 0) >= 3 || (game.state.tech['xeno'] ?? 0) >= 4 },
       { id: 'truepath', label: '真相', icon: 'truepath', visible: !!game.state.race['truepath'] && (game.state.tech['outer'] ?? 0) >= 1 },
+      { id: 'tauceti', label: 'Tau Ceti', icon: 'space', visible: !!game.state.race['truepath'] && ((game.state.tech['tauceti'] ?? 0) >= 2 || (game.state.tech['tau_home'] ?? 0) >= 1) },
       { id: 'portal', label: '地狱门', icon: 'portal', visible: (game.state.tech['portal'] ?? 0) >= 2 },
       { id: 'mech', label: '机甲', icon: 'mech', visible: (game.state.tech['hell_spire'] ?? 0) >= 4 || (game.state.tech['edenic'] ?? 0) >= 5 },
       { id: 'edenic', label: '伊甸园', icon: 'edenic', visible: (game.state.tech['edenic'] ?? 0) >= 1 },
@@ -186,7 +188,7 @@ const cityTabLabel = computed(() => {
           <EvolutionPanel v-if="activeTab === 'evolution'" />
           
           <template v-else>
-            <PowerPanel v-if="activeTab === 'city'" />
+            <PowerPanel v-if="activeTab === 'city' || activeTab === 'tauceti'" />
             <SeasonalEventPanel v-if="activeTab === 'city'" />
             <BuildPanel v-if="activeTab === 'city'" />
             <TechPanel v-if="activeTab === 'city'" />
@@ -218,6 +220,7 @@ const cityTabLabel = computed(() => {
             <ArpaPanel v-if="activeTab === 'arpa'" />
             <SpacePanel v-if="activeTab === 'space'" />
             <GalaxyPanel v-if="activeTab === 'galaxy'" />
+            <TaucetiPanel v-if="activeTab === 'tauceti'" />
             <template v-if="activeTab === 'industry'">
               <FactoryPanel />
               <SmelterPanel />

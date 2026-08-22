@@ -23,16 +23,22 @@ const power = computed(() => game.state.city.power ?? {
   activeConsumers: {},
 })
 const hasPower = computed(() => power.value.generated > 0 || power.value.consumed > 0)
-const locationLabel: Record<'city' | 'space' | 'interstellar' | 'eden', string> = {
+const locationLabel: Record<PowerGeneratorDef['location'], string> = {
   city: '城市',
   space: '太空',
   interstellar: '星际',
+  galaxy: '银河',
+  portal: '地狱门',
+  tauceti: 'Tau Ceti',
   eden: '伊甸园',
 }
 
 function structureBucket(location: PowerGeneratorDef['location']) {
   if (location === 'space') return game.state.space
   if (location === 'interstellar') return game.state.interstellar
+  if (location === 'galaxy') return game.state.galaxy
+  if (location === 'portal') return game.state.portal
+  if (location === 'tauceti') return game.state.tauceti
   if (location === 'eden') return game.state.eden
   return game.state.city
 }

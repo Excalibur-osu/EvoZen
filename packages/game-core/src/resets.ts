@@ -102,6 +102,7 @@ function resetCommon(state: GameState, args: ResetCommonArgs): void {
   // 清空太空/星际/其他进度
   state.space = {} as GameState['space'];
   state.interstellar = {} as GameState['interstellar'];
+  state.galaxy = {} as GameState['galaxy'];
   state.portal = {} as GameState['portal'];
   state.eden = {} as GameState['eden'];
   state.tauceti = {} as GameState['tauceti'];

@@ -10,7 +10,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGameStore } from '../stores/game'
-import { CRAFT_COSTS, CRAFTABLE_IDS, type CraftableId, type FoundryState } from '@evozen/game-core'
+import {
+  CRAFT_COSTS,
+  CRAFTABLE_IDS,
+  getCraftingLineCapacity,
+  getManualCraftPreview,
+  type CraftableId,
+  type FoundryState,
+} from '@evozen/game-core'
 import { getResourceName } from '../utils/resourceNames'
 import AppIcon from './ui/AppIcon.vue'
 import AllocationControl from './ui/AllocationControl.vue'
@@ -24,6 +31,10 @@ const craftNames: Record<string, string> = {
   Wrought_Iron: '锻铁',
   Sheet_Metal: '金属板',
   Mythril: '秘银',
+  Aerogel: '气凝胶',
+  Nanoweave: '纳米织物',
+  Scarletite: '猩红石',
+  Quantium: '量子素',
   Thermite: '铝热剂',
 }
 
@@ -34,6 +45,10 @@ const craftDesc: Record<string, string> = {
   Wrought_Iron: '由铁锭锻造而成的高强度材料。',
   Sheet_Metal: '由铝材压制成板，用于更先进的工业与太空建材。',
   Mythril: '以铱和合金锻造的稀有材料，是火星前线扩张的关键资源。',
+  Aerogel: '以石墨烯和炼狱矿合成的超轻隔热材料。',
+  Nanoweave: '由纳米管和玻璃合金编织而成的先进复合材料。',
+  Scarletite: '由地狱铸造厂冶炼；每座通电建筑容纳 1 名工匠。',
+  Quantium: '由零重力实验室合成；每座通电且获得支援的实验室容纳 1 名工匠。',
   Thermite: '夏至篝火使用的高温燃烧剂。',
 }
 
@@ -59,18 +74,30 @@ const unassigned = computed(() => craftsmanWorkers.value - totalAssigned.value)
 const visibleCraftIds = computed(() => CRAFTABLE_IDS.filter(id => game.state.resource[id]?.display))
 
 /** 检查是否有足够原料手动合成 */
-function canCraft(craftId: string): boolean {
-  const recipe = CRAFT_COSTS[craftId]
-  if (!recipe) return false
-  for (const { resource, amount } of recipe) {
-    if ((game.state.resource[resource]?.amount ?? 0) < amount) return false
-  }
-  return true
+function getManualPreview(craftId: CraftableId) {
+  return getManualCraftPreview(game.state, craftId)
+}
+
+function canCraft(craftId: CraftableId): boolean {
+  return getManualPreview(craftId)?.canCraft ?? false
+}
+
+function getManualOutput(craftId: CraftableId): string {
+  const output = getManualPreview(craftId)?.output ?? 1
+  return Number(output.toFixed(4)).toLocaleString('zh-CN')
+}
+
+function getManualRecipe(craftId: CraftableId) {
+  return getManualPreview(craftId)?.costs ?? CRAFT_COSTS[craftId] ?? []
 }
 
 /** 获取当前产线分配的工匠数 */
 function getAssigned(craftId: string): number {
   return foundry.value?.[craftId] ?? 0
+}
+
+function getLineCapacity(craftId: CraftableId): number {
+  return getCraftingLineCapacity(game.state, craftId)
 }
 
 /** 获取当前已有的合成品数量 */
@@ -104,7 +131,7 @@ function getCraftAmount(craftId: string): number {
         <div class="recipe-line">
           <span class="recipe-label">配方:</span>
           <span
-            v-for="(item, idx) in CRAFT_COSTS[craftId]"
+            v-for="(item, idx) in getManualRecipe(craftId as CraftableId)"
             :key="idx"
             class="recipe-item"
             :class="{ insufficient: (game.state.resource[item.resource]?.amount ?? 0) < item.amount }"
@@ -118,17 +145,17 @@ function getCraftAmount(craftId: string): number {
           <!-- 手动合成按钮 -->
           <button
             class="btn primary sm craft-action-btn"
-            :disabled="!canCraft(craftId)"
+            :disabled="!canCraft(craftId as CraftableId)"
             @click="game.doCraft(craftId as CraftableId)"
           >
-            合成 ×1
+            合成 ×{{ getManualOutput(craftId as CraftableId) }}
           </button>
 
           <!-- 工匠分配 -->
           <AllocationControl
             :value="getAssigned(craftId)"
             :decrement-disabled="getAssigned(craftId) <= 0"
-            :increment-disabled="unassigned <= 0"
+            :increment-disabled="unassigned <= 0 || getAssigned(craftId) >= getLineCapacity(craftId as CraftableId)"
             decrement-label="减少此产线工匠"
             increment-label="增加此产线工匠"
             @decrement="game.removeCraftLine(craftId as CraftableId)"

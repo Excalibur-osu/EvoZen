@@ -14,6 +14,7 @@ import {
   getCrisprLevel,
   getCrisprPrestigeResource,
   getDiscoveredMinorTraits,
+  getGeneSequenceLabLabel,
   getGeneSequenceState,
   getRemovableRaceTraits,
   GENE_MINOR_TRAIT_NAMES,
@@ -45,6 +46,7 @@ const sequencePercent = computed(() => {
   return current && current.max > 0 ? current.progress / current.max * 100 : 0
 })
 const sequenceLabel = computed(() => (game.state.tech['genetics'] ?? 0) === 2 ? '基因组测序' : '基因突变')
+const sequenceLabLabel = computed(() => sequence.value ? getGeneSequenceLabLabel(sequence.value) : '有效实验室')
 const knowledgeRate = computed(() => {
   const mutation = Number(game.state.race['mutation'] ?? 0)
   return (50 + mutation * 10) * (sequence.value?.boost ? 4 : 1)
@@ -130,7 +132,7 @@ function gainTrait(traitId: string) {
       <div class="sequence-head">
         <div>
           <h3 class="section-title">{{ sequenceLabel }}</h3>
-          <p class="sequence-meta">通电实验室 {{ sequence.labs }} · 知识消耗 {{ knowledgeRate }}/秒</p>
+          <p class="sequence-meta">{{ sequenceLabLabel }} {{ sequence.labs }} · 知识消耗 {{ knowledgeRate }}/秒</p>
         </div>
         <span class="sequence-status" :class="sequence.on ? 'active' : 'idle'">
           {{ sequence.on ? '运行中' : '已暂停' }}

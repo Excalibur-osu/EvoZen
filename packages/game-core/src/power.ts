@@ -11,9 +11,15 @@ import type { GameState } from '@evozen/shared-types';
 import { BASIC_STRUCTURES } from './structures';
 import { SPACE_STRUCTURES } from './space';
 import { getDysonPowerState, INTERSTELLAR_STRUCTURES } from './interstellar';
+import { GALAXY_STRUCTURES } from './galaxy';
 import { EDENIC_BUILDINGS } from './edenic';
 import { getChallengePowerCost } from './challenges';
 import { getAchievementLevel, getThermalCollectorPowerReduction } from './achievements';
+import {
+  getTaucetiGeneratorFuel,
+  getTaucetiPowerCost,
+  TAUCETI_STRUCTURES,
+} from './tauceti';
 
 const TIME_MULTIPLIER = 0.25;
 
@@ -26,7 +32,7 @@ export interface PowerGeneratorDef {
   id: string;
   name: string;
   power: number;
-  location: 'city' | 'space' | 'interstellar' | 'eden';
+  location: 'city' | 'space' | 'interstellar' | 'galaxy' | 'portal' | 'tauceti' | 'eden';
   fuel?: FuelDef;
   /** 整个分段巨构作为一台不可手动开关的发电机。 */
   aggregate?: boolean;
@@ -36,7 +42,7 @@ export interface PowerConsumerDef {
   id: string;
   name: string;
   powerCost: number;
-  location: 'city' | 'space' | 'interstellar' | 'eden';
+  location: 'city' | 'space' | 'interstellar' | 'galaxy' | 'portal' | 'tauceti' | 'eden';
 }
 
 const CITY_GENERATORS: PowerGeneratorDef[] = [
@@ -105,6 +111,19 @@ const SPACE_GENERATORS: PowerGeneratorDef[] = SPACE_STRUCTURES
       : undefined,
   }));
 
+const PORTAL_GENERATORS: PowerGeneratorDef[] = [
+  { id: 'incinerator', name: '焚化炉', location: 'portal', power: 25 },
+];
+
+const TAUCETI_GENERATORS: PowerGeneratorDef[] = TAUCETI_STRUCTURES
+  .filter((structure) => structure.implemented && (structure.powerCost ?? 0) < 0)
+  .map((structure) => ({
+    id: structure.id,
+    name: structure.name,
+    location: 'tauceti',
+    power: Math.abs(structure.powerCost ?? 0),
+  }));
+
 const INTERSTELLAR_GENERATORS: PowerGeneratorDef[] = INTERSTELLAR_STRUCTURES
   .filter((def) => (def.powerCost ?? 0) < 0)
   .map((def) => ({
@@ -120,13 +139,55 @@ const INTERSTELLAR_GENERATORS: PowerGeneratorDef[] = INTERSTELLAR_STRUCTURES
       : undefined,
   }));
 
-const SPACE_CONSUMERS: PowerConsumerDef[] = SPACE_STRUCTURES
-  .filter((def) => (def.powerCost ?? 0) > 0)
-  .map((def) => ({
-    id: def.id,
-    name: def.name,
+const SPACE_CONSUMERS: PowerConsumerDef[] = [
+  ...SPACE_STRUCTURES
+    .filter((def) => (def.powerCost ?? 0) > 0)
+    .map<PowerConsumerDef>((def) => ({
+      id: def.id,
+      name: def.name,
+      location: 'space',
+      powerCost: def.powerCost ?? 0,
+    })),
+  {
+    id: 'electrolysis',
+    name: '水电解装置',
     location: 'space',
-    powerCost: def.powerCost ?? 0,
+    powerCost: 8,
+  },
+  {
+    id: 'titan_spaceport',
+    name: '土卫六港口',
+    location: 'space',
+    powerCost: 10,
+  },
+  {
+    id: 'zero_g_lab',
+    name: '零重力实验室',
+    location: 'space',
+    powerCost: 12,
+  },
+  {
+    id: 'fob',
+    name: '前进基地',
+    location: 'space',
+    powerCost: 50,
+  },
+];
+
+const PORTAL_CONSUMERS: PowerConsumerDef[] = [
+  { id: 'guard_post', name: '守卫站', location: 'portal', powerCost: 3 },
+  { id: 'arcology', name: '巨型生态屋', location: 'portal', powerCost: 25 },
+  { id: 'hell_forge', name: '地狱铸造厂', location: 'portal', powerCost: 12 },
+  { id: 'twisted_lab', name: '扭曲实验室', location: 'portal', powerCost: 4 },
+];
+
+const TAUCETI_CONSUMERS: PowerConsumerDef[] = TAUCETI_STRUCTURES
+  .filter((structure) => structure.implemented && (structure.powerCost ?? 0) > 0)
+  .map((structure) => ({
+    id: structure.id,
+    name: structure.name,
+    location: 'tauceti',
+    powerCost: structure.powerCost ?? 0,
   }));
 
 const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
@@ -135,6 +196,15 @@ const INTERSTELLAR_CONSUMERS: PowerConsumerDef[] = INTERSTELLAR_STRUCTURES
     id: def.id,
     name: def.name,
     location: 'interstellar',
+    powerCost: def.powerCost ?? 0,
+  }));
+
+const GALAXY_CONSUMERS: PowerConsumerDef[] = GALAXY_STRUCTURES
+  .filter((def) => (def.powerCost ?? 0) > 0)
+  .map<PowerConsumerDef>((def) => ({
+    id: def.id,
+    name: def.name,
+    location: 'galaxy',
     powerCost: def.powerCost ?? 0,
   }));
 
@@ -164,7 +234,14 @@ const EDEN_CONSUMERS: PowerConsumerDef[] = EDENIC_BUILDINGS
   });
 
 export function listPowerGenerators(state?: GameState): PowerGeneratorDef[] {
-  const generators: PowerGeneratorDef[] = [...CITY_GENERATORS, ...SPACE_GENERATORS, ...INTERSTELLAR_GENERATORS, ...EDEN_GENERATORS];
+  const generators: PowerGeneratorDef[] = [
+    ...CITY_GENERATORS,
+    ...SPACE_GENERATORS,
+    ...INTERSTELLAR_GENERATORS,
+    ...PORTAL_GENERATORS,
+    ...TAUCETI_GENERATORS,
+    ...EDEN_GENERATORS,
+  ];
   if (state) {
     const dyson = getDysonPowerState(state);
     if (dyson) {
@@ -182,15 +259,28 @@ export function listPowerGenerators(state?: GameState): PowerGeneratorDef[] {
   const dissipated = getAchievementLevel(state, 'dissipated');
   return generators.map((generator) => {
     let power = generator.power;
+    let fuel = generator.fuel;
     if (generator.id === 'coal_power' && dissipated >= 1) power += 1;
     if (generator.id === 'oil_power' && dissipated >= 3) power += dissipated >= 5 ? 2 : 1;
     if (generator.id === 'geothermal' && getAchievementLevel(state, 'failed_history') >= 5) power += 2;
-    return { ...generator, power };
+    if (generator.location === 'tauceti') {
+      const structure = TAUCETI_STRUCTURES.find((candidate) => candidate.id === generator.id);
+      if (structure) fuel = getTaucetiGeneratorFuel(state, structure);
+    }
+    return { ...generator, power, fuel };
   });
 }
 
 export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
-  const consumers = [...CITY_CONSUMERS, ...SPACE_CONSUMERS, ...INTERSTELLAR_CONSUMERS, ...EDEN_CONSUMERS];
+  const consumers = [
+    ...CITY_CONSUMERS,
+    ...SPACE_CONSUMERS,
+    ...INTERSTELLAR_CONSUMERS,
+    ...GALAXY_CONSUMERS,
+    ...PORTAL_CONSUMERS,
+    ...TAUCETI_CONSUMERS,
+    ...EDEN_CONSUMERS,
+  ];
   if (!state) return consumers;
 
   const dissipated = getAchievementLevel(state, 'dissipated');
@@ -202,6 +292,9 @@ export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
     if (consumer.id === 'mass_driver') {
       if (dissipated >= 4) powerCost--;
       if ((state.tech['mass'] ?? 0) >= 2) powerCost--;
+    }
+    if (consumer.location === 'tauceti') {
+      powerCost = getTaucetiPowerCost(state, consumer.id);
     }
     powerCost = getChallengePowerCost(state, Math.max(0, powerCost));
     if (consumer.id === 'ascension_trigger') {
@@ -223,10 +316,13 @@ export function listPowerConsumers(state?: GameState): PowerConsumerDef[] {
 
 function getStructBucket(
   state: GameState,
-  location: 'city' | 'space' | 'interstellar' | 'eden',
+  location: 'city' | 'space' | 'interstellar' | 'galaxy' | 'portal' | 'tauceti' | 'eden',
 ): Record<string, unknown> {
   if (location === 'space') return state.space;
   if (location === 'interstellar') return state.interstellar;
+  if (location === 'galaxy') return state.galaxy;
+  if (location === 'portal') return state.portal;
+  if (location === 'tauceti') return state.tauceti;
   if (location === 'eden') return state.eden;
   return state.city;
 }
@@ -234,7 +330,7 @@ function getStructBucket(
 function getRequestedOn(
   state: GameState,
   id: string,
-  location: 'city' | 'space' | 'interstellar' | 'eden',
+  location: 'city' | 'space' | 'interstellar' | 'galaxy' | 'portal' | 'tauceti' | 'eden',
 ): number {
   const bucket = getStructBucket(state, location);
   const struct = bucket[id] as { count?: number; on?: number } | undefined;

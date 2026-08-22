@@ -1,6 +1,9 @@
 import type { GameState } from '@evozen/shared-types';
 import { applyInflationToCosts } from './challenges';
-import { applySpaceScaling } from './space';
+import { getFactoryOutputMultiplier } from './government';
+import { getPsychicProductionMultiplier } from './production-modifiers';
+import { applySpaceScaling, zigguratBonus } from './space';
+import { galaxyPiracy } from './syndicate';
 
 export type GalaxySupportPool = 'gateway' | 'gorddon' | 'alien1' | 'alien2' | 'chthonian';
 
@@ -279,11 +282,14 @@ export const GALAXY_STRUCTURES: GalaxyStructureDefinition[] = [
     description: '建造玻璃合金工厂。',
     reqs: { xeno: 10 },
     costs: {
-      Money: galaxyCost(7250000, 1.18),
-      Bolognium: galaxyCost(350000, 1.18),
-      Orichalcum: galaxyCost(100000, 1.18),
+      Money: galaxyCost(35000000, 1.25),
+      Cement: galaxyCost(1800000, 1.25),
+      Neutronium: galaxyCost(250000, 1.25),
+      Iridium: galaxyCost(850000, 1.25),
+      Aerogel: galaxyCost(400000, 1.25),
     },
-    effect: '生产玻璃合金材料。',
+    effect: '每座消耗 50K 金币、2.5 博洛尼亚合金与 100 锡烯，生产玻璃合金。',
+    powerCost: 10,
   },
 
   // ===== gxy_alien2 — 外星区域2 =====
@@ -451,8 +457,128 @@ export function getGalaxyStructuresForRegion(region: string): GalaxyStructureDef
 }
 
 function getGalaxyCount(state: GameState, id: string): number {
-  const galaxy = (state as unknown as { galaxy?: Record<string, { count?: number }> }).galaxy ?? {};
-  return galaxy[id]?.count ?? 0;
+  return state.galaxy[id]?.count ?? 0;
+}
+
+export interface GalaxyProductionModifier {
+  label: string;
+  multiplier: number;
+}
+
+export interface VitreloyInputResult {
+  resource: 'Money' | 'Bolognium' | 'Stanene';
+  amountPerPlant: number;
+  consumption: number;
+}
+
+export interface VitreloyTickResult {
+  requestedPlants: number;
+  poweredPlants: number;
+  effectivePlants: number;
+  baseRate: number;
+  requestedBaseOutput: number;
+  poweredBaseOutput: number;
+  materialBaseOutput: number;
+  inputs: VitreloyInputResult[];
+  modifiers: GalaxyProductionModifier[];
+  theoreticalOutput: number;
+  actualOutput: number;
+  truncatedOutput: number;
+}
+
+export interface GalaxyProductionOptions {
+  activeVitreloyPlants?: number;
+  productionModifiers?: GalaxyProductionModifier[];
+  dischargeActive?: boolean;
+}
+
+export interface GalaxyProductionResult {
+  vitreloy?: VitreloyTickResult;
+}
+
+const VITRELOY_INPUTS: Array<{ resource: VitreloyInputResult['resource']; amount: number }> = [
+  { resource: 'Money', amount: 50000 },
+  { resource: 'Bolognium', amount: 2.5 },
+  { resource: 'Stanene', amount: 100 },
+];
+const VITRELOY_BASE_RATE = 0.18;
+
+export function galaxyProductionTick(
+  state: GameState,
+  timeMul: number,
+  deltas: Record<string, number>,
+  options: GalaxyProductionOptions = {},
+): GalaxyProductionResult {
+  const plant = state.galaxy['vitreloy_plant'];
+  if (!plant || plant.count <= 0) return {};
+
+  const requestedPlants = Math.max(0, plant.on ?? plant.count);
+  const poweredPlants = Math.min(
+    requestedPlants,
+    Math.max(0, options.activeVitreloyPlants ?? requestedPlants),
+  );
+  let effectivePlants = poweredPlants;
+  for (const input of VITRELOY_INPUTS) {
+    const amountPerPlant = input.amount * timeMul;
+    const available = Math.max(0, state.resource[input.resource]?.amount ?? 0);
+    if (amountPerPlant > 0) {
+      effectivePlants = Math.min(effectivePlants, Math.floor((available + 1e-12) / amountPerPlant));
+    }
+  }
+  effectivePlants = Math.max(0, effectivePlants);
+
+  const inputs = VITRELOY_INPUTS.map<VitreloyInputResult>((input) => ({
+    resource: input.resource,
+    amountPerPlant: input.amount * timeMul,
+    consumption: input.amount * timeMul * effectivePlants,
+  }));
+  for (const input of inputs) {
+    if (input.consumption > 0) {
+      deltas[input.resource] = (deltas[input.resource] ?? 0) - input.consumption;
+    }
+  }
+
+  const requestedBaseOutput = requestedPlants * VITRELOY_BASE_RATE * timeMul;
+  const poweredBaseOutput = poweredPlants * VITRELOY_BASE_RATE * timeMul;
+  const materialBaseOutput = effectivePlants * VITRELOY_BASE_RATE * timeMul;
+  const modifiers: GalaxyProductionModifier[] = [
+    { label: '政体制造效率', multiplier: getFactoryOutputMultiplier(state) },
+    { label: '灵能生产增益', multiplier: getPsychicProductionMultiplier(state, 'Vitreloy') },
+    { label: '电磁放电', multiplier: options.dischargeActive ? 0.5 : 1 },
+    { label: '银河海盗压力', multiplier: galaxyPiracy(state, 'gxy_alien1') },
+    { label: '金字塔神庙', multiplier: zigguratBonus(state) },
+    ...(options.productionModifiers ?? []),
+  ].filter(({ multiplier }) => Math.abs(multiplier - 1) >= 1e-12);
+  const theoreticalOutput = modifiers.reduce(
+    (output, modifier) => output * modifier.multiplier,
+    materialBaseOutput,
+  );
+  const vitreloyResource = state.resource.Vitreloy;
+  const availableCapacity = vitreloyResource?.max > 0
+    ? Math.max(0, vitreloyResource.max - vitreloyResource.amount)
+    : Infinity;
+  const actualOutput = Math.min(theoreticalOutput, availableCapacity);
+  const truncatedOutput = theoreticalOutput - actualOutput;
+  if (actualOutput > 0) {
+    deltas.Vitreloy = (deltas.Vitreloy ?? 0) + actualOutput;
+  }
+
+  return {
+    vitreloy: {
+      requestedPlants,
+      poweredPlants,
+      effectivePlants,
+      baseRate: VITRELOY_BASE_RATE,
+      requestedBaseOutput,
+      poweredBaseOutput,
+      materialBaseOutput,
+      inputs,
+      modifiers,
+      theoreticalOutput,
+      actualOutput,
+      truncatedOutput,
+    },
+  };
 }
 
 export function getGalaxyBuildCost(state: GameState, id: string): Record<string, number> {

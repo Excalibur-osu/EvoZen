@@ -132,31 +132,34 @@ export function createNewGame(): GameState {
       Aluminium: { ...makeResource('铝', 50, 1), value: 0 },
       Oil: { ...makeResource('石油', 0, 1), value: 0 },
       Titanium: { ...makeResource('钛', 50, 1), value: 0 },
-      Uranium: { ...makeResource('铀', 250, 0), value: 0 },
+      Uranium: { ...makeResource('铀', 10, 0), value: 0 },
       // 太空特有资源（前置 0 最大值以临时隐藏）
       Iridium: { ...makeResource('铱', 0, 0), value: 0 },
       Helium_3: { ...makeResource('氦-3', 0, 0), value: 0 },
       Elerium: { ...makeResource('超铀', 0, 0), value: 297.115 },
       Neutronium: { ...makeResource('中子素', 0, 0), value: 150 },
       Mythril: { ...makeResource('秘银', -1, 0), value: 94.239 },
-      Nano_Tube: { ...makeResource('纳米管', -1, 0), value: 15.083 },
-      Adamantite: { ...makeResource('精金', -1, 0), value: 178.803 },
+      Nano_Tube: { ...makeResource('纳米管', 0, 0), value: 15.083 },
+      Adamantite: { ...makeResource('精金', 0, 0), value: 178.803 },
       Stanene: { ...makeResource('锡烯', -1, 0), value: 33.9615 },
+      Unobtainium: { ...makeResource('不可得矿', 0, 0), value: 168.59 },
+      Cipher: { ...makeResource('密文', 0, 0), value: 0 },
+      Materials: { ...makeResource('材料', 0, 1), value: 0 },
       // 合成资源
       Plywood: { ...makeResource('胶合板', -1, 0), value: 0 },
       Brick: { ...makeResource('砖', -1, 0), value: 0 },
       Wrought_Iron: { ...makeResource('锻铁', -1, 0), value: 0 },
       Sheet_Metal: { ...makeResource('金属板', -1, 0), value: 0 },
       // 工厂资源（前置：factory 建筑）
-      Alloy: { ...makeResource('合金', 500, 0), value: 150 },
-      Polymer: { ...makeResource('聚合物', 500, 0), value: 200 },
+      Alloy: { ...makeResource('合金', 50, 0), value: 150 },
+      Polymer: { ...makeResource('聚合物', 50, 0), value: 200 },
       // 容器
       Crates: { ...makeResource('板条箱', 0, 0) },
       Containers: { ...makeResource('集装箱', 0, 0) },
       Genes: { ...makeResource('基因', -1, 0), value: 0 },
       // 魔法宇宙资源
       Mana: { ...makeResource('魔力', 0, 0), value: 0 },
-      Crystal: { ...makeResource('水晶', 0, 0), value: 0 },
+      Crystal: { ...makeResource('水晶', 10, 0), value: 0 },
       // Portal / 地狱资源
       Soul_Gem: { ...makeResource('灵魂宝石', 0, 0), value: 0 },
       Demonic_Essence: { ...makeResource('恶魔精华', 0, 0), value: 0 },
@@ -181,7 +184,7 @@ export function createNewGame(): GameState {
       Scarletite: { ...makeResource('猩红石', 0, 0), value: 1500 },
       Deuterium: { ...makeResource('氘', 0, 0), value: 0 },
       Graphene: { ...makeResource('石墨烯', 0, 0), value: 0 },
-      Chrysotile: { ...makeResource('温石棉', 0, 0), value: 0 },
+      Chrysotile: { ...makeResource('温石棉', 200, 0), value: 0 },
       // 血脉资源
       Blood_Stone: { ...makeResource('血石', 0, 0), value: 0 },
       Corrupt_Gem: { ...makeResource('腐败宝石', 0, 0), value: 0 },
@@ -198,7 +201,19 @@ export function createNewGame(): GameState {
       geology: {},
       market: { active: false, qty: 1 },
       // 铸造厂产线分配（工匠 → 合成品）
-      foundry: { count: 0, on: 0, Plywood: 0, Brick: 0, Wrought_Iron: 0, Sheet_Metal: 0, Mythril: 0 },
+      foundry: {
+        count: 0,
+        on: 0,
+        Plywood: 0,
+        Brick: 0,
+        Wrought_Iron: 0,
+        Sheet_Metal: 0,
+        Mythril: 0,
+        Aerogel: 0,
+        Nanoweave: 0,
+        Scarletite: 0,
+        Quantium: 0,
+      },
       // 工厂产线分配（需要 high_tech:3 科技）
       factory: { count: 0, on: 0, Alloy: 0, Polymer: 0, Nano: 0, Stanene: 0, Lux: 0, Furs: 0 } as FactoryState,
       // 熔炉多燃料生产状态
@@ -212,6 +227,7 @@ export function createNewGame(): GameState {
 
     space: {},
     interstellar: {},
+    galaxy: {},
     portal: {},
     eden: {},
     tauceti: {},
@@ -236,6 +252,8 @@ export function createNewGame(): GameState {
       quarry_worker: makeJob('quarry_worker', 1, 5),
       miner: makeJob('miner', 1, 4),
       coal_miner: makeJob('coal_miner', 0.2, 4),
+      pit_miner: makeJob('pit_miner', 1, 4.5),
+      teamster: { ...makeJob('teamster', 1, 4), max: -1 },
       colonist: makeJob('colonist', 1, 5),
       craftsman: makeJob('craftsman', 1, 5),
       cement_worker: makeJob('cement_worker', 0.4, 5),

@@ -69,6 +69,8 @@ export interface SpaceStructureDefinition {
    * 例：moon_base 每座 on 后每 tick 消耗 2 Oil。
    */
   supportFuel?: { resource: string; amountPerTick: number };
+  /** 分段巨构的总段数，用于稳定限制和 UI 进度。 */
+  segmentCap?: number;
 }
 
 /**
@@ -774,7 +776,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     id: 'shipyard',
     region: 'spc_dwarf',
     name: '造船厂',
-    description: '在矮行星轨道建造庞大的星舰制造设施，开启星际战舰建造系统。',
+    description: '在矮行星轨道建造舰船制造设施，开启舰船建造与航行。',
     reqs: { shipyard: 1 },
     condition: (state) =>
       ((state.space['shipyard'] as { count?: number } | undefined)?.count ?? 0) < 1,
@@ -786,7 +788,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Neutronium: (_state, count) => (count < 1 ? 10_000 : 0),
       Mythril: (_state, count) => (count < 1 ? 500_000 : 0),
     },
-    effect: '仅可建造 1 座；通电 50MW 后开启星舰建造界面。',
+    effect: '仅可建造 1 座；通电 50MW 后可建造并派遣探索舰。',
     powerCost: 50,
   },
 
@@ -904,7 +906,10 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
     description: '在恒星轨道建造星系跳跃门，分 100 段完工后开启跨恒星系旅行（仅真实路径）。',
     reqs: { tauceti: 3 },
     condition: (state) =>
-      ((state.space['jump_gate'] as { count?: number } | undefined)?.count ?? 0) < 100,
+      Boolean(state.race['truepath'])
+      && !state.tech['isolation']
+      && ((state.space['jump_gate'] as { count?: number } | undefined)?.count ?? 0) < 100,
+    segmentCap: 100,
     costs: {
       Money:       (_state, count) => count < 100 ? 1_000_000 : 0,
       Alloy:       (_state, count) => count < 100 ? 50_000 : 0,
@@ -913,7 +918,7 @@ export const SPACE_STRUCTURES: SpaceStructureDefinition[] = [
       Orichalcum:  (_state, count) => count < 100 ? 35_000 : 0,
       Quantium:    (_state, count) => count < 100 ? 25_000 : 0,
     },
-    effect: '共需建造 100 段；完工后开启 tauceti 阶段，配合 mass_relay 触发终局传送。',
+    effect: '共需建造 100 段；只有 Tau Ceti 侧的配对跃迁门也完工后，才会建立资源通道。',
   },
 
   // ===== spc_gas: star_dock（星际飞船船坞，仅建 1 座） =====
@@ -1234,7 +1239,40 @@ export const GARAGE_STORAGE_PER_BUILDING: Record<string, number> = {
   Cement: 6000,
   Steel: 4500,
   Titanium: 3500,
+  Alloy: 2500,
+  Nano_Tube: 25000,
+  Neutronium: 125,
+  Polymer: 2500,
+  Coal: 1500,
+  Lumber: 7500,
+  Chrysotile: 7500,
+  Stone: 7500,
+  Furs: 2200,
 };
+
+const GARAGE_HEAVY_RESOURCES = new Set([
+  'Copper', 'Iron', 'Steel', 'Titanium', 'Neutronium',
+]);
+
+export function getGarageStorageBonus(state: GameState, resourceId: string): number {
+  const count = getGarageCount(state);
+  const baseValue = GARAGE_STORAGE_PER_BUILDING[resourceId] ?? 0;
+  if (count <= 0 || baseValue <= 0 || !state.resource[resourceId]?.display) return 0;
+  const cataclysmStorage = Boolean(state.race['cataclysm'] || state.race['orbit_decayed']);
+  if (['Polymer', 'Coal', 'Lumber', 'Chrysotile', 'Stone', 'Furs'].includes(resourceId)
+    && !cataclysmStorage) return 0;
+
+  let multiplier = (state.tech['particles'] ?? 0) >= 4
+    ? 1 + (state.tech['supercollider'] ?? 0) / 20
+    : 1;
+  if ((state.tech['world_control'] ?? 0) >= 1 || cataclysmStorage) multiplier *= 2;
+  if ((state.tech['shelving'] ?? 0) >= 3) multiplier *= 1.5;
+  multiplier *= 1 + getAchievementLevel(state, 'blackhole') * 0.05;
+  if (GARAGE_HEAVY_RESOURCES.has(resourceId) && (state.tech['shelving'] ?? 0) >= 2) {
+    multiplier *= 3;
+  }
+  return count * applyPillarStorageBonus(state, baseValue * multiplier);
+}
 
 /** garage 对 Containers 上限的基线贡献（每座 +20）。 */
 export const GARAGE_CONTAINERS_PER_BUILDING = 20;

@@ -24,6 +24,7 @@ import { getAchievementLevel, getChallengeLevel, unlockAchievement } from './ach
 import { armyRating } from './military';
 import { RACES } from './races';
 import { getPillarProductionMultiplier } from './pillars';
+import { getTraitVar } from './trait-ranks';
 
 // ============================================================
 // 区域定义
@@ -42,7 +43,7 @@ export interface PortalRegionDef {
 export const PORTAL_REGIONS: Record<PortalRegionId, PortalRegionDef> = {
   fortress:  { id: 'fortress',  name: '要塞',     desc: '从世界深处通往地狱的传送门，需要重兵把守。',          reqs: { portal: 2 } },
   badlands:  { id: 'badlands',  name: '荒原',     desc: '恶魔出没的荒野，富含古代圣物。',                      reqs: { portal: 3 } },
-  wasteland: { id: 'wasteland', name: '废土',     desc: '战争之主的领土，可在地狱中建立城市。',                reqs: { hell_lake: 4, warlord: 1 } },
+  wasteland: { id: 'wasteland', name: '废土',     desc: '战争之主的领土，可在地狱中建立城市。',                reqs: { hellspawn: 1 } },
   pit:       { id: 'pit',       name: '深渊',     desc: '充满灵魂的地下洞穴，恶魔灵魂之源。',                  reqs: { hell_pit: 1 } },
   ruins:     { id: 'ruins',     name: '遗迹',     desc: '远古文明的废墟，蕴藏神秘技术。',                      reqs: { hell_ruins: 1 } },
   gate:      { id: 'gate',      name: '灵魂门',   desc: '通往尖塔的双塔大门，需要灵魂能量驱动。',              reqs: { hell_gate: 1 } },
@@ -71,6 +72,8 @@ export interface PortalBuildingDef {
   baseCost: Record<string, number>;
   /** 成本递增系数 */
   costMult: number;
+  /** 少数原版建筑按资源使用不同递增系数。 */
+  costMultByResource?: Record<string, number>;
   /** 电力消耗（MW）— 正值消耗，负值发电 */
   power: number;
   /** 简短效果描述 */
@@ -100,11 +103,11 @@ export const PORTAL_BUILDINGS: PortalBuildingDef[] = [
 
   // ----- Wasteland (废土) — warlord 专用 -----
   { id: 'throne',         region: 'wasteland', name: '王座',         desc: '战争之主的统治中心。',                     reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Money: 50000000, Demonic_Essence: 100, Soul_Gem: 100 }, costMult: 1.1, power: 0, effectDesc: '解锁地狱城市建造。' },
-  { id: 'incinerator',    region: 'wasteland', name: '焚化炉',       desc: '焚化尸体提供能量。',                       reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 10, Soul_Gem: 10 }, costMult: 1.2, power: -8, effectDesc: '发电 8 MW。' },
+  { id: 'incinerator',    region: 'wasteland', name: '焚化炉',       desc: '焚化地狱废料，为军阀城市提供电力。',         reqs: { hellspawn: 1 }, trait: ['warlord'], baseCost: { Money: 220000, Coal: 80000, Neutronium: 5000, Infernite: 4000 }, costMult: 1.3, power: -25, effectDesc: '基础发电 25 MW。' },
   { id: 'warehouse',      region: 'wasteland', name: '地狱仓库',     desc: '地狱中的资源储存设施。',                   reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 5, Adamantite: 1000 }, costMult: 1.2, power: 1, effectDesc: '增加多种资源容量。' },
   { id: 'hovel',          region: 'wasteland', name: '陋屋',         desc: '为地狱居民提供住所。',                     reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 3, Stone: 50000 }, costMult: 1.2, power: 0, effectDesc: '住房 +3。' },
   { id: 'hell_casino',    region: 'wasteland', name: '地狱赌场',     desc: '为恶魔市民提供娱乐。',                     reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 20, Soul_Gem: 25 }, costMult: 1.2, power: 4, effectDesc: '提供金钱与士气加成。' },
-  { id: 'twisted_lab',    region: 'wasteland', name: '扭曲实验室',   desc: '研究恶魔生理的禁忌实验室。',               reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 15, Sus: 75 }, costMult: 1.2, power: 6, effectDesc: '提供 Sus 知识产出。' },
+  { id: 'twisted_lab',    region: 'wasteland', name: '扭曲实验室',   desc: '研究恶魔生理的禁忌实验室。',               reqs: { hellspawn: 1, science: 9 }, trait: ['warlord'], baseCost: { Money: 350000, Knowledge: 69000, Copper: 375000, Polymer: 289000, Graphene: 230000 }, costMult: 1.3, power: 4, effectDesc: '每座通电实验室为基因测序提供 1 点速率。' },
   { id: 'demon_forge',    region: 'wasteland', name: '恶魔铸造厂',   desc: '锻造恶魔兵器的工坊。',                     reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 25, Iron: 100000 }, costMult: 1.2, power: 3, effectDesc: '武器升级加成。' },
   { id: 'hell_factory',   region: 'wasteland', name: '地狱工厂',     desc: '大规模生产地狱产品。',                     reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 30, Stanene: 50000 }, costMult: 1.2, power: 4, effectDesc: '工厂产出 +50%。' },
   { id: 'pumpjack',       region: 'wasteland', name: '地狱抽油机',   desc: '从地下抽取地狱原油。',                     reqs: { hell_lake: 4, warlord: 1 }, trait: ['warlord'], baseCost: { Demonic_Essence: 20, Iron: 80000 }, costMult: 1.2, power: 3, effectDesc: '+5 Oil/秒。' },
@@ -131,7 +134,7 @@ export const PORTAL_BUILDINGS: PortalBuildingDef[] = [
   { id: 'war_vault',      region: 'ruins', name: '战争保险库',   desc: '存储战争物资。',                             reqs: { hell_ruins: 1 }, trait: ['warlord'], baseCost: { Money: 9500000, Steel: 250000 }, costMult: 1.25, power: 1, effectDesc: '+30M Money 容量。' },
   { id: 'archaeology',    region: 'ruins', name: '考古发掘',     desc: '挖掘远古文物。',                             reqs: { hell_ruins: 3 }, baseCost: { Money: 25000000, Lumber: 1250000, Stone: 1250000, Mythril: 12500 }, costMult: 1.22, power: 0, effectDesc: '生产 Codex。' },
   { id: 'arcology',       region: 'ruins', name: '巨型生态屋',   desc: '在遗迹中建立庞大居住区。',                   reqs: { hell_ruins: 6 }, baseCost: { Money: 75000000, Cement: 1500000, Steel: 750000, Adamantite: 100000 }, costMult: 1.25, power: 25, effectDesc: '+250 住房，提供大量市民。' },
-  { id: 'hell_forge',     region: 'ruins', name: '地狱铸造厂',   desc: '冶炼超级金属。',                             reqs: { hell_ruins: 4 }, baseCost: { Money: 12000000, Adamantite: 200000, Bolognium: 80000 }, costMult: 1.25, power: 4, effectDesc: '提供工匠岗位与工业产出。' },
+  { id: 'hell_forge',     region: 'ruins', name: '地狱铸造厂',   desc: '冶炼超级金属。',                             reqs: { scarletite: 1 }, baseCost: { Money: 250000000, Coal: 1650000, Steel: 3800000, Iridium: 1200000, Neutronium: 280000, Soul_Gem: 5 }, costMult: 1.22, costMultByResource: { Money: 1.15 }, power: 12, effectDesc: '每座通电时提供 1 条猩红石工匠产线，并强化自动合成。' },
   { id: 'inferno_power',  region: 'ruins', name: '熔狱发电',     desc: '利用地狱熔岩发电。',                         reqs: { hell_ruins: 5 }, baseCost: { Money: 25000000, Brick: 350000, Coal: 250000, Infernite: 1000 }, costMult: 1.2, power: -22, effectDesc: '产生 22 MW 电力。' },
   { id: 'ancient_pillars', region: 'ruins', name: '远古石柱',    desc: '远古文明的支柱，调谐后增益。',               reqs: { hell_ruins: 6 }, baseCost: { Harmony: 1 }, costMult: 1.05, power: 0, effectDesc: '调谐石柱：每柱提供全球加成。' },
 
@@ -622,6 +625,7 @@ export function getBuildingsByRegion(region: PortalRegionId): PortalBuildingDef[
 /** 判断某区域是否已解锁 */
 export function isRegionUnlocked(state: GameState, regionId: PortalRegionId): boolean {
   const def = PORTAL_REGIONS[regionId];
+  if (regionId === 'wasteland' && !state.race['warlord']) return false;
   for (const [tech, lvl] of Object.entries(def.reqs)) {
     if ((state.tech[tech] ?? 0) < lvl) return false;
   }
@@ -668,10 +672,10 @@ export function getPortalBuildCost(state: GameState, buildingId: string): Record
   }
   const portal = state.portal as Record<string, Record<string, number>>;
   const count = portal[buildingId]?.['count'] ?? 0;
-  const mult = Math.pow(building.costMult, count);
   const cost: Record<string, number> = {};
   for (const [res, base] of Object.entries(building.baseCost)) {
-    cost[res] = Math.round(base * mult);
+    const multiplier = building.costMultByResource?.[res] ?? building.costMult;
+    cost[res] = Math.round(base * Math.pow(multiplier, count));
   }
   return applyInflationToCosts(state, cost);
 }
@@ -715,8 +719,41 @@ export function buildPortalStructure(state: GameState, buildingId: string): bool
   }
   if (!portal[buildingId]) portal[buildingId] = { count: 0, on: 0 };
   portal[buildingId].count = (portal[buildingId].count ?? 0) + 1;
+  if (buildingId === 'guard_post' || buildingId === 'arcology' || buildingId === 'hell_forge'
+    || buildingId === 'incinerator' || buildingId === 'twisted_lab') {
+    portal[buildingId].on = (portal[buildingId].on ?? 0) + 1;
+  }
   addInflationPoints(state, 1);
   return true;
+}
+
+function portalOn(state: GameState, id: string, activeConsumers?: Record<string, number>): number {
+  if (activeConsumers?.[id] !== undefined) return Math.max(0, activeConsumers[id]);
+  const structure = state.portal[id];
+  return Math.max(0, structure?.on ?? structure?.count ?? 0);
+}
+
+function traitRank(state: GameState, id: string): number {
+  const value = state.race[id];
+  return typeof value === 'number' && value > 0 ? value : value ? 1 : 0;
+}
+
+/** 对标 legacy hellSupression('ruins')，供地狱铸造与猩红石合成共用。 */
+export function getRuinsSuppression(
+  state: GameState,
+  activeConsumers?: Record<string, number>,
+): { suppression: number; rating: number } {
+  if (state.race['warlord']) return { suppression: 1, rating: 5000 };
+  const guards = portalOn(state, 'guard_post', activeConsumers);
+  const arcologyRating = portalOn(state, 'arcology', activeConsumers) * 75;
+  let rating = armyRating(guards, state, 0);
+  const holyRank = traitRank(state, 'holy');
+  if (holyRank) rating *= 1 + getTraitVar('holy', 1, holyRank) / 100;
+  rating += arcologyRating;
+  return {
+    suppression: Math.min(1, Math.max(0, rating / 5000)),
+    rating,
+  };
 }
 
 // ============================================================

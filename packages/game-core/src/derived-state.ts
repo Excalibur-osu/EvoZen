@@ -12,6 +12,16 @@ import { getMaxTradeRoutes } from './trade';
 import { getBankVault, getCasinoVault, getInterstellarExchangeVault } from './commerce';
 import { getAchievementLevel } from './achievements';
 import { hasPlanetTrait, magneticVars, permafrostVars } from './planet-traits';
+import { getTraitVar } from './trait-ranks';
+import { getTruepathFleetCrew } from './truepath-ships';
+import {
+  getPitMinerCapacity,
+  getTaucetiAlienOutpostProfessorCapacity,
+  getTaucetiColonyCitizens,
+  getTaucetiFactoryCementWorkerCapacity,
+  getTaucetiFactoryCraftsmanCapacity,
+  resolveTaucetiSupport,
+} from './tauceti';
 import { applyPillarStorageBonus, getPillarProductionMultiplier } from './pillars';
 import {
   getSatelliteKnowledgeCapBonus,
@@ -21,13 +31,20 @@ import {
   getMoonBaseIridiumCapBonus,
   getHeliumMineHeliumCapBonus,
   getGarageCount,
-  GARAGE_STORAGE_PER_BUILDING,
+  getGarageStorageBonus,
   GARAGE_CONTAINERS_PER_BUILDING,
   getGasStorageOilCapBonus,
   getGasStorageHeliumCapBonus,
   getGasStorageUraniumCapBonus,
   getEleriumContainCapBonus,
 } from './space';
+import {
+  getTaucetiRepositoryContainerCapacityBonus,
+  getTaucetiRepositoryResources,
+  getTaucetiRepositoryStorageBonus,
+  TRUEPATH_STOREHOUSE_RESOURCES,
+  getTruepathStorehouseStorageBonus,
+} from './truepath-storage';
 
 function getStorageYardCrateCapacity(state: GameState): number {
   let capacity = (state.tech['container'] ?? 0) >= 3 ? 20 : 10;
@@ -74,6 +91,9 @@ export function applyDerivedStateInPlace(state: GameState): void {
     (s.space[id] as { count?: number } | undefined)?.count ?? 0;
   const getInterstellarCount = (id: string): number =>
     (s.interstellar[id] as { count?: number } | undefined)?.count ?? 0;
+  const tauSupport = resolveTaucetiSupport(s, s.city.power?.activeConsumers ?? {});
+  const supportedTauColonies = tauSupport.supportOn['colony'] ?? 0;
+  const supportedMiningPits = tauSupport.supportOn['mining_pit'] ?? 0;
 
   const setJobMax = (jobId: string, max: number): void => {
     const job = s.civic[jobId] as { max: number } | undefined;
@@ -90,6 +110,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
   popCap += cottages * 2;
   popCap += apartments * 4;
   popCap += lodges;
+  popCap += supportedTauColonies * getTaucetiColonyCitizens(s);
   if ((s.tech['farm'] ?? 0) >= 1) {
     popCap += farms;
   }
@@ -103,6 +124,11 @@ export function applyDerivedStateInPlace(state: GameState): void {
   foodMax += farms * spatialStorage(50);
   foodMax += silos * spatialStorage(500);
   foodMax += smokehouses * spatialStorage(100);
+  if (s.tech['isolation'] && s.race['artifical']) {
+    const activeTauFarms = s.city.power?.activeConsumers?.['tau_farm'] ?? 0;
+    foodMax += activeTauFarms * spatialStorage(350);
+  }
+  foodMax += getStorageBonus(s, 'Food');
   s.resource['Food'].max = foodMax;
 
   const sheds = getStructCount('shed');
@@ -186,16 +212,15 @@ export function applyDerivedStateInPlace(state: GameState): void {
     }
   }
 
-  // 对标 legacy actions.js L3118-3135：
-  //   Uranium.max = baseline 250 + oil_depot * 250（需 uranium >= 2）
+  // 对标 legacy 资源容量基线与 oil_depot 加成。
   if (s.resource['Uranium']) {
-    s.resource['Uranium'].max = 250 + ((s.tech['uranium'] ?? 0) >= 2 ? oilDepots * spatialStorage(250) : 0);
+    s.resource['Uranium'].max = 10 + ((s.tech['uranium'] ?? 0) >= 2 ? oilDepots * spatialStorage(250) : 0);
   }
 
   // 对标 legacy space.js L262：moon_base 每座 Iridium.max +500（baseline 0）
   if (s.resource['Iridium']) {
     const iridiumBonus = getMoonBaseIridiumCapBonus(s);
-    s.resource['Iridium'].max = iridiumBonus;
+    s.resource['Iridium'].max = iridiumBonus + getStorageBonus(s, 'Iridium');
     // 建成首座 moon_base 后解锁 Iridium（legacy space.js L344 同时在 iridium_mine 建造时触发；
     // 此处归一到 moon_base.max 写入后立即开启 display，简化链路）
     if (iridiumBonus > 0) {
@@ -235,18 +260,46 @@ export function applyDerivedStateInPlace(state: GameState): void {
     s.resource['Uranium'].display = true;
   }
 
-  // 对标 legacy/src/space.js L874-943 garage effect（baseline：non-cataclysm，multiplier=1）：
-  //   Copper +6500, Iron +5500, Cement +6000, Steel +4500, Titanium +3500 per garage
-  //   Containers +20/座（在下方 Containers max 一段合并）。
-  //   Alloy / Nano_Tube / Neutronium / Infernite 待对应管理/资源接入后再补。
-  const garageCount = getGarageCount(s);
-  if (garageCount > 0) {
-    for (const [resId, perBuilding] of Object.entries(GARAGE_STORAGE_PER_BUILDING)) {
-      const res = s.resource[resId];
-      if (!res) continue;
-      res.max += garageCount * spatialStorage(perBuilding);
+  // 原版 main.js 的资源容量表会在每次循环从固定基线重建。这里覆盖 repository
+  // 涉及、但此前仍依赖 -1/静态占位的高级资源，避免重复 derived 调用累加。
+  s.resource['Crystal'].max = 10
+    + (s.resource['Crystal'].display ? sheds * spatialStorage((SHED_BASE_VALUES['Crystal'] ?? 0) * storageMult) : 0)
+    + getStorageBonus(s, 'Crystal');
+  s.resource['Alloy'].max = 50 + getStorageBonus(s, 'Alloy');
+  s.resource['Polymer'].max = 50 + getStorageBonus(s, 'Polymer');
+  s.resource['Chrysotile'].max = 200
+    + (s.resource['Chrysotile'].display ? sheds * spatialStorage((SHED_BASE_VALUES['Chrysotile'] ?? 0) * storageMult) : 0)
+    + getStorageBonus(s, 'Chrysotile');
+  s.resource['Nano_Tube'].max = 0;
+  s.resource['Neutronium'].max = getSpaceCount('outpost') * spatialStorage(500)
+    + getInterstellarCount('cargo_yard') * spatialStorage(200);
+  s.resource['Adamantite'].max = getStorageBonus(s, 'Adamantite');
+  s.resource['Unobtainium'].max = 0;
+  const titanSpaceport = s.space['titan_spaceport'] as { count?: number; on?: number } | undefined;
+  const activeTitanSpaceports = s.city.power
+    ? s.city.power.activeConsumers?.['titan_spaceport'] ?? 0
+    : titanSpaceport?.on ?? titanSpaceport?.count ?? 0;
+  s.resource['Water'].max = activeTitanSpaceports * spatialStorage(250);
+
+  // 对标 legacy gatewayStorage()/gateway_depot：网关仓库是 repository 前的重要高级容量来源。
+  const gatewayDepots = s.galaxy['gateway_depot']?.count ?? 0;
+  let gatewayStorageMultiplier = 1;
+  if (s.race['pack_rat']) gatewayStorageMultiplier *= 1.05;
+  gatewayStorageMultiplier *= 1 + getAchievementLevel(s, 'blackhole') * 0.05;
+  if ((s.tech['world_control'] ?? 0) >= 1) gatewayStorageMultiplier *= 2;
+  const gatewayStorageValues: Record<string, number> = {
+    Uranium: 3_000,
+    Nano_Tube: 250_000,
+    Neutronium: 9_001,
+  };
+  for (const [resourceId, baseValue] of Object.entries(gatewayStorageValues)) {
+    if (s.resource[resourceId]?.display && gatewayDepots > 0) {
+      s.resource[resourceId].max += gatewayDepots * spatialStorage(baseValue * gatewayStorageMultiplier);
     }
   }
+
+  // garage 资源加成在 display 解锁同步后统一写入，见下方。
+  const garageCount = getGarageCount(s);
 
   const hunterWorkers = (s.civic['hunter'] as { workers?: number } | undefined)?.workers ?? 0;
   if (hunterWorkers > 0 || getStructCount('garrison') > 0) {
@@ -302,6 +355,9 @@ export function applyDerivedStateInPlace(state: GameState): void {
     | undefined;
   const activeExchanges = Math.min(exchange?.count ?? 0, exchange?.support_on ?? 0);
   moneyMax += spatialStorage(getInterstellarExchangeVault(s, activeExchanges));
+  if (s.tech['isolation'] && supportedTauColonies > 0) {
+    moneyMax += supportedTauColonies * spatialStorage(getBankVault(s) * 25);
+  }
   s.resource['Money'].max = moneyMax;
 
   setJobMax('farmer', -1);
@@ -309,9 +365,14 @@ export function applyDerivedStateInPlace(state: GameState): void {
   setJobMax('quarry_worker', -1);
   setJobMax('miner', getStructCount('mine'));
   setJobMax('coal_miner', getStructCount('coal_mine'));
-  setJobMax('cement_worker', getStructCount('cement_plant') * 2);
+  setJobMax('teamster', -1);
+  setJobMax(
+    'cement_worker',
+    getStructCount('cement_plant') * 2
+      + getTaucetiFactoryCementWorkerCapacity(s, tauSupport.supportOn),
+  );
   setJobMax('banker', banks);
-  setJobMax('professor', universities);
+  setJobMax('professor', universities + getTaucetiAlienOutpostProfessorCapacity(s));
   setJobMax('scientist', wardenclyffes);
 
   if ((s.tech['primitive'] ?? 0) >= 1) {
@@ -350,12 +411,70 @@ export function applyDerivedStateInPlace(state: GameState): void {
   if ((s.tech['stanene'] ?? 0) >= 1) {
     s.resource['Stanene'].display = true;
   }
+  if ((s.tech['aerogel'] ?? 0) >= 1) {
+    s.resource['Aerogel'].display = true;
+  }
+  if ((s.tech['nanoweave'] ?? 0) >= 1) {
+    s.resource['Nanoweave'].display = true;
+  }
+  if ((s.tech['scarletite'] ?? 0) >= 1) {
+    s.resource['Scarletite'].display = true;
+  }
+  if ((s.tech['quantium'] ?? 0) >= 1) {
+    s.resource['Quantium'].display = true;
+  }
+  if (s.tech['isolation'] || (s.tauceti['womling_mine']?.count ?? 0) > 0) {
+    s.resource['Unobtainium'].display = true;
+  }
+  const tauHomeOpen = (s.tech['tau_home'] ?? 0) >= 2;
+  const advancedTauMining = (s.tech['tauceti'] ?? 0) >= 4;
+  if (s.resource['Materials']) {
+    s.resource['Materials'].max = advancedTauMining ? 0 : supportedMiningPits * 1_000_000;
+    s.resource['Materials'].display = tauHomeOpen && !advancedTauMining;
+  }
+  if (tauHomeOpen && advancedTauMining && (s.tauceti['mining_pit']?.count ?? 0) > 0) {
+    for (const resource of ['Bolognium', 'Stone', 'Adamantite']) s.resource[resource].display = true;
+    if (s.race['smoldering']) s.resource['Chrysotile'].display = true;
+    if (s.tech['isolation']) {
+      s.resource['Copper'].display = true;
+      s.resource['Coal'].display = true;
+      if (s.race['lone_survivor']) {
+        s.resource['Iron'].display = true;
+        s.resource['Aluminium'].display = true;
+      }
+    }
+  }
+  if ((s.space['crashed_ship'] as { count?: number } | undefined)?.count === 100) {
+    s.resource['Cipher'].display = true;
+  }
   if (getInterstellarCount('mining_droid') > 0) {
     s.resource['Adamantite'].display = true;
   }
 
+  // 对标 legacy main.js garage/repository 分支：只有已显示资源才获得对应容量。
+  for (const resourceId of Object.keys(s.resource)) {
+    const garageBonus = getGarageStorageBonus(s, resourceId);
+    if (garageBonus > 0) s.resource[resourceId].max += garageBonus;
+  }
+  for (const resourceId of TRUEPATH_STOREHOUSE_RESOURCES) {
+    const storehouseBonus = getTruepathStorehouseStorageBonus(s, resourceId);
+    if (storehouseBonus > 0) s.resource[resourceId].max += storehouseBonus;
+  }
+  for (const resourceId of getTaucetiRepositoryResources(s)) {
+    const repositoryBonus = getTaucetiRepositoryStorageBonus(s, resourceId);
+    if (repositoryBonus > 0) s.resource[resourceId].max += repositoryBonus;
+  }
+
   const foundries = getStructCount('foundry');
-  setJobMax('craftsman', foundries);
+  setJobMax(
+    'craftsman',
+    foundries + getTaucetiFactoryCraftsmanCapacity(s, tauSupport.supportOn),
+  );
+  setJobMax('pit_miner', getPitMinerCapacity(s, s.city.power?.activeConsumers ?? {}));
+  const pitMinerJob = s.civic['pit_miner'] as { display?: boolean } | undefined;
+  if (pitMinerJob) pitMinerJob.display = tauHomeOpen;
+  const teamsterJob = s.civic['teamster'] as { stress?: number } | undefined;
+  if (teamsterJob) teamsterJob.stress = (s.tech['teamster'] ?? 0) >= 1 ? 6 : 4;
 
   const amphitheatres = getStructCount('amphitheatre');
   const casinoCount = getStructCount('casino');
@@ -389,7 +508,7 @@ export function applyDerivedStateInPlace(state: GameState): void {
   // 多余的工人必须退回到 unemployed，否则出现幽灵工人（无建筑却产出资源）
   const clampableJobs = [
     'farmer', 'miner', 'coal_miner', 'cement_worker', 'banker',
-    'professor', 'scientist', 'craftsman', 'entertainer', 'priest',
+    'professor', 'scientist', 'craftsman', 'entertainer', 'priest', 'pit_miner',
   ];
   const unemployed = s.civic['unemployed'] as { workers: number } | undefined;
   for (const jobId of clampableJobs) {
@@ -421,8 +540,21 @@ export function applyDerivedStateInPlace(state: GameState): void {
   const crateCapacity = getStorageYardCrateCapacity(s);
   const containerCapacity = getWarehouseContainerCapacity(s);
   const wharfCapacity = getWharfStorageCapacity(s);
+  const cargoYards = getInterstellarCount('cargo_yard');
+  const gatewayDepotContainerCapacity = gatewayDepots * ((s.tech['world_control'] ?? 0) >= 1 ? 150 : 100);
+  const repositoryContainerCapacity = getTaucetiRepositoryContainerCapacityBonus(s);
   if (s.resource['Crates']) {
-    s.resource['Crates'].max = Math.max(0, storageYards * crateCapacity + wharves * wharfCapacity - getTotalAssignedCrates(s));
+    const tauStorage = supportedTauColonies * (s.tech['isolation'] ? 900 : 250);
+    s.resource['Crates'].max = Math.max(
+      0,
+      storageYards * crateCapacity
+        + wharves * wharfCapacity
+        + cargoYards * 50
+        + gatewayDepotContainerCapacity
+        + tauStorage
+        + repositoryContainerCapacity
+        - getTotalAssignedCrates(s),
+    );
     if (s.resource['Crates'].amount > s.resource['Crates'].max) {
       s.resource['Crates'].amount = s.resource['Crates'].max;
     }
@@ -430,14 +562,23 @@ export function applyDerivedStateInPlace(state: GameState): void {
   if (s.resource['Containers']) {
     // 对标 legacy/src/space.js L924-934：garage 每座 +20 集装箱（baseline containers 值）。
     const garageContainers = garageCount * GARAGE_CONTAINERS_PER_BUILDING;
+    const tauStorage = supportedTauColonies * (s.tech['isolation'] ? 900 : 250);
     s.resource['Containers'].max = Math.max(
       0,
-      warehouses * containerCapacity + wharves * wharfCapacity + garageContainers - getTotalAssignedContainers(s),
+      warehouses * containerCapacity
+        + wharves * wharfCapacity
+        + garageContainers
+        + cargoYards * 50
+        + gatewayDepotContainerCapacity
+        + tauStorage
+        + repositoryContainerCapacity
+        - getTotalAssignedContainers(s),
     );
     if (s.resource['Containers'].amount > s.resource['Containers'].max) {
       s.resource['Containers'].amount = s.resource['Containers'].max;
     }
   }
+
 
   if ((s.tech['container'] ?? 0) >= 1) {
     s.resource['Crates'].display = true;
@@ -498,6 +639,21 @@ export function applyDerivedStateInPlace(state: GameState): void {
     const soldiersPerBarracks = (s.tech['marines'] ?? 0) >= 2 ? 4 : 2;
     s.civic.garrison.max += spaceBarracksOn * soldiersPerBarracks;
   }
+
+  // 对标 legacy main.js L8885-8887 / truepath.js fob.soldiers()。
+  const activeFob = s.city.power?.activeConsumers?.['fob'] ?? 0;
+  if (activeFob > 0) {
+    const rankValue = s.race['high_pop'];
+    const highPopRank = typeof rankValue === 'number' && rankValue > 0 ? rankValue : rankValue ? 1 : 0;
+    const baseFobSoldiers = s.race['grenadier'] ? 6 : 10;
+    const scaledFobSoldiers = highPopRank > 0
+      ? baseFobSoldiers * getTraitVar('high_pop', 0, highPopRank)
+      : baseFobSoldiers;
+    s.civic.garrison.max += activeFob * scaledFobSoldiers;
+  }
+
+  // Truepath 舰船离港后持续占用军方船员，抵达 Tau 后仍不释放。
+  s.civic.garrison.crew = getTruepathFleetCrew(s);
 
   if (s.civic.garrison.workers > s.civic.garrison.max) {
     s.civic.garrison.workers = s.civic.garrison.max;
@@ -567,7 +723,6 @@ export function applyDerivedStateInPlace(state: GameState): void {
   }
   if ((s.tech['magic'] ?? 0) >= 1 && s.resource['Crystal']) {
     s.resource['Crystal'].display = true;
-    if (s.resource['Crystal'].max === 0) s.resource['Crystal'].max = 500;
   }
   if ((s.tech['portal'] ?? 0) >= 2 && s.resource['Soul_Gem']) {
     s.resource['Soul_Gem'].display = true;

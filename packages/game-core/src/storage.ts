@@ -32,8 +32,9 @@ export const CONTAINER_COST_STEEL = 125;
 
 /** 可以分配板条箱/集装箱的资源列表 — 对标原版 actions.js shed.res() */
 export const STORABLE_RESOURCES = [
-  'Lumber', 'Stone', 'Furs', 'Copper', 'Iron',
-  'Aluminium', 'Cement', 'Coal', 'Steel', 'Titanium',
+  'Food', 'Lumber', 'Chrysotile', 'Stone', 'Crystal', 'Furs', 'Copper', 'Iron',
+  'Aluminium', 'Cement', 'Coal', 'Steel', 'Titanium', 'Alloy', 'Polymer', 'Iridium',
+  'Adamantite',
 ] as const;
 
 export type StorableResourceId = typeof STORABLE_RESOURCES[number];
@@ -45,6 +46,8 @@ export type StorableResourceId = typeof STORABLE_RESOURCES[number];
 export const SHED_BASE_VALUES: Record<string, number> = {
   Lumber: 300,
   Stone: 300,
+  Chrysotile: 300,
+  Crystal: 8,
   Furs: 125,
   Copper: 90,
   Iron: 125,

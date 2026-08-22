@@ -6,6 +6,11 @@
 export { createNewGame, defaultSettings } from './state';
 export { seededRandom, mathRand } from './random';
 export {
+  getPlasmidProductionBonus,
+  getTemplePlasmidBonus,
+  type PlasmidProductionBonus,
+} from './prestige-bonuses';
+export {
   getBuildCost,
   canBuildStructure,
   buildStructure,
@@ -76,18 +81,65 @@ export {
   getGalaxyStructuresForRegion,
   canBuildGalaxyStructure,
   getGalaxyBuildCost,
+  galaxyProductionTick,
   type GalaxyStructureDefinition,
   type GalaxySupportPool,
   type GalaxyRegion,
+  type GalaxyProductionModifier,
+  type VitreloyInputResult,
+  type VitreloyTickResult,
+  type GalaxyProductionOptions,
+  type GalaxyProductionResult,
 } from './galaxy';
 export {
   TAUCETI_STRUCTURES,
   TAUCETI_REGIONS,
+  TAUCETI_MISSIONS,
+  WOMLING_RELATIONS,
   isTaucetiRegionUnlocked,
   getTaucetiStructuresForRegion,
+  getImplementedTaucetiStructuresForRegion,
+  isTaucetiStructureVisible,
+  getTaucetiPowerCost,
+  getTaucetiSupportFuel,
+  getTaucetiGeneratorFuel,
+  getTaucetiBuildCost,
+  canBuildTaucetiStructure,
+  buildTaucetiStructure,
+  isTaucetiMissionAvailable,
+  canRunTaucetiMission,
+  runTaucetiMission,
+  getWomlingRelation,
+  isWomlingRelationAvailable,
+  getWomlingRelationCost,
+  canChooseWomlingRelation,
+  chooseWomlingRelation,
+  resolveTaucetiSupport,
+  getTaucetiColonyCitizens,
+  getPitMinerCapacity,
+  getTaucetiFactoryLinesPerBuilding,
+  getTaucetiFactoryConfiguredLines,
+  getTaucetiFactorySupportedLines,
+  getTaucetiFactoryCraftsmanCapacity,
+  getTaucetiFactoryCementWorkerCapacity,
+  getWomlingRecycledCost,
+  getTaucetiAlienOutpostKnowledgeBonus,
+  getTaucetiAlienOutpostProfessorCapacity,
+  taucetiAlienOutpostTick,
+  taucetiFarmTick,
+  taucetiHomeTick,
   type TaucetiStructureDefinition,
   type TaucetiSupportPool,
+  type TaucetiSupportResult,
+  type TaucetiHomeProductionModifier,
+  type TaucetiHomeProductionLine,
+  type TaucetiHomeTickOptions,
+  type TaucetiAlienOutpostProductionLine,
+  type TaucetiFarmProductionLine,
   type TaucetiRegion,
+  type TaucetiMissionDefinition,
+  type WomlingRelationDefinition,
+  type WomlingRelation,
 } from './tauceti';
 export {
   SPACE_ACTIONS,
@@ -104,6 +156,24 @@ export {
 export { RESOURCE_VALUES, TRADE_RATIOS, CRAFT_COSTS, type CraftRecipe } from './resources';
 export { BASE_JOBS, type JobDefinition } from './jobs';
 export { BASIC_TECHS, type TechDefinition } from './tech';
+export { checkTaucetiJumpGateCompletion, TAUCETI_JUMP_GATE_SEGMENTS } from './tauceti-progression';
+export {
+  TAUCETI_REPOSITORY_STANDARD_VALUES,
+  TAUCETI_REPOSITORY_ISOLATION_VALUES,
+  TAUCETI_REPOSITORY_STANDARD_RESOURCES,
+  TAUCETI_REPOSITORY_ISOLATION_RESOURCES,
+  TAUCETI_REPOSITORY_CONTAINER_CAPACITY,
+  getTaucetiRepositoryResources,
+  getTaucetiRepositoryStorageMultiplier,
+  getTaucetiRepositoryBaseValue,
+  getTaucetiRepositoryStorageBonus,
+  getTaucetiRepositoryContainerCapacityBonus,
+  TRUEPATH_STOREHOUSE_VALUES,
+  TRUEPATH_STOREHOUSE_RESOURCES,
+  getTruepathStorehouseStorageMultiplier,
+  getTruepathStorehouseStorageBonus,
+  type TaucetiRepositoryResourceId,
+} from './truepath-storage';
 export { BASIC_STRUCTURES, type StructureDefinition, type CostFunction } from './structures';
 export {
   SPECIES_TRAITS,
@@ -137,6 +207,13 @@ export {
   type FactoryTickResult,
   type FactoryTickOptions,
 } from './factory';
+export {
+  calculateTeamsterLoad,
+  getPsychicProductionMultiplier,
+  getTeamsterCapacity,
+  getTeamsterProductionMultiplier,
+  type TeamsterLoadOverrides,
+} from './production-modifiers';
 export { saveGame, loadGame, exportSave, importSave } from './save';
 export {
   STANDARD_CHALLENGE_FLAGS,
@@ -170,9 +247,11 @@ export * from './commerce';
 export * from './espionage';
 export {
   manualCraft,
+  getManualCraftPreview,
   craftingTick,
   craftingTickWithSupport,
   craftingTickDetailed,
+  getCraftingLineCapacity,
   assignCraftsman,
   removeCraftsman,
   CRAFTABLE_IDS,
@@ -185,6 +264,7 @@ export {
   type CraftingLineResult,
   type CraftingTickResult,
   type CraftingTickOptions,
+  type ManualCraftPreview,
 } from './crafting';
 export {
   isSeasonalEventActive,
@@ -196,7 +276,7 @@ export {
   setSeasonalFireworkActive,
   type SeasonalEventId,
 } from './seasonal-events';
-export type { FactoryState } from '@evozen/shared-types';
+export type { FactoryState, GrapheneFactoryState } from '@evozen/shared-types';
 export {
   buyResource,
   sellResource,
@@ -492,11 +572,6 @@ export {
   type RankKey,
 } from './trait-ranks';
 export {
-  defaultWomlingState,
-  initWomling,
-  discoverWomling,
-  getWomlingPopCap,
-  assignWomling,
   createServantsState,
   maybeGenerateServants,
   getServantsState,
@@ -504,7 +579,10 @@ export {
   womlingTick,
   canUseWomling,
   type ServantsState,
-  type WomlingState,
+  type TauWomlingState,
+  type WomlingTickOptions,
+  type WomlingTickResult,
+  type WomlingProductionLine,
 } from './womling';
 export {
   calcSyndicatePressure,
@@ -575,9 +653,15 @@ export {
 } from './crispr';
 export {
   getGeneSequenceState,
+  getGeneSequenceLabLabel,
+  resolveGeneSequenceLabs,
   setGeneSequenceActive,
   geneSequenceTick,
+  GENE_SEQUENCE_SOURCE_NAMES,
   GENE_MINOR_TRAIT_NAMES,
+  type GeneSequenceLabOptions,
+  type GeneSequenceLabResult,
+  type GeneSequenceLabSource,
   type GeneSequenceState,
   type GeneSequenceTickResult,
 } from './genetics';
@@ -653,6 +737,7 @@ export {
   isRegionUnlocked,
   isBuildingVisible,
   getPortalBuildCost,
+  getRuinsSuppression,
   canBuildPortalStructure,
   buildPortalStructure,
   type PortalRegionId,
@@ -690,18 +775,57 @@ export {
   TRUEPATH_REGIONS,
   TRUEPATH_BUILDINGS,
   truepathProductionTick,
+  getGrapheneFactory,
+  assignGrapheneFeedstock,
+  removeGrapheneFeedstock,
   isTruepath,
   isTruepathRegionUnlocked,
   getSyndicatePressure,
   canRetire,
   getTruepathBuildingsByRegion,
   getTruepathBuildCost,
+  getSyndicateProductionMultiplier,
+  resolveEnceladusSupport,
+  tritonWarTick,
   canBuildTruepath,
   buildTruepathStructure,
   type TruepathRegionId,
   type TruepathRegionDef,
   type TruepathBuildingDef,
+  type GrapheneFeedstockId,
+  type GrapheneModifier,
+  type GrapheneInputResult,
+  type GrapheneTickResult,
+  type TruepathProductionOptions,
+  type TruepathProductionResult,
+  type EnceladusSupportResult,
+  type TritonOperationResult,
+  type TritonWarResult,
 } from './truepath';
+export {
+  EXPLORER_TAU_TRANSIT,
+  EXPLORER_ELERIUM_PER_TICK,
+  normalizeTruepathShipyard,
+  initializeTruepathShipyard,
+  isTruepathShipyardPowered,
+  getExplorerShips,
+  getTauExplorerForDismantle,
+  dismantleTauExplorer,
+  getExplorerCrewSize,
+  getTruepathFleetCrew,
+  getExplorerShipCost,
+  canBuildExplorerShip,
+  buildExplorerShip,
+  canDispatchExplorerToTau,
+  dispatchExplorerToTau,
+  truepathFleetFuelTick,
+  advanceTruepathFleet,
+  type TruepathShipLocation,
+  type TruepathShip,
+  type TruepathShipyardState,
+  type TruepathFleetFuelResult,
+  type TruepathFleetTravelResult,
+} from './truepath-ships';
 export {
   RITUAL_TYPES,
   ALCHEMY_RESOURCES,

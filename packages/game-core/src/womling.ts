@@ -7,26 +7,8 @@
 
 import type { GameState } from '@evozen/shared-types';
 import { getAchievementLevel } from './achievements';
-
-// ============================================================
-// Womling 状态
-// ============================================================
-
-export interface WomlingState {
-  /** 已发现 */
-  discovered: boolean;
-  /** 总人口 */
-  population: number;
-  /** 各岗位分配 */
-  jobs: {
-    farmer: number;
-    miner: number;
-    lab: number;
-    soldier: number;
-  };
-  /** 士气（影响产出） */
-  morale: number;
-}
+import { getPsychicProductionMultiplier } from './production-modifiers';
+import { getWomlingRelation } from './tauceti';
 
 export interface ServantsState {
   max: number;
@@ -36,15 +18,6 @@ export interface ServantsState {
   jobs: Record<string, number>;
   sjobs: Record<string, number>;
   force_scavenger: boolean;
-}
-
-export function defaultWomlingState(): WomlingState {
-  return {
-    discovered: false,
-    population: 0,
-    jobs: { farmer: 0, miner: 0, lab: 0, soldier: 0 },
-    morale: 100,
-  };
 }
 
 export function createServantsState(state: GameState): ServantsState | null {
@@ -90,89 +63,145 @@ export function canUseServants(state: GameState): boolean {
   return Boolean(getServantsState(state));
 }
 
-/** 初始化 Womling 状态（在 state.space 下挂） */
-export function initWomling(state: GameState): WomlingState {
-  const space = state.space as Record<string, unknown>;
-  if (!space['_womling']) {
-    space['_womling'] = defaultWomlingState();
-  }
-  return space['_womling'] as WomlingState;
-}
-
-/** 发现 Womling（首次接触触发） */
-export function discoverWomling(state: GameState): void {
-  const w = initWomling(state);
-  w.discovered = true;
-}
-
-// ============================================================
-// 建筑容量（每个建筑提供的最大人口）
-// ============================================================
-
-/** 计算当前 Womling 人口上限（取决于 village 数量） */
-export function getWomlingPopCap(state: GameState): number {
-  const space = state.space as Record<string, { count?: number; on?: number }>;
-  const village = space['womling_village']?.on ?? 0;
-  return village * 5;
-}
-
-// ============================================================
-// 分配工作
-// ============================================================
-
-/** 分配 N 个 womling 到指定工作 */
-export function assignWomling(state: GameState, job: keyof WomlingState['jobs'], delta: number): boolean {
-  const w = initWomling(state);
-  const newVal = w.jobs[job] + delta;
-  if (newVal < 0) return false;
-
-  const totalAssigned = Object.values(w.jobs).reduce((s, n) => s + n, 0);
-  if (delta > 0 && totalAssigned + delta > w.population) return false;
-
-  w.jobs[job] = newVal;
-  return true;
-}
-
 // ============================================================
 // Womling tick — 产出资源
 // ============================================================
 
-export function womlingTick(state: GameState, timeMul: number, deltas: Record<string, number>): void {
-  const w = (state.space as Record<string, unknown>)['_womling'] as WomlingState | undefined;
-  if (!w?.discovered) return;
-  const space = state.space as Record<string, { count?: number; on?: number }>;
+export interface WomlingProductionModifier {
+  label: string;
+  multiplier: number;
+}
 
-  // 人口增长（每秒 0.05 直到上限）
-  const cap = getWomlingPopCap(state);
-  if (w.population < cap) {
-    w.population = Math.min(cap, w.population + 0.05 * timeMul);
+export interface WomlingProductionLine {
+  resource: string;
+  miners: number;
+  ratePerMiner: number;
+  baseOutput: number;
+  modifiers: WomlingProductionModifier[];
+  output: number;
+}
+
+export interface WomlingTickOptions {
+  supportedOn?: Record<string, number>;
+  productionModifiers?: WomlingProductionModifier[];
+  hungerMultiplier?: number;
+}
+
+export interface TauWomlingState {
+  population: number;
+  farmers: number;
+  miners: number;
+  injured: number;
+  working: number;
+  loyalty: number;
+  morale: number;
+  productivity: number;
+}
+
+export interface WomlingTickResult {
+  state: TauWomlingState;
+  lines: WomlingProductionLine[];
+}
+
+function overseerValue(state: GameState): number {
+  const relation = getWomlingRelation(state);
+  const upgraded = getAchievementLevel(state, 'overlord') >= 5;
+  let value = relation === 'lord'
+    ? (upgraded ? 12 : 10)
+    : relation === 'god'
+      ? (upgraded ? 6 : 5)
+      : relation === 'friend'
+        ? (upgraded ? 10 : 8)
+        : 0;
+  if (state.race['lone_survivor']) value *= 2;
+  return value;
+}
+
+export function resolveTauWomlingState(
+  state: GameState,
+  supportedOn: Record<string, number> = {},
+): TauWomlingState {
+  const relation = getWomlingRelation(state);
+  const overseer = state.tauceti['overseer'];
+  if (!relation || !overseer || (state.tech['tau_red'] ?? 0) < 5) {
+    return { population: 0, farmers: 0, miners: 0, injured: 0, working: 0, loyalty: 0, morale: 0, productivity: 0 };
   }
 
-  // 士气影响（食物充足时 +1，缺粮时 -1）
-  // farmer 提供食物
-  const farmerOutput = w.jobs.farmer * 2 * (w.morale / 100);
-  // miner 提供资源（Iron / Adamantite 比例）
-  const minerOn = space['womling_mine']?.on ?? 0;
-  const minerEff = Math.min(w.jobs.miner, minerOn * 5);
-  if (minerEff > 0) {
-    deltas['Iron'] = (deltas['Iron'] ?? 0) + minerEff * 50 * (w.morale / 100) * timeMul;
-    deltas['Adamantite'] = (deltas['Adamantite'] ?? 0) + minerEff * 5 * (w.morale / 100) * timeMul;
-  }
-  // lab 提供 Knowledge
-  const labOn = space['womling_lab']?.on ?? 0;
-  const labEff = Math.min(w.jobs.lab, labOn * 5);
-  if (labEff > 0) {
-    deltas['Knowledge'] = (deltas['Knowledge'] ?? 0) + labEff * 30 * (w.morale / 100) * timeMul;
+  let loyalty = relation === 'friend' ? 25 : relation === 'god' ? 75 : 0;
+  let morale = relation === 'friend' ? 75 : relation === 'god' ? 40 : 30;
+  const supportedOverseers = Math.max(0, supportedOn['overseer'] ?? 0);
+  loyalty += supportedOverseers * overseerValue(state);
+
+  const populationPerVillage = (state.tech['womling_pop'] ?? 0) >= 2 ? 6 : 5;
+  let population = Math.max(0, supportedOn['womling_village'] ?? 0) * populationPerVillage;
+  const farmers = Math.min(population, Math.max(0, supportedOn['womling_farm'] ?? 0) * 2);
+  let cropPerFarmer = (state.tech['womling_pop'] ?? 0) >= 1 ? 8 : 6;
+  if (state.tech['womling_gene']) cropPerFarmer += 2;
+  population = Math.min(population, farmers * cropPerFarmer);
+
+  const injured = Math.min(population, Math.max(0, Number(overseer.injured ?? 0)));
+  const unemployed = Math.max(0, population - farmers - injured);
+  const miners = Math.min(unemployed, Math.max(0, supportedOn['womling_mine'] ?? 0) * 6);
+
+  loyalty = Math.max(0, Math.min(100, loyalty - miners));
+  morale = Math.max(0, Math.min(100, morale - miners - farmers - injured));
+  const productivity = Math.round((loyalty + morale) / 2);
+  const working = farmers + miners;
+
+  Object.assign(overseer, { pop: population, working, injured, morale, loyal: loyalty, prod: productivity });
+  const farm = state.tauceti['womling_farm'];
+  if (farm) farm.farmers = farmers;
+  const mine = state.tauceti['womling_mine'];
+  if (mine) mine.miners = miners;
+
+  return { population, farmers, miners, injured, working, loyalty, morale, productivity };
+}
+
+export function womlingTick(
+  state: GameState,
+  timeMul: number,
+  deltas: Record<string, number>,
+  options: WomlingTickOptions = {},
+): WomlingTickResult {
+  const womlingState = resolveTauWomlingState(state, options.supportedOn);
+  const lines: WomlingProductionLine[] = [];
+  if (womlingState.miners <= 0 || womlingState.productivity <= 0) {
+    return { state: womlingState, lines };
   }
 
-  // farmer 出粮可以增加 womling 士气
-  if (farmerOutput > w.population) {
-    w.morale = Math.min(150, w.morale + 0.1 * timeMul);
-  } else if (farmerOutput < w.population) {
-    w.morale = Math.max(50, w.morale - 0.1 * timeMul);
+  let miningBoost = 1 + Math.max(0, state.tech['womling_mining'] ?? 0) * 0.15;
+  if (getAchievementLevel(state, 'overlord') >= 5) miningBoost *= 1.1;
+  if (state.tech['womling_gene']) miningBoost *= 1.25;
+
+  const rates: Record<string, number> = { Unobtainium: 0.0305 };
+  if (state.tech['isolation']) {
+    rates.Uranium = 0.047;
+    rates.Titanium = 0.616;
+    if (state.race['lone_survivor']) {
+      rates.Copper = 1.191;
+      rates.Iron = 1.377;
+      rates.Aluminium = 1.544;
+      rates.Neutronium = 0.382;
+      rates.Iridium = 0.535;
+    }
   }
 
-  // soldier：提供地区防御加成（在 syndicate.ts 接入）
+  for (const [resource, ratePerMiner] of Object.entries(rates)) {
+    const baseOutput = womlingState.miners * ratePerMiner * miningBoost * timeMul;
+    const modifiers: WomlingProductionModifier[] = [
+      { label: 'Womling 生产率', multiplier: womlingState.productivity / 100 },
+      { label: '灵能生产增益', multiplier: getPsychicProductionMultiplier(state, resource) },
+      ...(options.productionModifiers ?? []),
+    ];
+    if (['Iron', 'Iridium', 'Neutronium'].includes(resource)) {
+      modifiers.push({ label: '饥饿修正', multiplier: options.hungerMultiplier ?? 1 });
+    }
+    let output = baseOutput;
+    for (const modifier of modifiers) output *= modifier.multiplier;
+    deltas[resource] = (deltas[resource] ?? 0) + output;
+    lines.push({ resource, miners: womlingState.miners, ratePerMiner, baseOutput, modifiers, output });
+  }
+  return { state: womlingState, lines };
 }
 
 // ============================================================
@@ -180,6 +209,5 @@ export function womlingTick(state: GameState, timeMul: number, deltas: Record<st
 // ============================================================
 
 export function canUseWomling(state: GameState): boolean {
-  const w = (state.space as Record<string, unknown>)['_womling'] as WomlingState | undefined;
-  return Boolean(w?.discovered);
+  return getWomlingRelation(state) !== undefined;
 }

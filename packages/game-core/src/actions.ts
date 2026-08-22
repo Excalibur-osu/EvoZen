@@ -35,13 +35,27 @@ import { getRaceMainType } from './races';
 import { getGeneSequenceState } from './genetics';
 import { applyFanaticism } from './fanaticism';
 import { ensureEdenicStructure } from './edenic';
+import { initializeTruepathShipyard } from './truepath-ships';
+import { checkTaucetiJumpGateCompletion } from './tauceti-progression';
+import { getTaucetiFactoryLinesPerBuilding } from './tauceti';
 import {
   addInflationPoints,
   applyInflationToCosts,
   isChallengeTechBlocked,
 } from './challenges';
 
-const CRAFT_LINE_IDS = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril'] as const;
+const CRAFT_LINE_IDS = [
+  'Plywood',
+  'Brick',
+  'Wrought_Iron',
+  'Sheet_Metal',
+  'Mythril',
+  'Aerogel',
+  'Nanoweave',
+  'Scarletite',
+  'Quantium',
+  'Thermite',
+] as const;
 export type FactoryLineId = 'Lux' | 'Furs' | 'Alloy' | 'Polymer' | 'Nano' | 'Stanene';
 export type MiningDroidTargetId = 'adam' | 'uran' | 'coal' | 'alum';
 
@@ -62,9 +76,8 @@ function ensureInterstellarStructure(state: GameState, id: string): void {
 }
 
 function ensureGalaxyState(state: GameState): Record<string, { count: number; on?: number }> {
-  const holder = state as unknown as { galaxy?: Record<string, { count: number; on?: number }> };
-  holder.galaxy ??= {};
-  return holder.galaxy;
+  state.galaxy ??= {};
+  return state.galaxy;
 }
 
 function ensureGalaxyStructure(state: GameState, id: string): void {
@@ -282,6 +295,12 @@ export function buildSpaceStructure(state: GameState, structureId: string): Game
       next.tech['asteroid'] = 3;
     }
   }
+  if (structureId === 'shipyard') {
+    initializeTruepathShipyard(next);
+  }
+  if (structureId === 'jump_gate') {
+    checkTaucetiJumpGateCompletion(next);
+  }
   if (structureId === 'biodome' && !next.race['cataclysm']) {
     unlockAchievement(next, 'colonist');
     if (next.race['joyless']) {
@@ -444,7 +463,10 @@ export function assignFactoryLine(state: GameState, lineId: FactoryLineId): Game
     + (factory.Nano ?? 0)
     + (factory.Stanene ?? 0);
   const redFactoryLines = (next.space['red_factory'] as { count?: number } | undefined)?.count ?? 0;
-  const maxLines = (factory.count ?? 0) + redFactoryLines;
+  const tauFactoryCount = next.tauceti['tau_factory']?.count ?? 0;
+  const maxLines = (factory.count ?? 0)
+    + redFactoryLines
+    + tauFactoryCount * getTaucetiFactoryLinesPerBuilding(next);
   if (totalAssigned >= maxLines) return null;
 
   factory[lineId] = (factory[lineId] ?? 0) + 1;
@@ -622,6 +644,24 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'de_novo_sequencing':
       next.resource['Genes'].display = true;
       break;
+    case 'aerogel':
+      next.resource['Aerogel'].display = true;
+      break;
+    case 'nanoweave':
+      next.resource['Nanoweave'].display = true;
+      break;
+    case 'scarletite':
+      next.resource['Scarletite'].display = true;
+      next.portal['hell_forge'] ??= { count: 0, on: 0 };
+      if (next.race.universe !== 'micro' && !next.pillars[next.race.species]) {
+        next.tech['fusable'] = Math.max(next.tech['fusable'] ?? 0, 1);
+      } else {
+        next.tech['pillars'] = Math.max(next.tech['pillars'] ?? 0, 2);
+      }
+      break;
+    case 'quantium':
+      next.resource['Quantium'].display = true;
+      break;
     case 'spirit_syphon':
       ensureEdenicStructure(next, 'spirit_vacuum');
       next.eden['palace'] = { count: 1, energy: 1_000_000_000_000, rate: 0 };
@@ -740,6 +780,34 @@ export function researchTech(state: GameState, techId: string): GameState | null
     case 'isolation_protocol':
       // legacy tech.js L13764: selecting isolation writes the branch key used by Tau Ceti follow-up techs.
       next.tech['isolation'] = Math.max(next.tech['isolation'] ?? 0, 1);
+      break;
+    case 'womling_unlock':
+      next.tauceti['orbital_platform'] ??= { count: 0, on: 0, support: 0, s_max: 0 };
+      next.tauceti['orbital_platform'].count = Math.max(1, next.tauceti['orbital_platform'].count);
+      next.tauceti['orbital_platform'].on = Math.max(1, next.tauceti['orbital_platform'].on ?? 0);
+      break;
+    case 'alien_outpost':
+      next.tauceti['alien_outpost'] ??= { count: 1, on: 0 };
+      next.tauceti['alien_outpost'].count = Math.max(1, next.tauceti['alien_outpost'].count);
+      next.tauceti['jump_gate'] ??= { count: 0 };
+      next.space['jump_gate'] ??= { count: 0 };
+      break;
+    case 'repository':
+      next.tauceti['repository'] ??= { count: 0 };
+      delete next.tauceti['repository'].on;
+      break;
+    case 'fusion_generator':
+      next.tauceti['fusion_generator'] ??= { count: 0, on: 0 };
+      break;
+    case 'tau_cultivation':
+      next.tauceti['tau_farm'] ??= { count: 0, on: 0 };
+      break;
+    case 'tau_manufacturing':
+      next.tauceti['tau_factory'] ??= { count: 0, on: 0 };
+      break;
+    case 'storehouse':
+      next.space['storehouse'] ??= { count: 0 };
+      delete next.space['storehouse'].on;
       break;
     case 'focus_cure':
       // legacy tech.js L13787: focus cure advances disease and seeds the cure research branch.

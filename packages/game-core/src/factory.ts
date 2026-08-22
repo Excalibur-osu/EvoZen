@@ -4,6 +4,10 @@ import { getAchievementLevel, getBanquetLuxuryMultiplier } from './achievements'
 import { getInflationMultiplier } from './challenges';
 import { getElementalBonus, getElementalType } from './complex-traits';
 import { getFactoryOutputMultiplier } from './government';
+import {
+  getPsychicProductionMultiplier,
+  getTeamsterProductionMultiplier,
+} from './production-modifiers';
 import { getTraitVar } from './trait-ranks';
 import { getToxicFactoryBonus } from './traits';
 
@@ -268,6 +272,10 @@ export function factoryTickDetailed(state: GameState, options: FactoryTickOption
   const dischargeModifiers = options.dischargeActive
     ? [{ label: '电磁放电', multiplier: 0.5 }]
     : [];
+  const teamsterMultiplier = getTeamsterProductionMultiplier(state);
+  const teamsterModifiers = Math.abs(teamsterMultiplier - 1) >= 1e-12
+    ? [{ label: '运输工人负载', multiplier: teamsterMultiplier }]
+    : [];
   let remainingLines = maxFactories;
 
   for (const lineId of LINE_ORDER) {
@@ -304,6 +312,7 @@ export function factoryTickDetailed(state: GameState, options: FactoryTickOption
           },
           { label: '通胀需求', multiplier: getInflationMultiplier(state, 1250) },
           { label: '餐厅盛宴', multiplier: getBanquetLuxuryMultiplier(state) },
+          ...teamsterModifiers,
           ...dischargeModifiers,
           ...globalModifiers,
         ].filter(({ multiplier }) => Math.abs(multiplier - 1) >= 1e-12);
@@ -370,7 +379,10 @@ export function factoryTickDetailed(state: GameState, options: FactoryTickOption
     const materialBaseOutput = effectiveLines * demandBase * outputRate * efficiency * options.timeMultiplier;
 
     if (lineId !== 'Lux') {
-      modifiers = [...commonModifiers];
+      const psychicMultiplier = getPsychicProductionMultiplier(state, outputResource);
+      modifiers = Math.abs(psychicMultiplier - 1) >= 1e-12
+        ? [{ label: '灵能生产增益', multiplier: psychicMultiplier }, ...commonModifiers]
+        : [...commonModifiers];
       if (lineId === 'Alloy' && (state.tech['alloy'] ?? 0) >= 1) {
         modifiers.push({ label: '合金科技', multiplier: 1.37 });
       }
@@ -383,7 +395,7 @@ export function factoryTickDetailed(state: GameState, options: FactoryTickOption
       if (lineId === 'Polymer' && (state.tech['polymer'] ?? 0) >= 2) {
         modifiers.push({ label: '聚合物科技', multiplier: 1.42 });
       }
-      modifiers.push(...globalModifiers, ...dischargeModifiers);
+      modifiers.push(...globalModifiers, ...teamsterModifiers, ...dischargeModifiers);
       const quantumMultiplier = quantumFactoryMultiplier(state, lineId, quantumLevel);
       if (Math.abs(quantumMultiplier - 1) >= 1e-12) {
         modifiers.push({ label: '量子制造', multiplier: quantumMultiplier });

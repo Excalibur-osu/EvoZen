@@ -15,19 +15,82 @@ import { isSeasonalEventActive } from './seasonal-events';
 import { getAchievementLevel, calcMastery } from './achievements';
 import { getTraitVar } from './trait-ranks';
 import { getResourcefulCraftDiscount } from './traits';
+import {
+  getPsychicProductionMultiplier,
+  getTeamsterProductionMultiplier,
+} from './production-modifiers';
+import { getRuinsSuppression } from './portal';
+import { powerTick } from './power';
+import { getPlasmidProductionBonus } from './prestige-bonuses';
+import { resolveSpaceSupport } from './space-support';
+import { resolveTaucetiSupport } from './tauceti';
+import { getSyndicateProductionMultiplier, resolveEnceladusSupport } from './truepath';
 
 // ============================================================
 // 合成产线 ID
 // ============================================================
 
-/** 第一阶段支持的合成品 ID */
-export type CraftableId = 'Plywood' | 'Brick' | 'Wrought_Iron' | 'Sheet_Metal' | 'Mythril' | 'Thermite';
+/** 支持的合成品 ID */
+export type CraftableId =
+  | 'Plywood'
+  | 'Brick'
+  | 'Wrought_Iron'
+  | 'Sheet_Metal'
+  | 'Mythril'
+  | 'Aerogel'
+  | 'Nanoweave'
+  | 'Scarletite'
+  | 'Quantium'
+  | 'Thermite';
 
 /** 所有可合成的产品 ID 列表 */
-export const CRAFTABLE_IDS: CraftableId[] = ['Plywood', 'Brick', 'Wrought_Iron', 'Sheet_Metal', 'Mythril', 'Thermite'];
+export const CRAFTABLE_IDS: CraftableId[] = [
+  'Plywood',
+  'Brick',
+  'Wrought_Iron',
+  'Sheet_Metal',
+  'Mythril',
+  'Aerogel',
+  'Nanoweave',
+  'Scarletite',
+  'Quantium',
+  'Thermite',
+];
 
 export function isCraftableAvailable(state: GameState, craftId: CraftableId, date: Date = new Date()): boolean {
+  if (craftId === 'Aerogel') return (state.tech['aerogel'] ?? 0) >= 1;
+  if (craftId === 'Nanoweave') return (state.tech['nanoweave'] ?? 0) >= 1;
+  if (craftId === 'Scarletite') return (state.tech['scarletite'] ?? 0) >= 1;
+  if (craftId === 'Quantium') return (state.tech['quantium'] ?? 0) >= 1;
   return craftId !== 'Thermite' || isSeasonalEventActive(state, 'summer', date);
+}
+
+function configuredOn(state: GameState, bucket: 'space' | 'portal' | 'tauceti', id: string): number {
+  const structure = state[bucket][id] as { count?: number; on?: number } | undefined;
+  return Math.max(0, structure?.on ?? structure?.count ?? 0);
+}
+
+/** 特殊合成产线的工匠上限；普通产线返回 Infinity。 */
+export function getCraftingLineCapacity(
+  state: GameState,
+  craftId: CraftableId,
+  poweredOn?: Record<string, number>,
+  supportedOn?: Record<string, number>,
+): number {
+  if (craftId !== 'Scarletite' && craftId !== 'Quantium') return Infinity;
+  const activeConsumers = poweredOn ?? powerTick(state).activeConsumers;
+  if (craftId === 'Scarletite') {
+    return Math.max(0, activeConsumers['hell_forge'] ?? 0);
+  }
+  const id = state.tech['isolation'] ? 'infectious_disease_lab' : 'zero_g_lab';
+  const bucket = state.tech['isolation'] ? 'tauceti' : 'space';
+  const configured = configuredOn(state, bucket, id);
+  const powered = Math.max(0, activeConsumers[id] ?? 0);
+  const liveSupport = supportedOn ?? (state.tech['isolation']
+    ? resolveTaucetiSupport(state, activeConsumers).supportOn
+    : { zero_g_lab: resolveEnceladusSupport(state, activeConsumers).zeroGLab });
+  const supported = Math.max(0, liveSupport[id] ?? 0);
+  return Math.min(configured, powered, supported);
 }
 
 // ============================================================
@@ -68,9 +131,12 @@ export interface CraftingInputResult {
 export interface CraftingLineResult {
   craftId: CraftableId;
   assignedWorkers: number;
+  specialCapacity: number;
+  capacityWorkers: number;
   effectiveWorkers: number;
   speed: number;
   assignedBaseOutput: number;
+  capacityBaseOutput: number;
   materialBaseOutput: number;
   scaledBaseOutput: number;
   additions: CraftingAddition[];
@@ -86,8 +152,19 @@ export interface CraftingTickResult {
 
 export interface CraftingTickOptions {
   poweredOn?: Record<string, number>;
+  supportedOn?: Record<string, number>;
   availableResources?: Record<string, number>;
   date?: Date;
+}
+
+export interface ManualCraftPreview {
+  craftId: CraftableId;
+  crafts: number;
+  output: number;
+  costs: Array<{ resource: string; amount: number }>;
+  additions: CraftingAddition[];
+  multipliers: CraftingModifier[];
+  canCraft: boolean;
 }
 
 const AUTO_CRAFT_TIME_MULTIPLIER = 0.25;
@@ -134,13 +211,15 @@ function getCraftRecipe(state: GameState, craftId: CraftableId, manual: boolean)
   });
 }
 
-function getAutoCraftAdditions(
+function getCraftAdditions(
   state: GameState,
   craftId: CraftableId,
   assignedWorkers: number,
   fabricationSupported: number,
   colonistWorkers: number,
   poweredOn: Record<string, number>,
+  supportedOn: Record<string, number>,
+  mode: 'manual' | 'auto',
 ): CraftingAddition[] {
   const additions: CraftingAddition[] = [];
   const foundryLevel = state.tech['foundry'] ?? 0;
@@ -155,6 +234,24 @@ function getAutoCraftAdditions(
     additions.push({
       label: '学徒协作',
       bonus: (assignedWorkers - 1) * highPopAdjust(state, 0.03),
+    });
+  }
+
+  const stellarForgeOn = poweredOn['stellar_forge'] ?? 0;
+  if (stellarForgeOn > 0 && craftId === 'Mythril') {
+    additions.push({ label: '恒星锻造专精', bonus: stellarForgeOn * 0.05 });
+  }
+  if (stellarForgeOn > 0 && mode === 'auto') {
+    additions.push({ label: '恒星锻造强化', bonus: stellarForgeOn * 0.1 });
+  }
+
+  const hellForgeOn = mode === 'auto'
+    ? poweredOn['hell_forge'] ?? configuredOn(state, 'portal', 'hell_forge')
+    : 0;
+  if (hellForgeOn > 0 && mode === 'auto') {
+    additions.push({
+      label: '地狱铸造强化',
+      bonus: hellForgeOn * 0.75 * getRuinsSuppression(state, poweredOn).suppression,
     });
   }
 
@@ -190,6 +287,16 @@ function getAutoCraftAdditions(
     });
   }
 
+  if (state.tech['isolation'] && (supportedOn['colony'] ?? 0) > 0) {
+    additions.push({ label: 'Tau 殖民地', bonus: supportedOn['colony'] * 0.5 });
+  }
+  if (mode === 'auto' && (supportedOn['tau_factory'] ?? 0) > 0) {
+    additions.push({
+      label: 'Tau 家园工厂',
+      bonus: supportedOn['tau_factory'] * (state.tech['isolation'] ? 2.75 : 0.9),
+    });
+  }
+
   if (state.race['crafty']) additions.push({ label: '灵巧特质', bonus: 0.03 });
 
   const ambidextrous = Number(state.race['ambidextrous']) || 0;
@@ -205,12 +312,22 @@ function getAutoCraftAdditions(
   return additions.filter(({ bonus }) => Math.abs(bonus) >= 1e-12);
 }
 
-function getAutoCraftMultipliers(state: GameState): CraftingModifier[] {
+function getCraftMultipliers(
+  state: GameState,
+  craftId: CraftableId,
+  poweredOn: Record<string, number>,
+  supportedOn: Record<string, number>,
+  mode: 'manual' | 'auto',
+): CraftingModifier[] {
   const multipliers: CraftingModifier[] = [];
-  if (state.race['artisan']) multipliers.push({ label: '工匠大师特质', multiplier: 1.5 });
+  if (mode === 'auto' && state.race['artisan']) {
+    multipliers.push({ label: '工匠大师特质', multiplier: 1.5 });
+  }
 
   const livingTool = livingToolCraftMultiplier(state);
-  if (livingTool !== 1) multipliers.push({ label: '活体工具特质', multiplier: livingTool });
+  if (mode === 'auto' && livingTool !== 1) {
+    multipliers.push({ label: '活体工具特质', multiplier: livingTool });
+  }
 
   if (state.civic.govern?.type === 'socialist') {
     multipliers.push({ label: '社会主义政体', multiplier: 1.1 });
@@ -220,38 +337,75 @@ function getAutoCraftMultipliers(state: GameState): CraftingModifier[] {
   if (ritualPower > 0) {
     multipliers.push({
       label: '制造仪式',
-      multiplier: 1 + (2 * ritualPower) / (2 * ritualPower + 75),
+      multiplier: mode === 'manual'
+        ? 1 + ritualPower / (ritualPower + 75)
+        : 1 + (2 * ritualPower) / (2 * ritualPower + 75),
     });
   }
 
   if (state.race.universe === 'magic') multipliers.push({ label: '魔法宇宙', multiplier: 0.8 });
-  if ((state.tech['v_train'] ?? 0) > 0) multipliers.push({ label: '职业训练', multiplier: 2 });
+  if (mode === 'auto' && (state.tech['v_train'] ?? 0) > 0) {
+    multipliers.push({ label: '职业训练', multiplier: 2 });
+  }
 
   const craftyGene = state.genes['crafty'] ?? 0;
-  if (craftyGene > 1) {
+  if (mode === 'auto' && craftyGene > 1) {
     multipliers.push({ label: '制造基因', multiplier: 1 + (craftyGene - 1) * 0.5 });
   }
 
-  if (getAchievementLevel(state, 'lamentis') >= 1) {
+  if (mode === 'auto' && getAchievementLevel(state, 'lamentis') >= 1) {
     multipliers.push({ label: '拉门提斯成就', multiplier: 1.1 });
   }
 
   const ambidextrous = Number(state.race['ambidextrous']) || 0;
-  if (ambidextrous > 0) {
+  if (mode === 'auto' && ambidextrous > 0) {
     multipliers.push({ label: '双手并用熟练度', multiplier: 1 + ambidextrous * 0.02 });
   }
 
   const bloodArtisan = Number(state.blood['artisan']) || 0;
-  if (bloodArtisan > 0) {
+  if (mode === 'auto' && bloodArtisan > 0) {
     multipliers.push({ label: '工匠血脉', multiplier: 1 + bloodArtisan / 100 });
   }
 
   const mastery = calcMastery(state);
+
+  const plasmid = getPlasmidProductionBonus(state).combined;
+  if (plasmid > 0) {
+    multipliers.push({ label: '质粒遗传增益', multiplier: 1 + plasmid / 8 });
+  }
+
   if (mastery > 0) {
     multipliers.push({
       label: '精通度',
       multiplier: 1 + mastery * (state.race['weak_mastery'] ? 2 : 1),
     });
+  }
+
+  const teamster = getTeamsterProductionMultiplier(state);
+  if (teamster !== 1) multipliers.push({ label: '运输工人负载', multiplier: teamster });
+
+  if (mode === 'auto' && craftId === 'Scarletite') {
+    multipliers.push({
+      label: '遗迹镇压率',
+      multiplier: getRuinsSuppression(state, poweredOn).suppression,
+    });
+  }
+
+  if (mode === 'auto' && craftId === 'Quantium') {
+    const syndicate = getSyndicateProductionMultiplier(state, 'enceladus');
+    if (syndicate !== 1) multipliers.push({ label: '辛迪加压力', multiplier: syndicate });
+    if ((state.tech['alien_crafting'] ?? 0) >= 1 && state.tech['isolation']) {
+      const labs = Math.min(
+        poweredOn['infectious_disease_lab'] ?? 0,
+        supportedOn['infectious_disease_lab'] ?? 0,
+      );
+      if (labs > 0) multipliers.push({ label: '外星合成研究', multiplier: 1 + labs * 0.65 });
+    }
+  }
+
+  if (mode === 'auto') {
+    const psychic = getPsychicProductionMultiplier(state, craftId);
+    if (psychic !== 1) multipliers.push({ label: '灵能生产增益', multiplier: psychic });
   }
 
   return multipliers;
@@ -274,20 +428,13 @@ export function manualCraft(
   qty: number = 1,
   date: Date = new Date(),
 ): GameState | null {
-  if (!isCraftableAvailable(state, craftId, date)) return null;
-  const recipe = getCraftRecipe(state, craftId, true);
-  if (recipe.length === 0) return null;
-
-  // 检查材料是否充足
-  for (const { resource, amount } of recipe) {
-    const have = state.resource[resource]?.amount ?? 0;
-    if (have < amount * qty) return null;
-  }
+  const preview = getManualCraftPreview(state, craftId, qty, date);
+  if (!preview?.canCraft) return null;
 
   // 扣除材料
   const newState: GameState = JSON.parse(JSON.stringify(state));
-  for (const { resource, amount } of recipe) {
-    newState.resource[resource].amount -= amount * qty;
+  for (const { resource, amount } of preview.costs) {
+    newState.resource[resource].amount -= amount;
   }
 
   // 增加产出
@@ -295,9 +442,51 @@ export function manualCraft(
     // 安全措施：如果资源条目不存在则跳过
     return null;
   }
-  newState.resource[craftId].amount += qty;
+  newState.resource[craftId].amount += preview.output;
 
   return newState;
+}
+
+/** 手动合成按钮与执行动作共用的成本、产量和修正预览。 */
+export function getManualCraftPreview(
+  state: GameState,
+  craftId: CraftableId,
+  qty: number = 1,
+  date: Date = new Date(),
+): ManualCraftPreview | null {
+  const crafts = Math.max(0, Math.floor(qty));
+  if (crafts <= 0 || state.race['no_craft'] || !isCraftableAvailable(state, craftId, date)) return null;
+  const recipe = getCraftRecipe(state, craftId, true);
+  if (recipe.length === 0) return null;
+
+  const poweredOn = powerTick(state).activeConsumers;
+  const spaceSupport = resolveSpaceSupport(state, poweredOn);
+  const tauSupport = resolveTaucetiSupport(state, poweredOn);
+  const assignedWorkers = (state.city['foundry'] as FoundryState | undefined)?.[craftId] ?? 0;
+  const colonistWorkers = (state.civic['colonist'] as { workers?: number } | undefined)?.workers ?? 0;
+  const additions = getCraftAdditions(
+    state,
+    craftId,
+    assignedWorkers,
+    spaceSupport.supportOn['fabrication'] ?? 0,
+    colonistWorkers,
+    poweredOn,
+    tauSupport.supportOn,
+    'manual',
+  );
+  const multipliers = getCraftMultipliers(state, craftId, poweredOn, spaceSupport.supportOn, 'manual');
+  let outputPerCraft = 1 + additions.reduce((sum, factor) => sum + factor.bonus, 0);
+  for (const factor of multipliers) outputPerCraft *= factor.multiplier;
+  const costs = recipe.map(({ resource, amount }) => ({ resource, amount: amount * crafts }));
+  return {
+    craftId,
+    crafts,
+    output: crafts * outputPerCraft,
+    costs,
+    additions,
+    multipliers,
+    canCraft: costs.every(({ resource, amount }) => (state.resource[resource]?.amount ?? 0) >= amount),
+  };
 }
 
 // ============================================================
@@ -341,7 +530,10 @@ export function craftingTickDetailed(
 
   const speed = (state.genes['crafty'] ?? 0) > 0 ? 2 : 1;
   const baseTickRate = speed / 140; // 每个工匠每 tick 的基础产出
-  const poweredOn = options.poweredOn ?? {};
+  const poweredOn = options.poweredOn ?? powerTick(state).activeConsumers;
+  const supportedOn = options.supportedOn ?? (state.tech['isolation']
+    ? resolveTaucetiSupport(state, poweredOn).supportOn
+    : { zero_g_lab: resolveEnceladusSupport(state, poweredOn).zeroGLab });
   const date = options.date ?? new Date();
   const available = Object.fromEntries(
     Object.entries(state.resource).map(([resource, value]) => [
@@ -356,11 +548,18 @@ export function craftingTickDetailed(
     const assignedWorkers = foundry[craftId] ?? 0;
     if (assignedWorkers <= 0) continue;
 
+    const specialCapacity = getCraftingLineCapacity(state, craftId, poweredOn, supportedOn);
+    const capacityWorkers = Math.min(assignedWorkers, specialCapacity);
+    if (Number.isFinite(specialCapacity) && foundry[craftId] !== capacityWorkers) {
+      foundry[craftId] = capacityWorkers;
+    }
+    if (capacityWorkers <= 0) continue;
+
     const recipe = getCraftRecipe(state, craftId, false);
     if (recipe.length === 0) continue;
 
     // 根据原料库存计算最多能支撑多少"有效工匠"
-    let maxByMaterials = Infinity;
+    let maxByMaterials = capacityWorkers;
     for (const { resource, amount } of recipe) {
       const have = available[resource] ?? 0;
       // 每个工匠每 tick 消耗 = amount * speed / 140
@@ -370,7 +569,7 @@ export function craftingTickDetailed(
       }
     }
 
-    const effectiveWorkers = Math.min(assignedWorkers, maxByMaterials);
+    const effectiveWorkers = Math.min(capacityWorkers, maxByMaterials);
     if (effectiveWorkers <= 0) continue;
 
     const inputs: CraftingInputResult[] = [];
@@ -394,17 +593,20 @@ export function craftingTickDetailed(
     }
 
     const assignedBaseOutput = assignedWorkers * baseTickRate;
+    const capacityBaseOutput = capacityWorkers * baseTickRate;
     const materialBaseOutput = effectiveWorkers * baseTickRate;
     const scaledBaseOutput = highPopAdjust(state, materialBaseOutput);
-    const additions = getAutoCraftAdditions(
+    const additions = getCraftAdditions(
       state,
       craftId,
-      assignedWorkers,
+      capacityWorkers,
       fabricationSupported,
       colonistWorkers,
       poweredOn,
+      supportedOn,
+      'auto',
     );
-    const multipliers = getAutoCraftMultipliers(state);
+    const multipliers = getCraftMultipliers(state, craftId, poweredOn, supportedOn, 'auto');
     let output = scaledBaseOutput * (1 + additions.reduce((sum, factor) => sum + factor.bonus, 0));
     for (const factor of multipliers) output *= factor.multiplier;
     deltas[craftId] = (deltas[craftId] ?? 0) + output;
@@ -412,9 +614,12 @@ export function craftingTickDetailed(
     lines.push({
       craftId,
       assignedWorkers,
+      specialCapacity,
+      capacityWorkers,
       effectiveWorkers,
       speed,
       assignedBaseOutput,
+      capacityBaseOutput,
       materialBaseOutput,
       scaledBaseOutput,
       additions,
@@ -447,6 +652,8 @@ export function assignCraftsman(
   const newState: GameState = JSON.parse(JSON.stringify(state));
   const foundry = newState.city['foundry'] as FoundryState | undefined;
   if (!foundry) return null;
+  const lineCapacity = getCraftingLineCapacity(newState, craftId);
+  if ((foundry[craftId] ?? 0) >= lineCapacity) return null;
 
   // 检查工匠总数是否已达上限
   const craftsman = newState.civic['craftsman'] as { workers: number; max: number } | undefined;

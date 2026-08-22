@@ -3971,7 +3971,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   { id: 'arcology', name: '生态建筑', description: '建造自给自足的生态建筑。', category: 'housing', era: '维度', reqs: { high_tech: 18 }, grant: ['arcology', 1], costs: { Knowledge: 25000000 }, effect: '解锁生态建筑。' },
   { id: 'cybernetics', name: '控制论', description: '研究人机融合技术。', category: 'science', era: '维度', reqs: { high_tech: 18 }, grant: ['cybernetics', 1], costs: { Knowledge: 28000000 }, effect: '解锁控制论升级。' },
-  { id: 'scarletite', name: '猩红石', description: '研究猩红石材料。', category: 'crafting', era: '维度', reqs: { high_tech: 18, hell_gate: 4 }, grant: ['scarletite', 1], costs: { Knowledge: 33000000 }, effect: '解锁猩红石生产。' },
+  { id: 'scarletite', name: '猩红石', description: '研究猩红石材料。', category: 'crafting', era: '维度', reqs: { hell_ruins: 4 }, condition: (state) => state.race.truepath === undefined, grant: ['scarletite', 1], costs: { Knowledge: 26750000, Iron: 100000000, Adamantite: 15000000, Orichalcum: 8000000 }, effect: '解锁猩红石与地狱铸造厂。' },
 
   // ===== 存在时代科技补充 =====
 
@@ -4054,7 +4054,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'cyborg_soldiers', name: '生化战士', description: '开发生化战士技术。', category: 'military', era: '维度', reqs: { military: 12, cybernetics: 1 }, grant: ['military', 13], costs: { Knowledge: 30000000, Orichalcum: 300000 }, effect: '解锁生化战士。' },
 
   // 更多锻造科技
-  { id: 'aerogel', name: '气凝胶', description: '研发气凝胶材料。', category: 'crafting', era: '星际', reqs: { high_tech: 12 }, grant: ['aerogel', 1], costs: { Knowledge: 600000 }, effect: '解锁气凝胶生产。' },
+  { id: 'aerogel', name: '气凝胶', description: '研发气凝胶材料。', category: 'crafting', era: '星际', reqs: { graphene: 1, science: 13 }, grant: ['aerogel', 1], costs: { Knowledge: 750000, Graphene: 50000, Infernite: 500 }, effect: '解锁气凝胶生产。' },
 
   // 更多存储科技
   { id: 'adamantite_crates', name: '精金箱', description: '制造精金集装箱。', category: 'storage', era: '太阳系', reqs: { container: 5, titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['container', 6], costs: { Knowledge: 525000, Adamantite: 12500 }, effect: '提升集装箱容量。' },
@@ -4098,13 +4098,20 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'alt_anthropology', name: '人类学（替代）', description: '研究种族文化。', category: 'religion', era: '文明', reqs: { theology: 2 }, condition: (state) => (state.genes['transcendence'] ?? 0) > 0, grant: ['anthropology', 1], costs: { Knowledge: 2500 }, effect: '在 transcendence 路线中解锁人类学研究。' },
 
   // 量子材料
-  { id: 'quantium', name: '量子材料', description: '研发量子材料。', category: 'crafting', era: '太阳系', reqs: { supercollider: 10, enceladus: 3 }, grant: ['quantium', 1], costs: { Knowledge: 2400000, Orichalcum: 125000, Cipher: 15000 }, effect: '解锁量子材料生产。' },
+  { id: 'quantium', name: '量子素', description: '研发量子材料。', category: 'crafting', era: '太阳系', reqs: { supercollider: 10, enceladus: 3 }, condition: (state) => state.race.truepath !== undefined, grant: ['quantium', 1], costs: { Knowledge: 1000000, Elerium: 1000, Nano_Tube: 1000000, Graphene: 1000000 }, effect: '解锁量子素生产。' },
 
   // 外层太空
   { id: 'strange_signal', name: '奇怪信号', description: '探测到奇怪信号。', category: 'space_exploration', era: '太阳系', reqs: { outer: 2 }, grant: ['outer', 3], costs: { Knowledge: 1500000 }, effect: '解锁外层太空探索。' },
 
   // 船坞传感器
-  { id: 'quantum_signatures', name: '量子签名', description: '检测量子签名。', category: 'space_militarization', era: '太阳系', reqs: { syard_sensor: 3 }, grant: ['syard_sensor', 4], costs: { Knowledge: 800000 }, effect: '提升船坞传感器精度。' },
+  { id: 'quantum_signatures', name: '量子签名', description: '检测量子签名。', category: 'space_militarization', era: '太阳系', reqs: { quantium: 1, syard_sensor: 3 }, condition: (state) => state.race.truepath !== undefined, grant: ['syard_sensor', 4], costs: { Knowledge: 1050000, Quantium: 10000 }, effect: '让舰船传感器识别通往 Tau Ceti 的量子特征。' },
+  { id: 'interstellar_drive', name: '星际驱动', description: '研发足以抵达邻近恒星系的舰船驱动。', category: 'progress', era: 'Tauceti', reqs: { outer: 8, titan_ai_core: 2, syard_sensor: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['tauceti', 1], costs: { Knowledge: 4500000, Quantium: 250000, Cipher: 75000 }, effect: '允许探索舰驶向 Tau Ceti。' },
+  { id: 'alien_outpost', name: '外星前哨', description: '研究已发掘的外星前哨。', category: 'science', era: 'Tauceti', reqs: { tauceti: 2, tau_home: 3 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_home', 4], costs: { Knowledge: 5000000, Cipher: 100000 }, effect: '恢复外星研究设施，并发现空间跃迁之门的设计图。' },
+  { id: 'jumpgates', name: '空间跃迁之门', description: '研究外星前哨发现的跃迁门设计图。', category: 'progress', era: 'Tauceti', reqs: { tauceti: 2, tau_home: 4 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor === undefined, grant: ['tauceti', 3], costs: { Knowledge: 6000000 }, effect: '允许在母星与 Tau Ceti 分别建造一座由 100 段组成的跃迁门。' },
+  { id: 'repository', name: '储存库', description: '研究 Tau 家园的大型资源储存设施。', category: 'storage', era: 'Tauceti', reqs: { tauceti: 4, tau_home: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_home', 5], costs: { Knowledge: 6500000 }, effect: '解锁储存库，并为已发现的基础与高级资源提供可扩展容量。' },
+  { id: 'fusion_generator', name: '聚变能源', description: '开发适用于 Tau 家园的氦-3 聚变发电技术。', category: 'power_generation', era: 'Tauceti', reqs: { tau_home: 5 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_home', 6], costs: { Knowledge: 6750000 }, effect: '解锁 Tau 家园聚变发电机。' },
+  { id: 'tau_cultivation', name: 'Tau 栽培', description: '开发适应 Tau 家园环境的高产农业。', category: 'agriculture', era: 'Tauceti', reqs: { tau_home: 6 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_home', 7], costs: { Knowledge: 6900000 }, effect: '解锁 Tau 家园农场。' },
+  { id: 'tau_manufacturing', name: 'Tau 制造', description: '将 Tau 家园接入工业制造网络。', category: 'crafting', era: 'Tauceti', reqs: { tau_home: 7 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_home', 8], costs: { Knowledge: 7250000 }, effect: '解锁 Tau 家园工厂。' },
 
   // 钛锤
 
@@ -4112,7 +4119,9 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   { id: 'iridium_smelting_perk', name: '铱冶炼', description: '将开拓者经验用于标准路线铱冶炼。', category: 'mining', era: '早期太空', reqs: { smelting: 6, space: 3 }, condition: (state) => state.race.truepath === undefined && getAchievementLevel(state, 'pathfinder') >= 3, grant: ['irid_smelting', 1], costs: { Knowledge: 350000, Mythril: 2500 }, effect: '解锁熔炉铱冶炼。' },
 
   // Womling
-  { id: 'weasels', name: '鼬鼠', description: '与鼬鼠建立联系。', category: 'womling', era: 'Tauceti', reqs: { tau_red: 2 }, grant: ['tau_red', 3], costs: { Knowledge: 6250000 }, effect: '与鼬鼠建立外交关系。' },
+  { id: 'weasels', name: '鼬鼠', description: '调查红色行星上的鼬鼠。', category: 'womling', era: 'Tauceti', reqs: { tau_red: 2 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_red', 3], costs: { Knowledge: 6250000 }, effect: '确认当地智慧生命的活动。' },
+  { id: 'jeff', name: 'Jeff', description: '进一步研究 Womling 社会。', category: 'womling', era: 'Tauceti', reqs: { tau_red: 3 }, condition: (state) => state.race.truepath !== undefined, grant: ['tau_red', 4], costs: { Knowledge: 6380000 }, effect: '解锁与 Womling 建立关系的选择。' },
+  { id: 'womling_unlock', name: 'Womling 信号', description: '复制器捕获到红色行星的 Womling 信号。', category: 'womling', era: 'Tauceti', reqs: { replicator: 1 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor !== undefined, grant: ['tau_red', 4], costs: { Knowledge: 6500000 }, effect: '恢复红星轨道平台并解锁 Womling 接触。' },
 
   // 外星旅游
   { id: 'xeno_tourism', name: '异星旅游', description: '发展异星旅游业。', category: 'banking', era: '星系际', reqs: { gateway: 3, xeno: 6 }, grant: ['monument', 3], costs: { Knowledge: 4500000, Bolognium: 500000 }, effect: '解锁异星旅游收入。' },
@@ -4120,6 +4129,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
   // ===== Solar/True Path 科技 =====
 
   { id: 'adamantite_containers_tp', name: '精金集装箱（真相之路）', description: '制造精金集装箱。', category: 'storage', era: '太阳系', reqs: { steel_container: 4, titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['steel_container', 5], costs: { Knowledge: 575000, Adamantite: 17500 }, effect: '提升集装箱容量。' },
+  { id: 'storehouse', name: '土卫六仓库', description: '研究适用于土卫六殖民地的深空仓储设施。', category: 'storage', era: '太阳系', reqs: { titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['titan', 5], costs: { Knowledge: 500000 }, effect: '解锁土卫六仓库。' },
   { id: 'adamantite_vault_tp', name: '精金金库（真相之路）', description: '建造精金金库。', category: 'banking', era: '太阳系', reqs: { vault: 2, titan: 4 }, condition: (state) => state.race.truepath !== undefined, grant: ['vault', 3], costs: { Money: 2000000, Knowledge: 560000, Adamantite: 20000 }, effect: '大幅提升金钱存储。' },
   { id: 'ai_core_tp', name: 'AI 核心（真相之路）', description: '建造 AI 核心。', category: 'ai_core', era: '太阳系', reqs: { titan: 8 }, condition: (state) => state.race.truepath !== undefined, grant: ['titan', 9], costs: { Knowledge: 3000000, Cipher: 100000 }, effect: '解锁 AI 核心技术。' },
   { id: 'ai_optimizations', name: 'AI 优化', description: '使用 AI 优化系统。', category: 'science', era: '太阳系', reqs: { eris: 3, titan: 9, titan_ai_core: 1, dig_control: 1 }, condition: (state) => state.race.truepath !== undefined, grant: ['titan_ai_core', 2], costs: { Knowledge: 3750000, Cipher: 75000 }, effect: 'AI 优化各项系统。' },
@@ -4262,7 +4272,7 @@ const RAW_BASIC_TECHS: TechDefinition[] = [
 
   // ===== 疾病系统补充 =====
 
-  { id: 'infectious_disease_lab', name: '传染病实验室', description: '建造传染病实验室。', category: 'science', era: 'Tauceti', reqs: { disease: 1 }, grant: ['disease', 2], costs: { Knowledge: 8000000 }, effect: '解锁传染病实验室。' },
+  { id: 'infectious_disease_lab', name: '传染病实验室', description: '建造传染病实验室。', category: 'science', era: 'Tauceti', reqs: { plague: 2 }, condition: (state) => state.race.truepath !== undefined, grant: ['disease', 1], costs: { Knowledge: 8250000 }, effect: '解锁传染病实验室。' },
   { id: 'isolation_protocol', name: '隔离协议', description: '实施隔离协议。', category: 'plague', era: 'Tauceti', reqs: { disease: 2 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor === undefined, grant: ['disease', 3], costs: { Knowledge: 8500000 }, effect: '实施隔离措施。' },
   { id: 'focus_cure', name: '集中治疗', description: '集中力量研发治疗方法。', category: 'plague', era: 'Tauceti', reqs: { disease: 2 }, condition: (state) => state.race.truepath !== undefined && state.race.lone_survivor === undefined, grant: ['disease', 3], costs: { Knowledge: 8500000 }, effect: '加速疾病研究。' },
 
